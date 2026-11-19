@@ -7,6 +7,7 @@ import logging.handlers
 from pathlib import Path
 
 from qedcode.config import logs_dir
+from qedcode.runtime.secrets import MaskingFilter
 
 MAX_LOG_BYTES = 5 * 1024 * 1024
 KEEP_LOGS = 3
@@ -47,6 +48,7 @@ def setup_logging(level: int = logging.INFO) -> Path | None:
         path, maxBytes=MAX_LOG_BYTES, backupCount=KEEP_LOGS, encoding="utf-8"
     )
     handler.setFormatter(logging.Formatter(_FORMAT))
+    handler.addFilter(MaskingFilter())
     handler._qed_file = True  # type: ignore[attr-defined]
     logger.addHandler(handler)
     logger.propagate = False
