@@ -12,6 +12,8 @@ license = { text = "GPL-3.0-or-later" }
 dependencies = [
     "typer>=0.12",
     "rich>=13.7",
+    "pydantic>=2.14.4",
+    "tomli-w>=1.2.0",
 ]
 
 [project.scripts]
@@ -34,6 +36,7 @@ extend-exclude = ["bugzoo/0*", "docs", "*.md"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+ignore = ["UP042"]  # AGENTS.md specifies (str, Enum) for the shared enums
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
