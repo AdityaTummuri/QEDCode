@@ -20,8 +20,10 @@ from rich.table import Table
 from qedcode import __version__
 from qedcode.config import load_global, save_global
 from qedcode.engine import api
+from qedcode.engine.callbacks import NonInteractiveCallbacks
 from qedcode.hardware import detect as hardware_detect
 from qedcode.hardware.recommend import best_ctx_for, recommend
+from qedcode.models.schemas import Grade, Speed
 from qedcode.runtime.catalog import CatalogError, load_catalog, local_path
 from qedcode.runtime.installer import (
     InstallDeclined,
@@ -88,6 +90,73 @@ def setup(
     except (KeyboardInterrupt, EOFError) as exc:
         typer.echo("\nSetup cancelled. Nothing more was changed; run `qed setup` to resume.")
         raise typer.Exit(1) from exc
+
+
+def _parse_speed(value: str) -> Speed:
+    try:
+        return Speed(value.lower())
+    except ValueError:
+        typer.echo(f"'{value}' is not a speed. Use fast, normal or sure.", err=True)
+        raise typer.Exit(2) from None
+
+
+def _grade_text(grade: Grade | None) -> str:
+    if grade is None:
+        return "[bold]Rejected[/bold]"
+    return (
+        f"[bold green]Grade {grade.value}[/bold green]"
+        if grade is Grade.A
+        else f"[bold]Grade {grade.value}[/bold]"
+    )
+
+
+@app.command("check")
+def check_command(
+    speed: Annotated[str, typer.Option("--speed", help="fast, normal or sure.")] = "normal",
+    base: Annotated[str, typer.Option("--base", help="Compare with this commit.")] = "HEAD",
+    as_json: Annotated[bool, typer.Option("--json", help="Print one JSON result.")] = False,
+    allow_risky: Annotated[
+        bool, typer.Option("--allow-risky", help="Do not stop at risky code.")
+    ] = False,
+) -> None:
+    """Grade the changes you made yourself (uncommitted work) and write a proof receipt."""
+    chosen = _parse_speed(speed)
+    console = Console(stderr=True) if as_json else Console()
+
+    def show(event) -> None:
+        console.print(event.message, style="dim", markup=False, highlight=False)
+
+    live = NonInteractiveCallbacks(on_event=None if as_json else show)
+    outcome = api.check(Path.cwd(), speed=chosen, base=base, cb=live, allow_risky=allow_risky)
+    if as_json:
+        typer.echo(outcome.model_dump_json(indent=1, exclude={"candidate"}))
+    else:
+        _print_check(Console(), outcome)
+    if outcome.status == "graded":
+        return
+    raise typer.Exit(1 if outcome.status in ("rejected", "cancelled") else 2)
+
+
+def _print_check(console: Console, outcome) -> None:
+    if outcome.status in ("error", "busy", "no_changes"):
+        console.print(outcome.message, markup=False)
+        return
+    console.print()
+    console.print(_grade_text(outcome.grade))
+    console.print(outcome.summary or outcome.message, markup=False)
+    if outcome.failing_tests:
+        console.print("Failing tests:")
+        for key in outcome.failing_tests[:10]:
+            console.print(f"  - {key}", markup=False, highlight=False)
+    if outcome.status == "rejected" and outcome.candidate is not None:
+        last = outcome.candidate.checks[-1] if outcome.candidate.checks else None
+        if last is not None and last.details:
+            console.print(last.details[:800], markup=False, highlight=False)
+    for note in outcome.notes:
+        console.print(f"Note: {note}", markup=False)
+    if outcome.receipt_path:
+        console.print(f"Receipt: {outcome.receipt_path}", markup=False)
+        console.print("Re-check it any time with: qed verify <receipt>", markup=False)
 
 
 @app.command("verify")

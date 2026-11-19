@@ -16,6 +16,7 @@ from qedcode.config import ProjectConfig
 from qedcode.models.schemas import Baseline
 from qedcode.project.detect import expand_test_command
 from qedcode.vcs import worktree
+from qedcode.vcs.git import git
 from qedcode.verify.pytest_runner import PytestOutcome, run_pytest
 
 
@@ -26,6 +27,11 @@ class BaselineRun:
     baseline: Baseline
     full_seconds: float | None  # how long the full suite took (None when it was not run)
     outcome: PytestOutcome | None
+
+
+def _existing_in_commit(root: Path, commit: str, paths: list[str]) -> list[str]:
+    """Only the paths that exist in `commit` (new files in the working tree are left out)."""
+    return [p for p in paths if git(root, "cat-file", "-e", f"{commit}:{p}").ok]
 
 
 def baseline_run(
@@ -41,7 +47,7 @@ def baseline_run(
 ) -> BaselineRun:
     """Run the full suite (or only the related tests) on the snapshot and record every outcome."""
     root = Path(root)
-    selection = None if full else list(related or [])
+    selection = None if full else _existing_in_commit(root, snapshot, related or [])
     if not full and not selection:
         return BaselineRun(
             Baseline(

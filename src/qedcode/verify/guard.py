@@ -164,7 +164,10 @@ def scope_check(
         if f.path in allowed and f.status == "added":
             problems.extend(_weakening(f))
             continue
-        if is_protected(f.path, project.protected):
+        new_test = f.status == "added" and is_test_file(
+            f.path
+        )  # a new test is evidence, not tampering
+        if is_protected(f.path, project.protected) and not new_test:
             protected_changes.append(f.path)
             if not allow_protected:
                 problems.append(
