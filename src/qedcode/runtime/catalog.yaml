@@ -1,0 +1,66 @@
+# Model catalog (AGENTS.md section 10). Values were read from the Hugging Face API on 2026-11-20:
+# file size and SHA-256 come from the LFS metadata of the pinned `revision`; KV numbers come from
+# each model's config.json (full-attention layers x 2 x KV heads x head_dim x 2 bytes).
+# Anything that could not be verified is written as "<verify>" and the installer refuses it.
+# size_gb is decimal gigabytes (bytes / 1e9), on purpose a little pessimistic for VRAM planning.
+# rank: lower = preferred when it fits.
+
+- id: qwen3.5-9b-q4km
+  display: Qwen3.5 9B (Q4_K_M)
+  gguf:
+    repo: unsloth/Qwen3.5-9B-GGUF
+    file: Qwen3.5-9B-Q4_K_M.gguf
+    revision: 3885219b6810b007914f3a7950a8d1b469d598a5
+    size_bytes: 5680522464
+    size_gb: 5.68
+    sha256: 03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8
+  ollama_tag: qwen3.5:9b
+  license: Apache-2.0
+  kv_bytes_per_token_f16: 32768   # 8 full-attention layers x 2 x 4 KV heads x 256 dim x 2 bytes
+  state_mb_per_seq: 50            # 24 Gated DeltaNet layers keep a fixed-size state
+  rank: 1
+
+- id: qwen3.5-4b-q4km
+  display: Qwen3.5 4B (Q4_K_M)
+  gguf:
+    repo: unsloth/Qwen3.5-4B-GGUF
+    file: Qwen3.5-4B-Q4_K_M.gguf
+    revision: e87f176479d0855a907a41277aca2f8ee7a09523
+    size_bytes: 2740937888
+    size_gb: 2.74
+    sha256: 00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4
+  ollama_tag: qwen3.5:4b
+  license: Apache-2.0
+  kv_bytes_per_token_f16: 32768   # 8 full-attention layers x 2 x 4 KV heads x 256 dim x 2 bytes
+  state_mb_per_seq: 50            # 24 Gated DeltaNet layers keep a fixed-size state
+  rank: 2
+
+- id: qwen2.5-coder-7b-q4km
+  display: Qwen2.5-Coder 7B (Q4_K_M)
+  gguf:
+    repo: Qwen/Qwen2.5-Coder-7B-Instruct-GGUF
+    file: qwen2.5-coder-7b-instruct-q4_k_m.gguf
+    revision: 13fb94bfda8c8cf22497dc57b78f391a9acb426a
+    size_bytes: 4683073536
+    size_gb: 4.68
+    sha256: 509287f78cb4d4cf6b3843734733b914b2c158e43e22a7f4bf5e963800894d3c
+  ollama_tag: qwen2.5-coder:7b
+  license: Apache-2.0
+  kv_bytes_per_token_f16: 57344   # 28 layers x 2 x 4 KV heads x 128 dim x 2 bytes
+  state_mb_per_seq: 0
+  rank: 3
+
+- id: qwen3.5-2b-q4km
+  display: Qwen3.5 2B (Q4_K_M)
+  gguf:
+    repo: unsloth/Qwen3.5-2B-GGUF
+    file: Qwen3.5-2B-Q4_K_M.gguf
+    revision: f6d5376be1edb4d416d56da11e5397a961aca8ae
+    size_bytes: 1280835840
+    size_gb: 1.28
+    sha256: aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223
+  ollama_tag: qwen3.5:2b
+  license: Apache-2.0
+  kv_bytes_per_token_f16: 12288   # 6 full-attention layers x 2 x 2 KV heads x 256 dim x 2 bytes
+  state_mb_per_seq: 20            # 18 Gated DeltaNet layers keep a fixed-size state
+  rank: 4

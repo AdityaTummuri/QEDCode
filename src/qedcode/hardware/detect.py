@@ -18,7 +18,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from qedcode.config import HardwareConfig
+from qedcode.config import HardwareConfig, global_config_path, load_global
 from qedcode.verify.run import RunResult, run
 
 log = logging.getLogger("qedcode.hardware")
@@ -482,3 +482,10 @@ def sys_platform_name() -> str:
     if sys.platform == "win32":
         return "Windows"
     return "Darwin" if sys.platform == "darwin" else "Linux"
+
+
+def current_hardware(host: Host | None = None) -> HardwareInfo:
+    """The hardware to plan with: the saved config when it exists, otherwise a fresh detection."""
+    if global_config_path().exists():
+        return info_from_config(load_global().hardware)
+    return detect(host)

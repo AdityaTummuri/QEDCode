@@ -8,6 +8,8 @@ from rich.table import Table
 
 from qedcode import __version__
 from qedcode.hardware import detect as hardware_detect
+from qedcode.hardware.recommend import recommend
+from qedcode.runtime.catalog import CatalogError, load_catalog, local_path
 
 app = typer.Typer(
     name="qed",
@@ -60,3 +62,56 @@ def doctor() -> None:
     """Check this computer and show what QEDCode found."""
     console = Console()
     console.print(hardware_table(hardware_detect.detect()))
+
+
+models_app = typer.Typer(
+    help="List, recommend and manage local models.", invoke_without_command=True
+)
+app.add_typer(models_app, name="models")
+
+
+@models_app.callback()
+def models_main(ctx: typer.Context) -> None:
+    """Show the model catalog when no subcommand is given."""
+    if ctx.invoked_subcommand is None:
+        models_list()
+
+
+def _catalog_or_exit():
+    try:
+        return load_catalog()
+    except CatalogError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+
+
+@models_app.command("list")
+def models_list() -> None:
+    """Show every model QEDCode knows, and which are downloaded."""
+    catalog = _catalog_or_exit()
+    table = Table(title="Models")
+    for column in ("id", "model", "size", "license", "downloaded"):
+        table.add_column(column, no_wrap=column == "id")
+    for entry in catalog.by_rank():
+        size = f"{entry.weights_gb:.2f} GB" if entry.weights_gb is not None else "unverified"
+        have = "yes" if local_path(entry).exists() else "no"
+        table.add_row(entry.id, entry.display, size, entry.license, have)
+    Console().print(table)
+
+
+@models_app.command("recommend")
+def models_recommend() -> None:
+    """Recommend the best model and context size for this computer."""
+    catalog = _catalog_or_exit()
+    hw = hardware_detect.current_hardware()
+    rec = recommend(hw, catalog)
+    console = Console()
+    console.print(hardware_table(hw))
+    if not rec.model_id:
+        console.print(rec.reason)
+        raise typer.Exit(2)
+    console.print(f"[bold]Recommended:[/bold] {rec.display} ({rec.model_id})")
+    console.print(f"Context: {rec.ctx} tokens, KV cache {rec.kv_cache}, runs on the {rec.run_on}")
+    console.print(rec.reason)
+    for warning in rec.warnings:
+        console.print(f"[yellow]Warning:[/yellow] {warning}")
