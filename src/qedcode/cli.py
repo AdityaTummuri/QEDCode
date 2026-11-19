@@ -18,13 +18,14 @@ from rich.progress import (
 from rich.table import Table
 
 from qedcode import __version__
-from qedcode.config import load_global, save_global
+from qedcode.config import load_global, logs_dir, save_global
 from qedcode.engine import api
 from qedcode.engine.callbacks import NonInteractiveCallbacks
 from qedcode.hardware import detect as hardware_detect
 from qedcode.hardware.recommend import best_ctx_for, recommend
-from qedcode.models.schemas import Grade, Speed
+from qedcode.models.schemas import Event, Grade, SolveResult, Speed
 from qedcode.runtime.catalog import CatalogError, load_catalog, local_path
+from qedcode.runtime.client import ModelError, make_client
 from qedcode.runtime.installer import (
     InstallDeclined,
     InstallError,
@@ -157,6 +158,156 @@ def _print_check(console: Console, outcome) -> None:
     if outcome.receipt_path:
         console.print(f"Receipt: {outcome.receipt_path}", markup=False)
         console.print("Re-check it any time with: qed verify <receipt>", markup=False)
+
+
+def _event_line(event: Event) -> str | None:
+    """One progress line for an event, or None for events that are not shown while working."""
+    if event.kind in ("stage", "candidate", "log"):
+        return event.message
+    if event.kind == "check":
+        return "  " + event.message
+    if event.kind == "warning":
+        return f"Warning: {event.message}"
+    return None
+
+
+def _print_solve(console: Console, result: SolveResult) -> None:
+    console.print()
+    if result.status == "done" and result.best is not None:
+        console.print(_grade_text(result.best.grade))
+        console.print(result.message, markup=False)
+        if result.explanation:
+            console.print()
+            console.print(result.explanation, markup=False)
+
+        def describe(c) -> str:
+            return f"{c.id}: " + (
+                f"grade {c.grade.value}" if c.grade else f"failed at {c.failed_stage}"
+            )
+
+        tries = ", ".join(describe(c) for c in result.candidates)
+        console.print(f"\nTries: {tries}", markup=False)
+        if result.receipt_path:
+            console.print(f"Receipt: {result.receipt_path}", markup=False)
+        if "Applied to" not in result.message:
+            console.print(f"Apply it with: qed apply {result.task.id}", markup=False)
+        return
+    console.print(result.message, markup=False)
+    if result.question:
+        console.print(f"Question for you: {result.question}", markup=False)
+
+
+@app.command("solve")
+def solve_command(
+    task: Annotated[str, typer.Argument(help="What to do, in plain words.")],
+    speed: Annotated[str | None, typer.Option("--speed", help="fast, normal or sure.")] = None,
+    apply_flag: Annotated[
+        bool, typer.Option("--apply", help="Apply the result if its grade is A or B.")
+    ] = False,
+    as_json: Annotated[bool, typer.Option("--json", help="Print one JSON result.")] = False,
+    allow_risky: Annotated[
+        bool, typer.Option("--allow-risky", help="Do not stop at risky code.")
+    ] = False,
+) -> None:
+    """Fix or build something: several tries, tests on each one, one proven result."""
+    config = load_global()
+    chosen = _parse_speed(speed) if speed else config.engine.speed
+    console = Console(stderr=True) if as_json else Console()
+
+    def show(event: Event) -> None:
+        line = _event_line(event)
+        if line and not as_json:
+            console.print(line, style="dim", markup=False, highlight=False)
+
+    callbacks = NonInteractiveCallbacks(on_event=show)
+    try:
+        client = make_client(config, "main")
+    except ModelError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    try:
+        with console.status("Working...", spinner="dots") if not as_json else _no_status():
+            result = api.solve(
+                Path.cwd(),
+                task,
+                speed=chosen,
+                cb=callbacks,
+                config=config,
+                client=client,
+                allow_risky=allow_risky,
+                apply=apply_flag,
+            )
+    except Exception as exc:  # noqa: BLE001 - last resort: a friendly message, details in the log
+        _log_crash(exc)
+        typer.echo(
+            "Something went wrong inside QEDCode. The details were saved to "
+            f"{logs_dir() / 'qedcode.log'}. Please report it.",
+            err=True,
+        )
+        raise typer.Exit(3) from exc
+    finally:
+        if config.engine.unload_on_exit:
+            try:
+                client.unload()
+            except Exception:  # noqa: BLE001 - unloading is best effort
+                pass
+    if as_json:
+        typer.echo(result.model_dump_json(indent=1))
+    else:
+        _print_solve(Console(), result)
+    if result.status == "done":
+        return
+    raise typer.Exit(2 if result.status == "error" else 1)
+
+
+class _no_status:  # noqa: N801 - a tiny context manager standing in for console.status
+    def __enter__(self) -> None:
+        return None
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+
+def _log_crash(exc: Exception) -> None:
+    import logging
+    import traceback
+
+    from qedcode.logging_setup import setup_logging
+
+    setup_logging()
+    logging.getLogger("qedcode.cli").error(
+        "Unhandled error\n%s", "".join(traceback.format_exception(exc))
+    )
+
+
+@app.command("apply")
+def apply_command(
+    task_id: Annotated[
+        str | None, typer.Argument(help="A task id (default: the last result).")
+    ] = None,
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask about a low grade.")] = False,
+) -> None:
+    """Apply a finished result to your files (undo it any time with `qed undo`)."""
+    console = Console()
+    outcome = api.apply_result(Path.cwd(), task_id)
+    if outcome.status == "needs_confirmation":
+        console.print(outcome.message, markup=False)
+        if yes or typer.confirm("Apply it anyway?", default=False):
+            outcome = api.apply_result(Path.cwd(), task_id, allow_low_grade=True)
+        else:
+            raise typer.Exit(1)
+    console.print(outcome.message, markup=False)
+    if outcome.status != "applied":
+        raise typer.Exit(1 if outcome.status == "refused" else 2)
+
+
+@app.command("undo")
+def undo_command() -> None:
+    """Take the last applied change back out of your files."""
+    outcome = api.undo(Path.cwd())
+    Console().print(outcome.message, markup=False)
+    if outcome.status != "undone":
+        raise typer.Exit(1 if outcome.status == "refused" else 2)
 
 
 @app.command("verify")

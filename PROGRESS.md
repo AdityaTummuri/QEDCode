@@ -1,7 +1,7 @@
 # QEDCode progress
 
 ## Current step
-M5.4
+M6.1
 
 ## Done
 - Setup, 2026-11-20: AGENTS.md (from the AI Build Brief), CLAUDE.md, PROGRESS.md, .gitignore, docs/ committed.
@@ -27,6 +27,7 @@ M5.4
 - M5.1, 2026-11-20: engine/prompts/*.txt (section 9 word for word), engine/roles.py (intake, locator, test_writer, coder, repairer, explainer: temperature/max tokens/tag per role, one format re-ask, typed results, graceful fallbacks, every prompt and reply saved in .qed/runs/<task id>/, cancel support), project/context.py budget helpers (chars/3.5 tokens, drop trailing files, condense to relevant symbols + outline, truncate), repro_test_path; tests with FakeModel: good, bad-then-good, still-bad-after-re-ask.
 - M5.2, 2026-11-20: project/repo_map.py (files + top-level symbols that shrink to a token budget), project/search.py (keywords from identifiers, quoted text, error names, file names, plain words; ripgrep when installed else pure Python; ranked files, tests ranked below source), project/tokens.py, project/context.py build_context (validated locator paths, search-hit fallback, adds a strong search match the locator missed, related tests, example test, compact() for helpers); for every bug zoo task the selected files include the buggy file even with a useless locator; a 200-file repo is searched in well under a second.
 - M5.3, 2026-11-20: engine/select.py (best, near_miss, no_progress, reached, promising), engine/solve.py (the controller: snapshot, intake with optional question, locator, baseline, repro test with 2 attempts that must fail on base, k tries, repair rounds, mix-mode helper behind confirm, full suite right after a promising candidate, finalist fallback, receipt, explanation, resume for 'try harder', cancel/time budget, one job per project), engine/api.py solve/apply_result/undo/status, FakeModel scripts for all 10 zoo projects. All 7 plan scenarios pass and every zoo script reaches grade A.
+- M5.4, 2026-11-20: 'qed solve "<task>" [--speed] [--apply] [--json] [--allow-risky]' (live progress lines, grade, explanation, tries, receipt path; non-interactive callbacks: ask->None, confirm->False unless --allow-risky or config pre-approves the helper; exit codes 0/1/2/3 with crashes logged not shown; model unloaded afterwards per config), 'qed apply [task id] [--yes]', 'qed undo'; mix-mode helper through confirm tested via the CLI; bugzoo/run_zoo.py for the real-model numbers; setup_logging now follows QEDCODE_HOME. Milestone M5 complete.
 
 ## Known issues
 - LICENSE in the repo is GPL-3.0 (created with the repo); the plan's step 8.4 suggests MIT or Apache-2.0. Left as GPL-3.0 for the human to decide.
@@ -52,4 +53,4 @@ M5.4
 - Git on Windows (step 3.1): the vcs tests have only been run on macOS here. Check the CI run on Windows, especially CRLF files with core.autocrlf=true and long paths.
 
 ## Real-model results
--
+- NOT RUN (unattended, no model downloads): step 5.4 real-model check. When ready run 'uv run python bugzoo/run_zoo.py --speed normal' and then '--speed fast', and write the A/B/no-fix counts, the time per task and any 'wrong A/B' here. Every wrong grade A is a bug to fix before M6 ships.

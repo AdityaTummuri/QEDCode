@@ -106,3 +106,17 @@ def tree_state(root: Path) -> dict[str, bytes]:
             continue
         state[rel] = path.read_bytes()
     return state
+
+
+@pytest.fixture(autouse=True)
+def _reset_qedcode_logging():
+    """Remove file handlers that a test's setup_logging() added to the shared logger."""
+    yield
+    import logging
+
+    logger = logging.getLogger("qedcode")
+    for handler in list(logger.handlers):
+        if getattr(handler, "_qed_file", False):
+            logger.removeHandler(handler)
+            handler.close()
+    logger.propagate = True

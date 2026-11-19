@@ -41,9 +41,12 @@ def setup_logging(level: int = logging.INFO) -> Path | None:
         path.parent.mkdir(parents=True, exist_ok=True)
     except OSError:
         return None
-    for handler in logger.handlers:
-        if getattr(handler, "_qed_file", False):
-            return path
+    for existing in list(logger.handlers):
+        if getattr(existing, "_qed_file", False):
+            if Path(getattr(existing, "baseFilename", "")) == path.resolve():
+                return path
+            logger.removeHandler(existing)  # QEDCODE_HOME changed: write to the new folder
+            existing.close()
     handler = logging.handlers.RotatingFileHandler(
         path, maxBytes=MAX_LOG_BYTES, backupCount=KEEP_LOGS, encoding="utf-8"
     )
