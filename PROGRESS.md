@@ -1,7 +1,7 @@
 # QEDCode progress
 
 ## Current step
-M4.1
+M4.2
 
 ## Done
 - Setup, 2026-11-20: AGENTS.md (from the AI Build Brief), CLAUDE.md, PROGRESS.md, .gitignore, docs/ committed.
@@ -20,6 +20,7 @@ M4.1
 - M3.2, 2026-11-20: project/detect.py (interpreter order .venv/venv/VIRTUAL_ENV/PATH, one-shot pytest probe, test files + static test count, ProjectConfig with default protected paths, first_run() + confirm_project() saving .qed/project.toml, git init + first commit helper, .gitignore offer, ask-first pytest install); all 10 bug zoo projects detect the right Python and pytest.
 - M3.3, 2026-11-20: edits/protocol.py parse_reply (state machine; every leniency rule from section 7 recorded as 'warning:' entries; real format problems are blocking errors; reply_ok/problem_text helpers); 57 parser tests incl. the brief's full example, all 10 bug zoo edits.txt and messy replies.
 - M3.4, 2026-11-20: edits/apply.py (all 5 ops via ast lineno/end_lineno/col_offset: decorators included in the replaced span, re-indent that leaves multi-line strings alone, name check with insert_after_symbol hint, 1/2 blank lines, add_import placement + dedupe, exact then tolerant search_replace with closest-line hints, create_file; atomic: nothing is written if any edit fails; CRLF/BOM kept; path rules, protected paths, test_writer limited to creating test files), project/paths.py (globs, path validation); 83 applier tests + all 10 bug zoo edits.txt make the hidden tests pass. Milestone M3 complete.
+- M4.1, 2026-11-20: verify/pytest_runner.py (pytest command from section 8, JUnit XML parsing with key classname::name, statuses ok/failed/no_tests/collection_error/timeout/cancelled/error, process-tree kill on timeout, worktree src+root first on PYTHONPATH), verify/baseline.py (baseline in its own worktree, known failures, runnable flag, BaselineRun with full-suite duration), project/context.py first part (related_tests by name and by import, select_targeted with the 4 rules).
 
 ## Known issues
 - LICENSE in the repo is GPL-3.0 (created with the repo); the plan's step 8.4 suggests MIT or Apache-2.0. Left as GPL-3.0 for the human to decide.
