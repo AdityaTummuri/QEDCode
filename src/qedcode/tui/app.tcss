@@ -1,0 +1,88 @@
+/* Calm on purpose: plain text everywhere, one green accent for grade A (set in code). */
+
+Screen {
+    layout: vertical;
+}
+
+#header {
+    height: 2;
+    padding: 0 1;
+    background: $boost;
+}
+
+#modebar {
+    height: 1;
+    padding: 0 1;
+    color: $text-muted;
+}
+
+#log {
+    height: 1fr;
+    padding: 0 1;
+    border: none;
+}
+
+#cards {
+    height: auto;
+    min-height: 1;
+    padding: 0 1;
+}
+
+#result {
+    height: auto;
+    max-height: 12;
+    padding: 0 1;
+}
+
+#task {
+    margin: 0 1;
+}
+
+ModalScreen {
+    align: center middle;
+}
+
+#dialog {
+    width: 80%;
+    max-width: 100;
+    height: auto;
+    max-height: 80%;
+    border: round $primary;
+    background: $surface;
+    padding: 1 2;
+}
+
+#dialog-title {
+    text-style: bold;
+    padding-bottom: 1;
+}
+
+#dialog-body {
+    height: auto;
+    max-height: 22;
+}
+
+#dialog-buttons {
+    height: auto;
+    padding-top: 1;
+}
+
+#dialog-buttons Button {
+    margin-right: 2;
+}
+
+#dialog-hint {
+    color: $text-muted;
+    padding-top: 1;
+}
+
+#diff-screen {
+    width: 100%;
+    height: 100%;
+    background: $surface;
+    padding: 0 1;
+}
+
+#diff-body {
+    height: 1fr;
+}

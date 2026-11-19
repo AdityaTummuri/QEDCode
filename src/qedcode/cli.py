@@ -60,7 +60,9 @@ def main(
 ) -> None:
     """Open QEDCode in the current folder."""
     if ctx.invoked_subcommand is None:
-        typer.echo("QEDCode is not ready yet")
+        from qedcode.tui.app import run_tui
+
+        run_tui(Path.cwd())
 
 
 def hardware_table(info: hardware_detect.HardwareInfo) -> Table:

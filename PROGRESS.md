@@ -1,7 +1,7 @@
 # QEDCode progress
 
 ## Current step
-M6.1
+M6.2
 
 ## Done
 - Setup, 2026-11-20: AGENTS.md (from the AI Build Brief), CLAUDE.md, PROGRESS.md, .gitignore, docs/ committed.
@@ -28,6 +28,7 @@ M6.1
 - M5.2, 2026-11-20: project/repo_map.py (files + top-level symbols that shrink to a token budget), project/search.py (keywords from identifiers, quoted text, error names, file names, plain words; ripgrep when installed else pure Python; ranked files, tests ranked below source), project/tokens.py, project/context.py build_context (validated locator paths, search-hit fallback, adds a strong search match the locator missed, related tests, example test, compact() for helpers); for every bug zoo task the selected files include the buggy file even with a useless locator; a 200-file repo is searched in well under a second.
 - M5.3, 2026-11-20: engine/select.py (best, near_miss, no_progress, reached, promising), engine/solve.py (the controller: snapshot, intake with optional question, locator, baseline, repro test with 2 attempts that must fail on base, k tries, repair rounds, mix-mode helper behind confirm, full suite right after a promising candidate, finalist fallback, receipt, explanation, resume for 'try harder', cancel/time budget, one job per project), engine/api.py solve/apply_result/undo/status, FakeModel scripts for all 10 zoo projects. All 7 plan scenarios pass and every zoo script reaches grade A.
 - M5.4, 2026-11-20: 'qed solve "<task>" [--speed] [--apply] [--json] [--allow-risky]' (live progress lines, grade, explanation, tries, receipt path; non-interactive callbacks: ask->None, confirm->False unless --allow-risky or config pre-approves the helper; exit codes 0/1/2/3 with crashes logged not shown; model unloaded afterwards per config), 'qed apply [task id] [--yes]', 'qed undo'; mix-mode helper through confirm tested via the CLI; bugzoo/run_zoo.py for the real-model numbers; setup_logging now follows QEDCODE_HOME. Milestone M5 complete.
+- M6.1, 2026-11-20: tui/app.py (Textual: header with model/backend/GPU/state, speed+mode line, scrolling log, task input, footer with keys; the engine runs in a worker thread and Events reach the log through call_from_thread; Esc cancels; 'qed' with no arguments opens it), tui/widgets.py, tui/screens.py, tui/app.tcss, hardware/telemetry.py (VRAM via nvidia-ml-py optional extra or AMD sysfs, else n/a); pilot tests with FakeModel incl. 'screen never freezes' and 'Esc leaves no worktrees'.
 
 ## Known issues
 - LICENSE in the repo is GPL-3.0 (created with the repo); the plan's step 8.4 suggests MIT or Apache-2.0. Left as GPL-3.0 for the human to decide.
@@ -43,6 +44,7 @@ M6.1
 - Baseline selection now keeps only tests that exist at the base commit (a new test in the working tree made pytest exit 4 and the baseline 'not runnable').
 - Controller deviates from the pseudocode in one way: a promising candidate gets the full suite immediately (not only after all tries), so stopping early means the proof is complete and a full-suite regression sends the loop on to the next try instead of ending with no fix.
 - Fix found by tests: a repro test for a not-yet-existing function fails on the base as a collection error; the fail-before proof (cascade and verify) now treats a file-level failure as 'every test in that file failed before'.
+- Found by the pilot tests: a Textual Static parses [Normal] as markup, hiding the current speed. All widget text now goes in as plain rich Text; my own helper must not be called _shutdown (it overrides Textual's).
 
 ## Values I must verify by hand
 - Real GPU detection (RTX 5060 Ti VRAM, AMD/Intel registry path, Windows PowerShell JSON) is only covered by mocked tests; confirm on the real machines in step 8.3.

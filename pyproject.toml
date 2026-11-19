@@ -21,10 +21,16 @@ dependencies = [
     "litellm>=1.110.1",
     "keyring>=25.7.0",
     "ruff>=0.17.6",
+    "textual>=8.2.8",
 ]
 
 [project.scripts]
 qed = "qedcode.cli:app"
+
+[project.optional-dependencies]
+nvidia = [
+    "nvidia-ml-py>=13.615.71",
+]
 
 [dependency-groups]
 dev = [
