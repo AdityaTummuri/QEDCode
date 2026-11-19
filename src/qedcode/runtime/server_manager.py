@@ -184,10 +184,18 @@ def _process_matches(pid: int, create_time: float) -> bool:
 
 
 def _atomic_write(path: Path, text: str) -> None:
+    """Write a file in one step. The temp name is unique per thread, so threads never collide."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     tmp.write_text(text, encoding="utf-8")
-    tmp.replace(path)
+    for attempt in range(5):  # Windows refuses a replace while another process is reading
+        try:
+            tmp.replace(path)
+            return
+        except PermissionError:
+            if attempt == 4:
+                raise
+            time.sleep(0.02)
 
 
 class FileLock:
@@ -250,6 +258,12 @@ class ServerManager:
         return run_dir() / "server.lock"
 
     @property
+    def used_path(self) -> Path:
+        """When a client last used the server. Kept apart from server.json so that recording a
+        use never rewrites (and so never clobbers) the record of which server is running."""
+        return run_dir() / "server.last_used"
+
+    @property
     def clients_dir(self) -> Path:
         return run_dir() / "clients"
 
@@ -289,10 +303,12 @@ class ServerManager:
 
     def touch(self) -> None:
         """Record that a client just used the server (resets the idle timer)."""
-        state = self._read_state()
-        if state is not None:
-            state.last_used = self._clock()
-            self._write_state(state)
+        if not self.state_path.exists():
+            return
+        try:
+            _atomic_write(self.used_path, repr(self._clock()))
+        except OSError:
+            log.debug("Could not record server use time", exc_info=True)  # best effort only
 
     # ----- start / reuse
 
@@ -350,6 +366,7 @@ class ServerManager:
             last_used=now,
         )
         self._write_state(info)
+        self.used_path.unlink(missing_ok=True)
         log.info("Started llama-server pid %s on port %s for %s", proc.pid, port, spec.model_id)
         return info
 
@@ -400,6 +417,7 @@ class ServerManager:
     def _stop_locked(self, info: ServerInfo) -> None:
         kill_process_tree(info.pid)
         self.state_path.unlink(missing_ok=True)
+        self.used_path.unlink(missing_ok=True)
         log.info("Stopped llama-server pid %s", info.pid)
 
     def stop(self) -> bool:
@@ -416,7 +434,14 @@ class ServerManager:
 
     def idle_seconds(self) -> float | None:
         state = self._read_state()
-        return None if state is None else self._clock() - state.last_used
+        if state is None:
+            return None
+        last = state.last_used
+        try:
+            last = max(last, float(self.used_path.read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            pass
+        return self._clock() - last
 
     def unload_if_idle(self, keep_alive_minutes: float) -> bool:
         """Stop the server when it has been idle longer than `keep_alive_minutes`."""
