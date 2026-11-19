@@ -10,13 +10,17 @@ This part: choosing which tests to run for a change. Selection rules, in order:
 from __future__ import annotations
 
 import ast
-import math
 import re
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 
+from qedcode.models.schemas import Event, TaskSpec
 from qedcode.project.detect import find_test_files
-from qedcode.project.paths import is_test_file
+from qedcode.project.paths import is_test_file, normalize_path, validate_path
+from qedcode.project.repo_map import MAX_FILE_BYTES, SKIP_DIRS, list_python_files, repo_map
+from qedcode.project.search import extract_keywords, format_hits, search
+from qedcode.project.tokens import CHARS_PER_TOKEN, estimate_tokens, prompt_budget
 
 FULL_SUITE_FAST_SECONDS = 60.0
 _SOURCE_ROOTS = ("src", "lib", "python")
@@ -130,20 +134,6 @@ def select_targeted(
 # with only its relevant symbols plus an outline of the rest.
 
 
-CHARS_PER_TOKEN = 3.5
-PROMPT_MARGIN_TOKENS = 512
-
-
-def estimate_tokens(text: str) -> int:
-    """Rough token count of `text` (characters divided by 3.5, rounded up)."""
-    return math.ceil(len(text) / CHARS_PER_TOKEN)
-
-
-def prompt_budget(context_tokens: int, max_output_tokens: int) -> int:
-    """Tokens available for the prompt: context - max output - 512 (never below 256)."""
-    return max(256, context_tokens - max_output_tokens - PROMPT_MARGIN_TOKENS)
-
-
 @dataclass
 class ContextFile:
     """A file shown to the model; `condensed` means only relevant symbols plus an outline."""
@@ -255,3 +245,147 @@ def repro_test_path(request: str, existing_tests: list[str], repo: Path | str) -
         if not (repo / rel).exists():
             return rel
     return f"{folder}/{base}_x.py" if folder else f"{base}_x.py"
+
+
+# --------------------------------------------------------------------------- building the context
+
+
+LOCATOR_MAX_TOKENS = 200
+CODER_FILE_BUDGET_MARGIN = 1800  # the fixed parts of the coder prompt (instructions, cheat sheet)
+STRONG_HIT_SCORE = 3.0
+COMPACT_BUDGET_TOKENS = 1500
+
+
+@dataclass
+class ContextBundle:
+    """What the controller shows the model: files, the repo map and search hits."""
+
+    files: list[ContextFile]
+    repo_map: str = ""
+    hits: str = ""
+    located: list[str] = field(default_factory=list)
+    related_tests: list[str] = field(default_factory=list)
+    example_test: ContextFile | None = None
+    keywords: set[str] = field(default_factory=set)
+    notes: list[str] = field(default_factory=list)
+
+    def compact(self, budget_tokens: int = COMPACT_BUDGET_TOKENS) -> ContextBundle:
+        """A much smaller context for a helper model: the first files, condensed, no map."""
+        files = fit_files(self.files[:3], budget_tokens, self.keywords)
+        return ContextBundle(
+            files=files,
+            located=[f.path for f in files],
+            related_tests=self.related_tests,
+            example_test=self.example_test,
+            keywords=self.keywords,
+            notes=["compact context"],
+        )
+
+
+def read_project_file(root: Path | str, rel: str) -> str | None:
+    """Text of a project file, or None when it is missing, too large or not readable text."""
+    path = Path(root) / rel
+    try:
+        if not path.is_file() or path.stat().st_size > MAX_FILE_BYTES:
+            return None
+        return path.read_bytes().decode("utf-8", errors="replace")
+    except OSError:
+        return None
+
+
+def validate_located(root: Path | str, paths: list[str]) -> list[str]:
+    """Keep the locator's paths that are real project files (inside the repo, not env folders)."""
+    root = Path(root)
+    kept: list[str] = []
+    for raw in paths:
+        rel = normalize_path(raw)
+        if validate_path(rel, root) or set(rel.split("/")[:-1]) & SKIP_DIRS:
+            continue
+        if rel not in kept and read_project_file(root, rel) is not None:
+            kept.append(rel)
+    return kept
+
+
+def build_context(
+    root: Path | str,
+    spec: TaskSpec,
+    locate: Callable[[str, str], list[str]],
+    *,
+    max_files: int,
+    context_tokens: int,
+    on_event: Callable[[Event], None] | None = None,
+) -> ContextBundle:
+    """Find the files for a task: search, repo map, the locator, validation and fallbacks.
+
+    `locate(repo_map, hits)` is the locator role. Its paths are validated; when it gives nothing
+    usable the best search hits are used instead; when it picked fewer than `max_files`, a strong
+    search match it missed is added.
+    """
+    root = Path(root)
+    notes: list[str] = []
+    py_files = list_python_files(root)
+    keywords = extract_keywords(spec.request, spec.acceptance)
+    found = search(root, keywords, files=py_files)
+    hits_text = format_hits(found, 20)
+    budget = prompt_budget(context_tokens, LOCATOR_MAX_TOKENS)
+    fixed = estimate_tokens(spec.request + "\n".join(spec.acceptance)) + 400
+    map_budget = max(200, budget - fixed - estimate_tokens(hits_text))
+    map_text = repo_map(root, map_budget, py_files)
+    located = validate_located(root, locate(map_text, hits_text))
+    top_sources = found.top_source_files(1)
+    top = top_sources[0] if top_sources else None
+    if not located:
+        located = validate_located(root, found.top_source_files(max_files))
+        if located:
+            notes.append("The locator gave no usable files, so the best search matches were used.")
+    elif (
+        top
+        and top not in located
+        and len(located) < max_files + 1
+        and (
+            found.scores.get(top, 0.0) >= STRONG_HIT_SCORE
+            or all(is_test_file(p) for p in located)  # only tests were picked: add real code
+        )
+    ):
+        located = located[: max_files - 1] + [top] if len(located) >= max_files else [*located, top]
+        notes.append(f"Added {top}, the best search match the locator did not pick.")
+    if not located:
+        source = [p for p in py_files if not is_test_file(p)]
+        located = validate_located(root, source[:max_files])
+        notes.append("No file stood out, so the first source files are shown.")
+    located = located[:max_files]
+    related = related_tests(located, root)
+    tests = find_test_files(root)
+    example_path = related[0] if related else (tests[0] if tests else None)
+    example = None
+    if example_path:
+        text = read_project_file(root, example_path)
+        example = ContextFile(example_path, text) if text is not None else None
+    raw_files = [
+        ContextFile(rel, text)
+        for rel in located
+        if (text := read_project_file(root, rel)) is not None
+    ]
+    files = fit_files(
+        raw_files,
+        max(256, prompt_budget(context_tokens, 2000) - CODER_FILE_BUDGET_MARGIN),
+        task_keywords(spec.request),
+    )
+    if on_event is not None:
+        on_event(
+            Event(
+                kind="stage",
+                message="Finding files ...... " + ", ".join(f.path for f in files),
+                data={"files": [f.path for f in files]},
+            )
+        )
+    return ContextBundle(
+        files=files,
+        repo_map=map_text,
+        hits=hits_text,
+        located=[f.path for f in files],
+        related_tests=related,
+        example_test=example,
+        keywords=task_keywords(spec.request),
+        notes=notes,
+    )

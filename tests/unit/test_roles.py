@@ -19,13 +19,12 @@ from qedcode.models.schemas import Candidate, Event, Speed, TaskKind, TaskSpec
 from qedcode.project.context import (
     ContextFile,
     condense_file,
-    estimate_tokens,
     files_block,
     fit_files,
-    prompt_budget,
     repro_test_path,
     task_keywords,
 )
+from qedcode.project.tokens import estimate_tokens, prompt_budget
 from qedcode.runtime.fake import FakeModel
 from qedcode.verify.cascade import Cancelled
 from tests.conftest import write_files
