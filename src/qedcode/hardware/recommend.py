@@ -122,3 +122,18 @@ def recommend(hw: HardwareInfo, catalog: Catalog, *, desktop_on_gpu: bool = True
         else "No model in the catalog has a verified size."
     )
     return _cpu_recommendation(catalog, hw, why)
+
+
+def best_ctx_for(
+    hw: HardwareInfo, entry: CatalogEntry, *, desktop_on_gpu: bool = True
+) -> int | None:
+    """The largest context that fits this model on this hardware, or None when none does."""
+    if hw.vendor == "cpu" or hw.vram_gb <= 0:
+        return None
+    reserve = reserve_for(hw, desktop_on_gpu)
+    fitting = [
+        step
+        for step in CTX_STEPS
+        if (needed := need_gb(entry, step, "q8_0", reserve)) is not None and needed <= hw.vram_gb
+    ]
+    return max(fitting) if fitting else None

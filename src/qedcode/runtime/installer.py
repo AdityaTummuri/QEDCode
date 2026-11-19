@@ -21,9 +21,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
+from huggingface_hub import hf_hub_download
+from tqdm.auto import tqdm
 
-from qedcode.config import bin_dir
+from qedcode.config import bin_dir, models_dir
 from qedcode.hardware.detect import HardwareInfo, sys_platform_name
+from qedcode.runtime.catalog import CatalogEntry, local_path
 from qedcode.verify.run import run
 
 log = logging.getLogger("qedcode.installer")
@@ -530,3 +533,117 @@ def download_llamacpp(
         + " | ".join(failures)
         + " Update your GPU driver, or use Ollama or LM Studio instead (qed setup)."
     )
+
+
+# --------------------------------------------------------------------------- model downloads
+
+
+def sha256_of(path: Path, chunk: int = 1024 * 1024) -> str:
+    """SHA-256 of a file, read in chunks (model files are several GB)."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while block := handle.read(chunk):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def verify_model_file(entry: CatalogEntry, path: Path | None = None) -> bool:
+    """True when the downloaded file exists and matches the catalog checksum (and size)."""
+    path = path or local_path(entry)
+    if not path.is_file():
+        return False
+    if entry.gguf.size_bytes and path.stat().st_size != entry.gguf.size_bytes:
+        return False
+    expected = entry.gguf.sha256
+    return True if expected in ("<fill>", "<verify>") else sha256_of(path) == expected
+
+
+def _progress_bar_class(callback: ProgressFn | None, name: str, total: int):
+    class _Bar(tqdm):
+        def __init__(self, *args, **kwargs):
+            kwargs["disable"] = True  # no terminal bar from here; the UI draws its own
+            super().__init__(*args, **kwargs)
+            self._qed_done = 0
+
+        def update(self, n=1):
+            self._qed_done += n or 0
+            if callback is not None:
+                callback(name, self._qed_done, int(self.total or total))
+            return True
+
+    return _Bar
+
+
+def download_model(
+    entry: CatalogEntry,
+    confirm: ConfirmFn,
+    on_progress: ProgressFn | None = None,
+) -> Path:
+    """Ask, then download a catalog model to ~/.qedcode/models/<id>/ and check its checksum.
+
+    Safe to call again after an interruption: huggingface_hub resumes the partial file.
+    """
+    if not entry.verified:
+        raise InstallError(
+            f"The catalog entry for {entry.id} still has unverified values "
+            f"({', '.join(entry.unverified_fields())}), so it cannot be downloaded safely. "
+            "Choose another model with `qed models list`."
+        )
+    target = local_path(entry)
+    if verify_model_file(entry, target):
+        return target  # already here and intact: nothing to download
+    size = entry.gguf.size_bytes or int((entry.weights_gb or 0) * 1e9)
+    prompt = (
+        f"Download {entry.display} ({format_size(size)}) from huggingface.co/{entry.gguf.repo}? "
+        f"It is saved under {target.parent}."
+    )
+    if not confirm(prompt):
+        raise InstallDeclined(
+            f"Nothing was downloaded because you said no. Run `qed models download {entry.id}` "
+            "when you are ready."
+        )
+    target.parent.mkdir(parents=True, exist_ok=True)
+    free = shutil.disk_usage(target.parent).free
+    needed = int(size * 1.05)
+    if free < needed:
+        raise InstallError(
+            f"There is not enough free disk space for {entry.display}: it needs about "
+            f"{format_size(needed)} and {format_size(free)} is free in {target.parent}. "
+            "Free some space, or remove a model you do not use (`qed models remove <id>`)."
+        )
+    try:
+        hf_hub_download(
+            repo_id=entry.gguf.repo,
+            filename=entry.gguf.file,
+            revision=entry.gguf.revision or None,
+            local_dir=str(target.parent),
+            tqdm_class=_progress_bar_class(on_progress, entry.gguf.file, size),
+        )
+    except Exception as exc:  # noqa: BLE001 - huggingface_hub raises many kinds of errors
+        raise InstallError(
+            f"Downloading {entry.display} stopped ({type(exc).__name__}: {str(exc)[:160]}). "
+            f"Check your internet connection and run `qed models download {entry.id}` again; "
+            "the download resumes where it stopped."
+        ) from exc
+    if not target.is_file():
+        raise InstallError(f"The download finished but {target} is missing. Run the command again.")
+    if not verify_model_file(entry, target):
+        target.unlink(missing_ok=True)
+        raise InstallError(
+            f"The downloaded {entry.gguf.file} does not match the catalog checksum, so it was "
+            f"deleted. Run `qed models download {entry.id}` again; if it keeps failing, the "
+            "catalog entry may be out of date (please report it)."
+        )
+    return target
+
+
+def remove_model(entry: CatalogEntry, confirm: ConfirmFn) -> bool:
+    """Delete a downloaded model after asking. Returns False when there was nothing to remove."""
+    folder = models_dir() / entry.id
+    if not folder.exists():
+        return False
+    size = sum(f.stat().st_size for f in folder.rglob("*") if f.is_file())
+    if not confirm(f"Delete {entry.display} ({format_size(size)}) from {folder}?"):
+        raise InstallDeclined("Nothing was deleted because you said no.")
+    shutil.rmtree(folder)
+    return True

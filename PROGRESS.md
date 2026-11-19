@@ -1,7 +1,7 @@
 # QEDCode progress
 
 ## Current step
-M2.5
+M2.6
 
 ## Done
 - Setup, 2026-11-20: AGENTS.md (from the AI Build Brief), CLAUDE.md, PROGRESS.md, .gitignore, docs/ committed.
@@ -13,6 +13,7 @@ M2.5
 - M2.2, 2026-11-20: runtime/catalog.yaml (4 models, values read from the Hugging Face API), runtime/catalog.py (Pydantic validation, <verify> placeholders), hardware/recommend.py (brief's formula), 'qed models list' and 'qed models recommend' (reads vram from config), tests for 4/6/8/16 GB, Apple, CPU.
 - M2.3, 2026-11-20: runtime/ollama.py (OllamaClient: chat streaming, is_running, list_models, pull, unload), runtime/openai_compat.py (OpenAICompatClient SSE), runtime/client.py (make_client factory, ModelError/ServerNotRunning, timeouts connect 5s read 600s); httpx.MockTransport tests, no real server.
 - M2.4, 2026-11-20: runtime/installer.py (asset matcher for the real b12549 release names incl. Blackwell CUDA>=12.8 rule, confirm-first download, checksum from GitHub digest, safe extract, --version check, CUDA->Vulkan->CPU fallback), runtime/server_manager.py (shared llama-server: state file, lock file, client registry, free port, /health polling, idle unload, OOM hint, --help flag probe cache), runtime/llamacpp.py (LlamaCppClient, lazy start), logging_setup.py (rotation 5MB x3), spawn_detached in verify/run.py; tests use a fake llama-server script (no model).
+- M2.5, 2026-11-20: installer.download_model (size shown, asks first, huggingface_hub with pinned revision, SHA-256 + size check, resumes on retry, disk-space check), remove_model, 'qed models download|use|remove' (--yes to skip prompts), best_ctx_for; huggingface_hub mocked in tests, nothing downloaded.
 
 ## Known issues
 - LICENSE in the repo is GPL-3.0 (created with the repo); the plan's step 8.4 suggests MIT or Apache-2.0. Left as GPL-3.0 for the human to decide.
@@ -26,6 +27,7 @@ M2.5
 - Real GPU detection (RTX 5060 Ti VRAM, AMD/Intel registry path, Windows PowerShell JSON) is only covered by mocked tests; confirm on the real machines in step 8.3.
 - Catalog (step 2.2): open each Hugging Face page and confirm repo, file, size, SHA-256 and pinned revision for qwen3.5-9b/4b/2b (unsloth/*-GGUF, third-party GGUFs: the official Qwen repos ship no GGUF) and qwen2.5-coder-7b (Qwen/Qwen2.5-Coder-7B-Instruct-GGUF). Values were read from the HF API on 2026-11-20; KV numbers derived from each config.json.
 - llama.cpp (step 2.4): the real download+extract+start was NOT exercised in this unattended run (the auto-mode classifier blocked downloading a binary). On your PC run qed setup / the installer once: CUDA build on Windows, Vulkan on Linux, check llama-server starts with a GGUF and answers once, and that two qed doctor runs start only one server.
+- qed models download qwen3.5-4b-q4km (step 2.5) was not run for real in this unattended run (no model downloads, as requested). Run it once by hand and confirm the size prompt, the progress bar and that the SHA-256 passes.
 
 ## Real-model results
 -

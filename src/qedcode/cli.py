@@ -4,12 +4,27 @@ from __future__ import annotations
 
 import typer
 from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    DownloadColumn,
+    Progress,
+    TextColumn,
+    TimeRemainingColumn,
+    TransferSpeedColumn,
+)
 from rich.table import Table
 
 from qedcode import __version__
+from qedcode.config import load_global, save_global
 from qedcode.hardware import detect as hardware_detect
-from qedcode.hardware.recommend import recommend
+from qedcode.hardware.recommend import best_ctx_for, recommend
 from qedcode.runtime.catalog import CatalogError, load_catalog, local_path
+from qedcode.runtime.installer import (
+    InstallDeclined,
+    InstallError,
+    download_model,
+    remove_model,
+)
 
 app = typer.Typer(
     name="qed",
@@ -115,3 +130,121 @@ def models_recommend() -> None:
     console.print(rec.reason)
     for warning in rec.warnings:
         console.print(f"[yellow]Warning:[/yellow] {warning}")
+
+
+class DownloadProgress:
+    """A Rich progress bar that appears on the first update (after the user said yes)."""
+
+    def __init__(self, console: Console) -> None:
+        self._console = console
+        self._progress: Progress | None = None
+        self._task = None
+
+    def __call__(self, name: str, done: int, total: int) -> None:
+        if self._progress is None:
+            self._progress = Progress(
+                TextColumn("{task.description}"),
+                BarColumn(),
+                DownloadColumn(),
+                TransferSpeedColumn(),
+                TimeRemainingColumn(),
+                console=self._console,
+            )
+            self._progress.start()
+            self._task = self._progress.add_task(name, total=total or None)
+        self._progress.update(self._task, completed=done, total=total or None)
+
+    def close(self) -> None:
+        if self._progress is not None:
+            self._progress.stop()
+
+
+def _confirmer(yes: bool):
+    return lambda prompt: True if yes else typer.confirm(prompt, default=False)
+
+
+@models_app.command("download")
+def models_download(
+    model_id: str = typer.Argument(..., help="A model id from `qed models list`."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Do not ask before downloading."),
+) -> None:
+    """Download a model (shows the size and asks first), then check its checksum."""
+    console = Console()
+    catalog = _catalog_or_exit()
+    progress = DownloadProgress(console)
+    try:
+        entry = catalog.require(model_id)
+        path = download_model(entry, _confirmer(yes), progress)
+    except InstallDeclined as exc:
+        console.print(str(exc))
+        raise typer.Exit(1) from exc
+    except (InstallError, CatalogError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    finally:
+        progress.close()
+    console.print(f"Ready: {path}")
+    console.print(f"Use it with: qed models use {entry.id}")
+
+
+@models_app.command("use")
+def models_use(
+    model: str = typer.Argument(..., help="A model id, or the path to a .gguf file."),
+) -> None:
+    """Make a downloaded model the one QEDCode uses."""
+    console = Console()
+    cfg = load_global()
+    if model.lower().endswith(".gguf"):
+        cfg.local.backend = "llamacpp"
+        cfg.local.model = model
+        save_global(cfg)
+        console.print(f"QEDCode will use the model file {model}.")
+        return
+    entry = _catalog_or_exit().get(model)
+    if entry is None:
+        typer.echo(
+            f"There is no model called '{model}' in the catalog. "
+            "Run `qed models list` to see the choices.",
+            err=True,
+        )
+        raise typer.Exit(2)
+    cfg.local.backend = "llamacpp"
+    cfg.local.model = entry.id
+    hw = hardware_detect.current_hardware()
+    ctx = best_ctx_for(hw, entry)
+    if ctx is not None:
+        cfg.local.ctx = min(cfg.local.ctx, ctx) if cfg.local.ctx else ctx
+    elif hw.vram_gb > 0:
+        console.print(
+            f"[yellow]Warning:[/yellow] {entry.display} may not fit in {hw.vram_gb:.1f} GB. "
+            "Run `qed models recommend` for a better choice."
+        )
+    save_global(cfg)
+    console.print(f"QEDCode will use {entry.display} with a {cfg.local.ctx}-token context.")
+    if not local_path(entry).exists():
+        console.print(f"It is not downloaded yet: run `qed models download {entry.id}`.")
+
+
+@models_app.command("remove")
+def models_remove(
+    model_id: str = typer.Argument(..., help="A model id from `qed models list`."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Do not ask before deleting."),
+) -> None:
+    """Delete a downloaded model (asks first)."""
+    console = Console()
+    catalog = _catalog_or_exit()
+    try:
+        entry = catalog.require(model_id)
+        removed = remove_model(entry, _confirmer(yes))
+    except InstallDeclined as exc:
+        console.print(str(exc))
+        raise typer.Exit(1) from exc
+    except CatalogError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    if not removed:
+        console.print(f"{model_id} is not downloaded, so there is nothing to remove.")
+        return
+    console.print(f"Removed {entry.display}.")
+    if load_global().local.model == entry.id:
+        console.print("It was the model in use: pick another with `qed models use <id>`.")
