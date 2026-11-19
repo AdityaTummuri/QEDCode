@@ -41,7 +41,12 @@ from qedcode.verify.guard import (
     scope_check,
 )
 from qedcode.verify.lint import lint_check, parse_check
-from qedcode.verify.pytest_runner import PytestOutcome, failure_report, run_pytest
+from qedcode.verify.pytest_runner import (
+    PytestOutcome,
+    failure_report,
+    file_level_failure,
+    run_pytest,
+)
 
 DETAILS_LIMIT = 4000
 
@@ -281,7 +286,10 @@ def _stage_fbpa(ctx: CascadeContext, cand: Candidate, wt: Path, files: list[File
         check.summary = f"The new test does not pass with the change. {check.summary}"[:300]
         return _record(ctx, cand, check)
     before = set(_base_failures_for(ctx, wt, tests))
-    proof = [r for r in out.results if r.outcome == "passed" and r.key in before]
+    whole_file_failed = file_level_failure(before)
+    proof = [
+        r for r in out.results if r.outcome == "passed" and (r.key in before or whole_file_failed)
+    ]
     if not proof:
         _emit(
             ctx,

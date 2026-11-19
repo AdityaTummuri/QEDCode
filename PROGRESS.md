@@ -1,7 +1,7 @@
 # QEDCode progress
 
 ## Current step
-M5.3
+M5.4
 
 ## Done
 - Setup, 2026-11-20: AGENTS.md (from the AI Build Brief), CLAUDE.md, PROGRESS.md, .gitignore, docs/ committed.
@@ -26,6 +26,7 @@ M5.3
 - M4.4, 2026-11-20: engine/check.py + 'qed check [--speed] [--base] [--json] [--allow-risky]' (role user: working-tree snapshot vs HEAD or --base, risk/scope report-only, fbpa on added tests, full suite unless fast, receipt written, nothing applied), engine/lock.py (one job per project), engine/callbacks.py (NonInteractiveCallbacks), engine.api.check. Verified: solution.patch by hand = grade B, plus the hidden test = grade A, receipt VERIFIED. Milestone M4 complete.
 - M5.1, 2026-11-20: engine/prompts/*.txt (section 9 word for word), engine/roles.py (intake, locator, test_writer, coder, repairer, explainer: temperature/max tokens/tag per role, one format re-ask, typed results, graceful fallbacks, every prompt and reply saved in .qed/runs/<task id>/, cancel support), project/context.py budget helpers (chars/3.5 tokens, drop trailing files, condense to relevant symbols + outline, truncate), repro_test_path; tests with FakeModel: good, bad-then-good, still-bad-after-re-ask.
 - M5.2, 2026-11-20: project/repo_map.py (files + top-level symbols that shrink to a token budget), project/search.py (keywords from identifiers, quoted text, error names, file names, plain words; ripgrep when installed else pure Python; ranked files, tests ranked below source), project/tokens.py, project/context.py build_context (validated locator paths, search-hit fallback, adds a strong search match the locator missed, related tests, example test, compact() for helpers); for every bug zoo task the selected files include the buggy file even with a useless locator; a 200-file repo is searched in well under a second.
+- M5.3, 2026-11-20: engine/select.py (best, near_miss, no_progress, reached, promising), engine/solve.py (the controller: snapshot, intake with optional question, locator, baseline, repro test with 2 attempts that must fail on base, k tries, repair rounds, mix-mode helper behind confirm, full suite right after a promising candidate, finalist fallback, receipt, explanation, resume for 'try harder', cancel/time budget, one job per project), engine/api.py solve/apply_result/undo/status, FakeModel scripts for all 10 zoo projects. All 7 plan scenarios pass and every zoo script reaches grade A.
 
 ## Known issues
 - LICENSE in the repo is GPL-3.0 (created with the repo); the plan's step 8.4 suggests MIT or Apache-2.0. Left as GPL-3.0 for the human to decide.
@@ -39,6 +40,8 @@ M5.3
 - Decision: the cascade's apply stage lets protected paths through the applier (allow_protected=True) so the diff-based scope stage rejects them, as the plan's step 4.2 and scenario 3 say ('rejected at scope'); edits.apply still refuses protected paths by default for direct callers.
 - Fix found by the plan's own 'Done when': a newly ADDED test file under tests/ no longer counts as a protected change (it would have capped grade A at B); only modified/deleted protected files and added config files count.
 - Baseline selection now keeps only tests that exist at the base commit (a new test in the working tree made pytest exit 4 and the baseline 'not runnable').
+- Controller deviates from the pseudocode in one way: a promising candidate gets the full suite immediately (not only after all tries), so stopping early means the proof is complete and a full-suite regression sends the loop on to the next try instead of ending with no fix.
+- Fix found by tests: a repro test for a not-yet-existing function fails on the base as a collection error; the fail-before proof (cascade and verify) now treats a file-level failure as 'every test in that file failed before'.
 
 ## Values I must verify by hand
 - Real GPU detection (RTX 5060 Ti VRAM, AMD/Intel registry path, Windows PowerShell JSON) is only covered by mocked tests; confirm on the real machines in step 8.3.

@@ -431,3 +431,15 @@ def test_related_tests_on_every_zoo_project_find_the_visible_test(zoo_copy) -> N
         found = related_tests(changed, project)
         assert any(f.startswith("tests/") for f in found), (name, found)
         assert src.exists()
+
+
+def test_file_level_failures_count_as_failing_before() -> None:
+    from qedcode.verify.pytest_runner import failed_before, file_level_failure
+
+    assert file_level_failure(["tests/test_x.py"]) and not file_level_failure(["t.a::test_b"])
+    # a feature test whose import fails on the base: no individual test could run
+    base = {"tests/test_qed_x.py": "error"}
+    assert failed_before("tests.test_qed_x::test_new", base)
+    assert failed_before("t.a::b", {"t.a::b": "failed"})
+    assert not failed_before("t.a::b", {"t.a::b": "passed", "t.a::c": "failed"})
+    assert not failed_before("t.a::b", {})

@@ -17,7 +17,7 @@ from qedcode.config import ProjectConfig, load_project
 from qedcode.models.schemas import CheckResult, Receipt
 from qedcode.vcs import worktree
 from qedcode.vcs.git import git
-from qedcode.verify.pytest_runner import run_pytest
+from qedcode.verify.pytest_runner import failed_before, run_pytest
 from qedcode.verify.receipt import load_receipt
 
 PYTHON = "{python}"
@@ -153,7 +153,7 @@ def _check_before(
         out = _run_command(wt, fbpa_command, python, timeout, cancelled)
         outcomes = out.as_map()
         for key in receipt.fbpa_tests:
-            if outcomes.get(key) not in ("failed", "error"):
+            if not failed_before(key, outcomes):
                 mismatch(
                     f"Test {key} was supposed to fail before the change but it "
                     f"{'passes' if outcomes.get(key) == 'passed' else 'did not run'} on the base."

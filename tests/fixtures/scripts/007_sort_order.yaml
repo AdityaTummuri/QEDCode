@@ -1,0 +1,51 @@
+# Scripted replies for bug zoo 007_sort_order: a good reply for every role.
+# The coder reply is the project's edits.txt; the repro test is its hidden test.
+intake:
+  - |
+    KIND: bugfix
+    ACCEPTANCE:
+    - top_scores returns the lowest scores first
+    QUESTION: NONE
+locator:
+  - |
+    FILE: src/board/scores.py
+test_writer:
+  - |
+    EDIT create_file path=tests/test_qed_repro.py
+    ```python
+    from board.scores import top_scores
+
+
+    def test_returns_the_highest_scores_best_first():
+        assert top_scores([3, 9, 1, 7], 2) == [9, 7]
+
+
+    def test_default_is_the_top_three():
+        assert top_scores([1, 2, 3, 4, 5]) == [5, 4, 3]
+    ```
+    FAILS NOW BECAUSE: the behaviour in the task is not implemented correctly yet
+coder:
+  - |
+    PLAN:
+    - sort in descending order before taking the first n
+
+    EDIT search_replace path=src/board/scores.py
+    <<<<<<< SEARCH
+        return sorted(scores)[:n]
+    =======
+        return sorted(scores, reverse=True)[:n]
+    >>>>>>> REPLACE
+repairer:
+  - |
+    PLAN:
+    - sort in descending order before taking the first n
+
+    EDIT search_replace path=src/board/scores.py
+    <<<<<<< SEARCH
+        return sorted(scores)[:n]
+    =======
+        return sorted(scores, reverse=True)[:n]
+    >>>>>>> REPLACE
+explainer:
+  - |
+    The code in src/board/scores.py did not do what the task asked. It was changed so the behaviour is now correct, and the tests that showed the problem now pass.

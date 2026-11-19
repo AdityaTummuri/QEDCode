@@ -389,3 +389,15 @@ def build_context(
         keywords=task_keywords(spec.request),
         notes=notes,
     )
+
+
+def files_at_commit(root: Path | str, commit: str, paths: list[str]) -> list[ContextFile]:
+    """The contents of `paths` as they are in `commit` (files that do not exist are skipped)."""
+    from qedcode.vcs.git import git
+
+    out: list[ContextFile] = []
+    for rel in paths:
+        shown = git(root, "show", f"{commit}:{rel}", exact=True)
+        if shown.ok and len(shown.stdout) <= MAX_FILE_BYTES:
+            out.append(ContextFile(rel, shown.stdout))
+    return out

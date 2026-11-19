@@ -1,0 +1,56 @@
+# Scripted replies for bug zoo 010_cart_quantity: a good reply for every role.
+# The coder reply is the project's edits.txt; the repro test is its hidden test.
+intake:
+  - |
+    KIND: bugfix
+    ACCEPTANCE:
+    - Cart
+    QUESTION: NONE
+locator:
+  - |
+    FILE: src/shopcart/cart.py
+test_writer:
+  - |
+    EDIT create_file path=tests/test_qed_repro.py
+    ```python
+    from shopcart.cart import Cart
+
+
+    def test_total_multiplies_by_quantity():
+        cart = Cart()
+        cart.add("pen", 2.5, 4)
+        assert cart.total() == 10.0
+
+
+    def test_total_adds_several_lines():
+        cart = Cart()
+        cart.add("pen", 2.5, 2)
+        cart.add("pad", 3, 1)
+        assert cart.total() == 8.0
+    ```
+    FAILS NOW BECAUSE: the behaviour in the task is not implemented correctly yet
+coder:
+  - |
+    PLAN:
+    - Cart.total must multiply each price by its quantity
+
+    EDIT replace_symbol path=src/shopcart/cart.py symbol=Cart.total
+    ```python
+    def total(self):
+        """Return the price of everything in the cart."""
+        return sum(item["price"] * item["quantity"] for item in self.items)
+    ```
+repairer:
+  - |
+    PLAN:
+    - Cart.total must multiply each price by its quantity
+
+    EDIT replace_symbol path=src/shopcart/cart.py symbol=Cart.total
+    ```python
+    def total(self):
+        """Return the price of everything in the cart."""
+        return sum(item["price"] * item["quantity"] for item in self.items)
+    ```
+explainer:
+  - |
+    The code in src/shopcart/cart.py did not do what the task asked. It was changed so the behaviour is now correct, and the tests that showed the problem now pass.

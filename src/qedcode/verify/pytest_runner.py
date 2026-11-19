@@ -290,3 +290,20 @@ def _interpret(
             details,
         )
     return outcome("ok", True, f"{passed_count}/{len(results)} tests pass.", results)
+
+
+def file_level_failure(keys) -> bool:
+    """True when a failing key names a whole file (a collection error such as a failed import).
+
+    A repro test for a function that does not exist yet fails like that on the base: none of its
+    individual tests could even run, so each of them counts as having failed before.
+    """
+    return any("::" not in key for key in keys)
+
+
+def failed_before(key: str, base_outcomes: dict[str, str]) -> bool:
+    """Did test `key` fail (or fail to run) in the base outcomes?"""
+    bad = ("failed", "error")
+    if base_outcomes.get(key) in bad:
+        return True
+    return file_level_failure(k for k, v in base_outcomes.items() if v in bad)

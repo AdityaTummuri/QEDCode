@@ -1,0 +1,51 @@
+# Scripted replies for bug zoo 005_integer_average: a good reply for every role.
+# The coder reply is the project's edits.txt; the repro test is its hidden test.
+intake:
+  - |
+    KIND: bugfix
+    ACCEPTANCE:
+    - average([1, 2]) gives me 1 but I expected 1
+    QUESTION: NONE
+locator:
+  - |
+    FILE: src/stats/core.py
+test_writer:
+  - |
+    EDIT create_file path=tests/test_qed_repro.py
+    ```python
+    from stats.core import average
+
+
+    def test_average_is_not_rounded_down():
+        assert average([1, 2]) == 1.5
+
+
+    def test_average_of_three_numbers():
+        assert abs(average([1, 1, 2]) - 4 / 3) < 1e-9
+    ```
+    FAILS NOW BECAUSE: the behaviour in the task is not implemented correctly yet
+coder:
+  - |
+    PLAN:
+    - use true division instead of floor division
+
+    EDIT search_replace path=src/stats/core.py
+    <<<<<<< SEARCH
+        return sum(numbers) // len(numbers)
+    =======
+        return sum(numbers) / len(numbers)
+    >>>>>>> REPLACE
+repairer:
+  - |
+    PLAN:
+    - use true division instead of floor division
+
+    EDIT search_replace path=src/stats/core.py
+    <<<<<<< SEARCH
+        return sum(numbers) // len(numbers)
+    =======
+        return sum(numbers) / len(numbers)
+    >>>>>>> REPLACE
+explainer:
+  - |
+    The code in src/stats/core.py did not do what the task asked. It was changed so the behaviour is now correct, and the tests that showed the problem now pass.

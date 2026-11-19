@@ -1,0 +1,61 @@
+# Scripted replies for bug zoo 006_missing_config_key: a good reply for every role.
+# The coder reply is the project's edits.txt; the repro test is its hidden test.
+intake:
+  - |
+    KIND: bugfix
+    ACCEPTANCE:
+    - load_config crashes with a KeyError when my settings file has no "timeout"
+    QUESTION: NONE
+locator:
+  - |
+    FILE: src/appconf/loader.py
+test_writer:
+  - |
+    EDIT create_file path=tests/test_qed_repro.py
+    ```python
+    import json
+
+    from appconf.loader import load_config
+
+
+    def test_missing_timeout_defaults_to_30(tmp_path):
+        path = tmp_path / "config.json"
+        path.write_text(json.dumps({"name": "demo"}), encoding="utf-8")
+        assert load_config(path) == {"name": "demo", "timeout": 30}
+
+
+    def test_an_explicit_timeout_wins(tmp_path):
+        path = tmp_path / "config.json"
+        path.write_text(json.dumps({"name": "demo", "timeout": 5}), encoding="utf-8")
+        assert load_config(path)["timeout"] == 5
+    ```
+    FAILS NOW BECAUSE: the behaviour in the task is not implemented correctly yet
+coder:
+  - |
+    PLAN:
+    - read timeout with a default of 30 instead of requiring it
+
+    EDIT replace_symbol path=src/appconf/loader.py symbol=load_config
+    ```python
+    def load_config(path):
+        """Read a JSON settings file and return the settings the app uses."""
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+        return {"name": data["name"], "timeout": data.get("timeout", 30)}
+    ```
+repairer:
+  - |
+    PLAN:
+    - read timeout with a default of 30 instead of requiring it
+
+    EDIT replace_symbol path=src/appconf/loader.py symbol=load_config
+    ```python
+    def load_config(path):
+        """Read a JSON settings file and return the settings the app uses."""
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+        return {"name": data["name"], "timeout": data.get("timeout", 30)}
+    ```
+explainer:
+  - |
+    The code in src/appconf/loader.py did not do what the task asked. It was changed so the behaviour is now correct, and the tests that showed the problem now pass.

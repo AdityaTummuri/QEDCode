@@ -1,0 +1,69 @@
+# Scripted replies for bug zoo 008_slugify_feature: a good reply for every role.
+# The coder reply is the project's edits.txt; the repro test is its hidden test.
+intake:
+  - |
+    KIND: feature
+    ACCEPTANCE:
+    - Please add a slugify(text) function to the text helpers: lowercase everything, turn spaces into dashes and drop punctuation
+    QUESTION: NONE
+locator:
+  - |
+    FILE: src/textutil/text.py
+test_writer:
+  - |
+    EDIT create_file path=tests/test_qed_repro.py
+    ```python
+    from textutil.text import slugify
+
+
+    def test_lowercases_and_joins_with_dashes():
+        assert slugify("Hello World") == "hello-world"
+
+
+    def test_punctuation_is_dropped():
+        assert slugify("Hello, World!") == "hello-world"
+
+
+    def test_existing_dashes_are_kept():
+        assert slugify("Already-slugged") == "already-slugged"
+    ```
+    FAILS NOW BECAUSE: the behaviour in the task is not implemented correctly yet
+coder:
+  - |
+    PLAN:
+    - add the new slugify function after word_count
+    - it needs the re module
+
+    EDIT add_import path=src/textutil/text.py
+    ```python
+    import re
+    ```
+
+    EDIT insert_after_symbol path=src/textutil/text.py symbol=word_count
+    ```python
+    def slugify(text):
+        """Lowercase the text, drop punctuation and join the words with dashes."""
+        cleaned = re.sub(r"[^a-z0-9\s-]", "", text.lower())
+        return re.sub(r"\s+", "-", cleaned.strip())
+    ```
+repairer:
+  - |
+    PLAN:
+    - add the new slugify function after word_count
+    - it needs the re module
+
+    EDIT add_import path=src/textutil/text.py
+    ```python
+    import re
+    ```
+
+    EDIT insert_after_symbol path=src/textutil/text.py symbol=word_count
+    ```python
+    def slugify(text):
+        """Lowercase the text, drop punctuation and join the words with dashes."""
+        cleaned = re.sub(r"[^a-z0-9\s-]", "", text.lower())
+        return re.sub(r"\s+", "-", cleaned.strip())
+    ```
+explainer:
+  - |
+    The code in src/textutil/text.py did not do what the task asked. It was changed so the behaviour is now correct, and the tests that showed the problem now pass.

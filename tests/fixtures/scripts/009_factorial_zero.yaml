@@ -1,0 +1,66 @@
+# Scripted replies for bug zoo 009_factorial_zero: a good reply for every role.
+# The coder reply is the project's edits.txt; the repro test is its hidden test.
+intake:
+  - |
+    KIND: bugfix
+    ACCEPTANCE:
+    - factorial(0) returns 0 but it should be 1
+    QUESTION: NONE
+locator:
+  - |
+    FILE: src/mathx/numbers.py
+test_writer:
+  - |
+    EDIT create_file path=tests/test_qed_repro.py
+    ```python
+    from mathx.numbers import choose, factorial
+
+
+    def test_factorial_of_zero_is_one():
+        assert factorial(0) == 1
+
+
+    def test_choose_all_or_none():
+        assert choose(5, 0) == 1
+        assert choose(5, 5) == 1
+    ```
+    FAILS NOW BECAUSE: the behaviour in the task is not implemented correctly yet
+coder:
+  - |
+    PLAN:
+    - the factorial of zero is one, not zero
+
+    EDIT replace_symbol path=src/mathx/numbers.py symbol=factorial
+    ```python
+    def factorial(n):
+        """Return n! for n >= 0."""
+        if n < 0:
+            raise ValueError("n must be 0 or more")
+        if n == 0:
+            return 1
+        result = 1
+        for i in range(2, n + 1):
+            result *= i
+        return result
+    ```
+repairer:
+  - |
+    PLAN:
+    - the factorial of zero is one, not zero
+
+    EDIT replace_symbol path=src/mathx/numbers.py symbol=factorial
+    ```python
+    def factorial(n):
+        """Return n! for n >= 0."""
+        if n < 0:
+            raise ValueError("n must be 0 or more")
+        if n == 0:
+            return 1
+        result = 1
+        for i in range(2, n + 1):
+            result *= i
+        return result
+    ```
+explainer:
+  - |
+    The code in src/mathx/numbers.py did not do what the task asked. It was changed so the behaviour is now correct, and the tests that showed the problem now pass.

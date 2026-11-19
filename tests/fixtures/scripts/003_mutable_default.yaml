@@ -1,0 +1,60 @@
+# Scripted replies for bug zoo 003_mutable_default: a good reply for every role.
+# The coder reply is the project's edits.txt; the repro test is its hidden test.
+intake:
+  - |
+    KIND: bugfix
+    ACCEPTANCE:
+    - add_tag keeps remembering tags from earlier calls when I don't pass a list
+    QUESTION: NONE
+locator:
+  - |
+    FILE: src/tagger/tags.py
+test_writer:
+  - |
+    EDIT create_file path=tests/test_qed_repro.py
+    ```python
+    from tagger.tags import add_tag
+
+
+    def test_calls_without_a_list_do_not_share_state():
+        assert add_tag("a") == ["a"]
+        assert add_tag("b") == ["b"]
+
+
+    def test_a_given_list_is_still_extended_in_place():
+        mine = ["x"]
+        assert add_tag("y", mine) is mine
+        assert mine == ["x", "y"]
+    ```
+    FAILS NOW BECAUSE: the behaviour in the task is not implemented correctly yet
+coder:
+  - |
+    PLAN:
+    - use None as the default and create a new list inside the function
+
+    EDIT replace_symbol path=src/tagger/tags.py symbol=add_tag
+    ```python
+    def add_tag(tag, tags=None):
+        """Add `tag` to `tags` and return the list; with no list given, start a new one."""
+        if tags is None:
+            tags = []
+        tags.append(tag)
+        return tags
+    ```
+repairer:
+  - |
+    PLAN:
+    - use None as the default and create a new list inside the function
+
+    EDIT replace_symbol path=src/tagger/tags.py symbol=add_tag
+    ```python
+    def add_tag(tag, tags=None):
+        """Add `tag` to `tags` and return the list; with no list given, start a new one."""
+        if tags is None:
+            tags = []
+        tags.append(tag)
+        return tags
+    ```
+explainer:
+  - |
+    The code in src/tagger/tags.py did not do what the task asked. It was changed so the behaviour is now correct, and the tests that showed the problem now pass.

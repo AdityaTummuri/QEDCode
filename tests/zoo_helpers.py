@@ -85,3 +85,41 @@ def zoo_case(
     for key, value in ctx_overrides.items():
         setattr(ctx, key, value)
     return ZooCase(project, ctx, events, edits_text, hidden_text)
+
+
+SCRIPTS_DIR = Path(__file__).resolve().parent / "fixtures" / "scripts"
+
+
+def zoo_git_repo(
+    tmp_path: Path, name: str = "001_paginate_off_by_one", *, confirmed: bool = True
+) -> Path:
+    """A git repo of one bug zoo project exactly as a user would have it (no hidden tests)."""
+    from qedcode.config import save_project
+
+    project = tmp_path / "proj"
+    shutil.copytree(
+        BUGZOO_DIR / name, project, ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache")
+    )
+    for leftover in ("hidden", "edits.txt", "solution.patch"):
+        target = project / leftover
+        shutil.rmtree(target) if target.is_dir() else target.unlink()
+    (project / ".gitignore").write_text("__pycache__/\n.pytest_cache/\n")
+    run_git(project, "init", "-q", "-b", "main")
+    run_git(project, "add", "-A")
+    run_git(project, "commit", "-q", "-m", "buggy")
+    if confirmed:
+        save_project(project, ProjectConfig(python=PY, confirmed=True))
+    return project
+
+
+def script_for(name: str, **replace) -> dict[str, list[str]]:
+    """The scripted replies of a bug zoo project, with some roles replaced (None removes one)."""
+    from qedcode.runtime.fake import load_script
+
+    script = load_script(next(SCRIPTS_DIR.glob(f"{name[:3]}_*.yaml")))
+    for tag, replies in replace.items():
+        if replies is None:
+            script.pop(tag, None)
+        else:
+            script[tag] = list(replies)
+    return script

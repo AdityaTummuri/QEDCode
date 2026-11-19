@@ -1,0 +1,57 @@
+# Scripted replies for bug zoo 004_empty_input_crash: a good reply for every role.
+# The coder reply is the project's edits.txt; the repro test is its hidden test.
+intake:
+  - |
+    KIND: bugfix
+    ACCEPTANCE:
+    - parse_csv_line crashes with an IndexError when the line is empty
+    QUESTION: NONE
+locator:
+  - |
+    FILE: src/csvlite/parser.py
+test_writer:
+  - |
+    EDIT create_file path=tests/test_qed_repro.py
+    ```python
+    from csvlite.parser import parse_csv_line
+
+
+    def test_empty_line_gives_an_empty_list():
+        assert parse_csv_line("") == []
+
+
+    def test_whitespace_only_line_gives_an_empty_list():
+        assert parse_csv_line("   ") == []
+    ```
+    FAILS NOW BECAUSE: the behaviour in the task is not implemented correctly yet
+coder:
+  - |
+    PLAN:
+    - return [] for an empty line before looking at the first character
+
+    EDIT replace_symbol path=src/csvlite/parser.py symbol=parse_csv_line
+    ```python
+    def parse_csv_line(line):
+        """Split one CSV line into trimmed fields. Lines starting with # are comments."""
+        line = line.strip()
+        if not line or line.startswith("#"):
+            return []
+        return [field.strip() for field in line.split(",")]
+    ```
+repairer:
+  - |
+    PLAN:
+    - return [] for an empty line before looking at the first character
+
+    EDIT replace_symbol path=src/csvlite/parser.py symbol=parse_csv_line
+    ```python
+    def parse_csv_line(line):
+        """Split one CSV line into trimmed fields. Lines starting with # are comments."""
+        line = line.strip()
+        if not line or line.startswith("#"):
+            return []
+        return [field.strip() for field in line.split(",")]
+    ```
+explainer:
+  - |
+    The code in src/csvlite/parser.py did not do what the task asked. It was changed so the behaviour is now correct, and the tests that showed the problem now pass.
