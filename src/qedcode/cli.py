@@ -73,6 +73,20 @@ def hardware_table(info: hardware_detect.HardwareInfo) -> Table:
 
 
 @app.command()
+def setup(
+    reset: bool = typer.Option(False, "--reset", help="Ignore saved settings and start fresh."),
+) -> None:
+    """Set up QEDCode: hardware, model, helper or cloud, and agent connection."""
+    from qedcode.setup_wizard import RichPrompter, run_setup
+
+    try:
+        run_setup(RichPrompter(), reset=reset)
+    except (KeyboardInterrupt, EOFError) as exc:
+        typer.echo("\nSetup cancelled. Nothing more was changed; run `qed setup` to resume.")
+        raise typer.Exit(1) from exc
+
+
+@app.command()
 def doctor() -> None:
     """Check this computer and show what QEDCode found."""
     console = Console()
