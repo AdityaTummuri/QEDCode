@@ -180,3 +180,44 @@ def run(
         _write_log(Path(log_path), result, cwd_path)
         result.log_path = str(log_path)
     return result
+
+
+def spawn_detached(
+    args: Sequence[str | os.PathLike[str]],
+    *,
+    cwd: Path | str | None = None,
+    env: Mapping[str, str] | None = None,
+    log_path: Path | str | None = None,
+    scrub: bool = True,
+) -> subprocess.Popen:
+    """Start a long-lived background process (the model server) and return its Popen.
+
+    Output is appended to `log_path` (or discarded). The caller owns the process and must stop it
+    with `kill_process_tree`. List args only; never a shell.
+    """
+    argv = [os.fspath(a) for a in args]
+    run_env = scrubbed_env(extra=env) if scrub else {**os.environ, **(env or {})}
+    sink: object = subprocess.DEVNULL
+    handle = None
+    if log_path is not None:
+        Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+        handle = open(log_path, "ab")  # noqa: SIM115 - closed below, after the child has it
+        sink = handle
+    kwargs: dict = {"start_new_session": True}
+    if sys.platform == "win32":
+        kwargs = {
+            "creationflags": subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+        }
+    try:
+        return subprocess.Popen(  # noqa: S603 - list args, no shell, by design
+            argv,
+            cwd=Path(cwd) if cwd is not None else None,
+            env=run_env,
+            stdin=subprocess.DEVNULL,
+            stdout=sink,  # type: ignore[arg-type]
+            stderr=sink,  # type: ignore[arg-type]
+            **kwargs,
+        )
+    finally:
+        if handle is not None:
+            handle.close()

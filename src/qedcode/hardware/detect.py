@@ -138,7 +138,9 @@ def real_host() -> Host:
 def default_backend(vendor: str, system: str) -> Backend:
     """The llama.cpp build family to suggest for a vendor on an operating system."""
     if vendor == "nvidia":
-        return "cuda" if system == "Windows" else "vulkan"  # no upstream Linux CUDA build
+        return (
+            "cuda"  # the installer falls back to Vulkan, then CPU, when a CUDA build will not run
+        )
     if vendor in ("amd", "intel"):
         return "vulkan"
     if vendor == "apple":
@@ -228,10 +230,6 @@ def _probe_nvidia(host: Host, notes: list[str]) -> HardwareInfo | None:
         info.cuda_version = parse_cuda_version(header.stdout)
     if not info.cuda_version:
         info.notes.append("Could not read the highest supported CUDA version from nvidia-smi.")
-    if host.system == "Linux":
-        info.notes.append(
-            "Upstream llama.cpp has no Linux CUDA build, so the Vulkan build (or Ollama) is used."
-        )
     return info
 
 

@@ -114,7 +114,7 @@ def test_classify_and_helpers() -> None:
     assert not is_integrated_intel("Intel(R) Arc(TM) A770 Graphics")
     assert apple_usable_gb(16 * GIB) == 9.6
     assert default_backend("nvidia", "Windows") == "cuda"
-    assert default_backend("nvidia", "Linux") == "vulkan"
+    assert default_backend("nvidia", "Linux") == "cuda"
     assert default_backend("amd", "Windows") == "vulkan"
     assert default_backend("apple", "Darwin") == "metal"
     assert default_backend("cpu", "Linux") == "cpu"
@@ -139,13 +139,12 @@ def test_nvidia_on_windows() -> None:
     assert info.source == "nvidia-smi"
 
 
-def test_nvidia_on_linux_suggests_vulkan_with_a_note() -> None:
+def test_nvidia_on_linux_uses_cuda() -> None:
     host = make_host(
         commands={"nvidia-smi": nvidia_smi("NVIDIA GeForce RTX 4050 Laptop GPU, 6141, 560.94\n")}
     )
     info = detect(host)
-    assert (info.vendor, info.vram_gb, info.backend) == ("nvidia", 6.0, "vulkan")
-    assert any("no Linux CUDA build" in n for n in info.notes)
+    assert (info.vendor, info.vram_gb, info.backend) == ("nvidia", 6.0, "cuda")
 
 
 def test_two_nvidia_gpus_use_the_biggest() -> None:
