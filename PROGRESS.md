@@ -1,7 +1,7 @@
 # QEDCode progress
 
 ## Current step
-M6.3
+M6.4
 
 ## Done
 - Setup, 2026-11-20: AGENTS.md (from the AI Build Brief), CLAUDE.md, PROGRESS.md, .gitignore, docs/ committed.
@@ -30,6 +30,7 @@ M6.3
 - M5.4, 2026-11-20: 'qed solve "<task>" [--speed] [--apply] [--json] [--allow-risky]' (live progress lines, grade, explanation, tries, receipt path; non-interactive callbacks: ask->None, confirm->False unless --allow-risky or config pre-approves the helper; exit codes 0/1/2/3 with crashes logged not shown; model unloaded afterwards per config), 'qed apply [task id] [--yes]', 'qed undo'; mix-mode helper through confirm tested via the CLI; bugzoo/run_zoo.py for the real-model numbers; setup_logging now follows QEDCODE_HOME. Milestone M5 complete.
 - M6.1, 2026-11-20: tui/app.py (Textual: header with model/backend/GPU/state, speed+mode line, scrolling log, task input, footer with keys; the engine runs in a worker thread and Events reach the log through call_from_thread; Esc cancels; 'qed' with no arguments opens it), tui/widgets.py, tui/screens.py, tui/app.tcss, hardware/telemetry.py (VRAM via nvidia-ml-py optional extra or AMD sysfs, else n/a); pilot tests with FakeModel incl. 'screen never freezes' and 'Esc leaves no worktrees'.
 - M6.2, 2026-11-20: results view (candidate cards 'c1 failed (parse) | c3 A', result panel with grade/summary/explanation, only grade A gets the accent colour, full-screen diff with syntax highlighting on d, explain on e, receipt on r with checks and plain-English gaps, help on ?, gentle hints when there is no result yet); pilot tests.
+- M6.3, 2026-11-20: TUI actions from the keyboard (a apply with confirm for grade C/D, u undo, h try harder at the next speed from the best try, m cycle speed, s settings screen saving mode/model/keep-alive/helper), dialogs for risky-pattern approval (shows the lines), helper approval (says code will be sent) and the intake question (answer or skip), slash commands /check /verify /models /speed /help; TuiCallbacks implements the Callbacks protocol; pilot tests.
 
 ## Known issues
 - LICENSE in the repo is GPL-3.0 (created with the repo); the plan's step 8.4 suggests MIT or Apache-2.0. Left as GPL-3.0 for the human to decide.
