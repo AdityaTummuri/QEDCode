@@ -1,0 +1,14 @@
+TASK: {request}
+ACCEPTANCE:
+{acceptance}
+{repro_block}
+CODE (current contents):
+{files_block}
+
+Make the smallest change that completes the task. Do not edit or create test files.
+Reply in exactly this format:
+PLAN:
+- <1 to 3 short lines>
+<one or more EDIT blocks>
+
+{protocol_cheatsheet}

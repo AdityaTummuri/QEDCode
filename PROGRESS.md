@@ -1,7 +1,7 @@
 # QEDCode progress
 
 ## Current step
-M5.1
+M5.2
 
 ## Done
 - Setup, 2026-11-20: AGENTS.md (from the AI Build Brief), CLAUDE.md, PROGRESS.md, .gitignore, docs/ committed.
@@ -24,6 +24,7 @@ M5.1
 - M4.2, 2026-11-20: verify/lint.py (parse stage; lint stage = new-errors-only ruff fatal rules E9,F63,F7,F82, --isolated, base vs candidate), verify/guard.py (git diff parser, scope_check: protected paths, deletions, coder-created tests, added skip/xfail, removed asserts, per-speed size limit, report-only for role user; risk_check: all 15 risky patterns, sets needs_approval), engine/budget.py (the speed dial table), ruff is now a runtime dependency.
 - M4.3, 2026-11-20: verify/grade.py (the section-8 function; assign_grade is the only writer, a test enforces it), verify/cascade.py (apply,parse,scope,risk,lint,fbpa,targeted,full; stops at first failure; Events after every stage; known failures ignored; skipped stages are not recorded so the grade never counts a check that did not run; worktrees removed and commits kept under refs/qed/candidates), verify/receipt.py (build/save/load, one-line summary, plain-English unverified gaps, commands with {python}/{report}), verify/verify.py (checksum, base commit, patch apply, re-run commands, fail-before test must fail on base), engine/api.py (verify, resolve_root), 'qed verify'. Tests: every grade branch, 28 cascade scenarios on the real bug zoo, tamper detection.
 - M4.4, 2026-11-20: engine/check.py + 'qed check [--speed] [--base] [--json] [--allow-risky]' (role user: working-tree snapshot vs HEAD or --base, risk/scope report-only, fbpa on added tests, full suite unless fast, receipt written, nothing applied), engine/lock.py (one job per project), engine/callbacks.py (NonInteractiveCallbacks), engine.api.check. Verified: solution.patch by hand = grade B, plus the hidden test = grade A, receipt VERIFIED. Milestone M4 complete.
+- M5.1, 2026-11-20: engine/prompts/*.txt (section 9 word for word), engine/roles.py (intake, locator, test_writer, coder, repairer, explainer: temperature/max tokens/tag per role, one format re-ask, typed results, graceful fallbacks, every prompt and reply saved in .qed/runs/<task id>/, cancel support), project/context.py budget helpers (chars/3.5 tokens, drop trailing files, condense to relevant symbols + outline, truncate), repro_test_path; tests with FakeModel: good, bad-then-good, still-bad-after-re-ask.
 
 ## Known issues
 - LICENSE in the repo is GPL-3.0 (created with the repo); the plan's step 8.4 suggests MIT or Apache-2.0. Left as GPL-3.0 for the human to decide.

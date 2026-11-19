@@ -1,0 +1,22 @@
+TASK: {request}
+ACCEPTANCE:
+{acceptance}
+
+YOUR LAST CHANGE:
+```diff
+{diff}
+```
+
+WHAT WENT WRONG:
+{failure_text}
+
+CURRENT CODE OF THE CHANGED FILES (your change is already applied):
+{files_block}
+
+Fix the problem with the smallest change. Edit the CURRENT code above.
+Reply in exactly this format:
+PLAN:
+- <1 to 3 short lines>
+<one or more EDIT blocks>
+
+{protocol_cheatsheet}

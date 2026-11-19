@@ -1,0 +1,12 @@
+TASK:
+{request}
+
+PROJECT: Python, tests run with pytest.
+
+Classify the task and list what must be true when it is done.
+Reply in exactly this format:
+KIND: bugfix | feature | refactor | test | docs | other
+ACCEPTANCE:
+- <one checkable statement about behaviour>
+- <at most 4 lines in total>
+QUESTION: <one short question only if the task cannot be understood, otherwise NONE>

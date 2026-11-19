@@ -1,0 +1,13 @@
+TASK: {request}
+ACCEPTANCE:
+{acceptance}
+
+FILES AND THEIR TOP-LEVEL SYMBOLS:
+{repo_map}
+
+SEARCH HITS FOR WORDS FROM THE TASK:
+{hits}
+
+Choose the files someone must read or change to do this task (at most {max_files}).
+Reply with one line per file, exactly like this, and nothing else:
+FILE: path/to/file.py

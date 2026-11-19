@@ -1,0 +1,30 @@
+EDIT FORMATS (use the simplest one that works):
+1) Replace a whole function, method or class (method: symbol=ClassName.method):
+EDIT replace_symbol path=pkg/mod.py symbol=func_name
+```python
+def func_name(...):
+    ...the full new definition...
+```
+2) Add a new function or class after an existing one:
+EDIT insert_after_symbol path=pkg/mod.py symbol=existing_name
+```python
+def new_helper(...):
+    ...
+```
+3) Add import lines:
+EDIT add_import path=pkg/mod.py
+```python
+from datetime import timedelta
+```
+4) Change a few exact lines (SEARCH must match the current code exactly, once):
+EDIT search_replace path=pkg/mod.py
+<<<<<<< SEARCH
+old lines
+=======
+new lines
+>>>>>>> REPLACE
+5) Create a new file:
+EDIT create_file path=pkg/new_mod.py
+```python
+...the whole file...
+```

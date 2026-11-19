@@ -1,0 +1,9 @@
+Explain this code change to a beginner in 2 to 4 short sentences:
+what was wrong, what changed, and why it works. No code, no lists.
+
+TASK: {request}
+CHANGE:
+```diff
+{diff}
+```
+CHECKS: {checks_summary}
