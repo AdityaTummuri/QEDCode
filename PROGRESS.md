@@ -1,7 +1,7 @@
 # QEDCode progress
 
 ## Current step
-M2.3
+M2.4
 
 ## Done
 - Setup, 2026-11-20: AGENTS.md (from the AI Build Brief), CLAUDE.md, PROGRESS.md, .gitignore, docs/ committed.
@@ -11,6 +11,7 @@ M2.3
 - M1.2, 2026-11-20: runtime/client.py (ModelClient protocol), runtime/fake.py (FakeModel, YAML scripts, call recording, clear errors), tests/fixtures/scripts/001_paginate_off_by_one.yaml.
 - M2.1, 2026-11-20: hardware/detect.py (NVIDIA, AMD/Intel Linux sysfs, AMD/Intel Windows registry, Apple Silicon, CPU fallback; injectable Host; overrides), 'qed doctor' hardware table, verify/run.py (the one subprocess helper, pulled forward from 3.1 because probes need it) with tests.
 - M2.2, 2026-11-20: runtime/catalog.yaml (4 models, values read from the Hugging Face API), runtime/catalog.py (Pydantic validation, <verify> placeholders), hardware/recommend.py (brief's formula), 'qed models list' and 'qed models recommend' (reads vram from config), tests for 4/6/8/16 GB, Apple, CPU.
+- M2.3, 2026-11-20: runtime/ollama.py (OllamaClient: chat streaming, is_running, list_models, pull, unload), runtime/openai_compat.py (OpenAICompatClient SSE), runtime/client.py (make_client factory, ModelError/ServerNotRunning, timeouts connect 5s read 600s); httpx.MockTransport tests, no real server.
 
 ## Known issues
 - LICENSE in the repo is GPL-3.0 (created with the repo); the plan's step 8.4 suggests MIT or Apache-2.0. Left as GPL-3.0 for the human to decide.
