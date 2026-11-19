@@ -22,6 +22,7 @@ dependencies = [
     "keyring>=25.7.0",
     "ruff>=0.17.6",
     "textual>=8.2.8",
+    "mcp>=2.3.0",
 ]
 
 [project.scripts]

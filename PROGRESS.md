@@ -1,7 +1,7 @@
 # QEDCode progress
 
 ## Current step
-M7.1
+M7.2
 
 ## Done
 - Setup, 2026-11-20: AGENTS.md (from the AI Build Brief), CLAUDE.md, PROGRESS.md, .gitignore, docs/ committed.
@@ -32,6 +32,7 @@ M7.1
 - M6.2, 2026-11-20: results view (candidate cards 'c1 failed (parse) | c3 A', result panel with grade/summary/explanation, only grade A gets the accent colour, full-screen diff with syntax highlighting on d, explain on e, receipt on r with checks and plain-English gaps, help on ?, gentle hints when there is no result yet); pilot tests.
 - M6.3, 2026-11-20: TUI actions from the keyboard (a apply with confirm for grade C/D, u undo, h try harder at the next speed from the best try, m cycle speed, s settings screen saving mode/model/keep-alive/helper), dialogs for risky-pattern approval (shows the lines), helper approval (says code will be sent) and the intake question (answer or skip), slash commands /check /verify /models /speed /help; TuiCallbacks implements the Callbacks protocol; pilot tests.
 - M6.4, 2026-11-20: first run and model lifecycle in the TUI (offers 'qed setup' when there is no global config, git init + first commit for a folder that is not a repo, shows the detected Python/pytest/test count and asks once before saving .qed/project.toml, offers to install pytest and to add .qed/ to .gitignore; the model loads in a worker with a 'Loading model...' line while the input stays usable and a task submitted early waits; idle watcher for the shared server; 'q' unloads per config and cancels a running task); pilot tests. Milestone M6 complete.
+- M7.1, 2026-11-20: mcp_server.py (tools solve/check/verify/status with the argument lists and results from the brief; JobRunner = background thread per job, one job per project (in-process and .qed/lock) so a second call returns status busy, status polling, progress notifications through the SDK, non-interactive callbacks so risky code is rejected and the helper is only used if the config pre-approves it, lazy model start and idle unload, shutdown cancels jobs), 'qed mcp', engine/events.py shared by CLI, TUI and MCP; tests through direct calls, the in-memory MCP client (incl. progress) and a real stdio subprocess.
 
 ## Known issues
 - LICENSE in the repo is GPL-3.0 (created with the repo); the plan's step 8.4 suggests MIT or Apache-2.0. Left as GPL-3.0 for the human to decide.
@@ -48,6 +49,7 @@ M7.1
 - Controller deviates from the pseudocode in one way: a promising candidate gets the full suite immediately (not only after all tries), so stopping early means the proof is complete and a full-suite regression sends the loop on to the next try instead of ending with no fix.
 - Fix found by tests: a repro test for a not-yet-existing function fails on the base as a collection error; the fail-before proof (cascade and verify) now treats a file-level failure as 'every test in that file failed before'.
 - Found by the pilot tests: a Textual Static parses [Normal] as markup, hiding the current speed. All widget text now goes in as plain rich Text; my own helper must not be called _shutdown (it overrides Textual's).
+- mcp 2.x renamed FastMCP to MCPServer (from mcp.server.mcpserver import MCPServer); the server uses the new name instead of pinning mcp<2.
 
 ## Values I must verify by hand
 - Real GPU detection (RTX 5060 Ti VRAM, AMD/Intel registry path, Windows PowerShell JSON) is only covered by mocked tests; confirm on the real machines in step 8.3.

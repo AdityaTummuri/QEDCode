@@ -21,6 +21,7 @@ from qedcode import __version__
 from qedcode.config import load_global, logs_dir, save_global
 from qedcode.engine import api
 from qedcode.engine.callbacks import NonInteractiveCallbacks
+from qedcode.engine.events import event_line
 from qedcode.hardware import detect as hardware_detect
 from qedcode.hardware.recommend import best_ctx_for, recommend
 from qedcode.models.schemas import Event, Grade, SolveResult, Speed
@@ -162,17 +163,6 @@ def _print_check(console: Console, outcome) -> None:
         console.print("Re-check it any time with: qed verify <receipt>", markup=False)
 
 
-def _event_line(event: Event) -> str | None:
-    """One progress line for an event, or None for events that are not shown while working."""
-    if event.kind in ("stage", "candidate", "log"):
-        return event.message
-    if event.kind == "check":
-        return "  " + event.message
-    if event.kind == "warning":
-        return f"Warning: {event.message}"
-    return None
-
-
 def _print_solve(console: Console, result: SolveResult) -> None:
     console.print()
     if result.status == "done" and result.best is not None:
@@ -217,7 +207,7 @@ def solve_command(
     console = Console(stderr=True) if as_json else Console()
 
     def show(event: Event) -> None:
-        line = _event_line(event)
+        line = event_line(event, include_result=False)
         if line and not as_json:
             console.print(line, style="dim", markup=False, highlight=False)
 
@@ -310,6 +300,14 @@ def undo_command() -> None:
     Console().print(outcome.message, markup=False)
     if outcome.status != "undone":
         raise typer.Exit(1 if outcome.status == "refused" else 2)
+
+
+@app.command("mcp")
+def mcp_command() -> None:
+    """Run the MCP server over stdio, so Claude Code, OpenCode and other agents can use QEDCode."""
+    from qedcode.mcp_server import run_stdio
+
+    run_stdio()
 
 
 @app.command("verify")

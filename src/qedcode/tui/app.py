@@ -24,6 +24,7 @@ from textual.widgets import Footer, Input, RichLog
 from qedcode.config import GlobalConfig, global_config_path, load_global, save_global
 from qedcode.engine import api
 from qedcode.engine.budget import next_speed
+from qedcode.engine.events import event_line
 from qedcode.hardware.detect import HardwareInfo, current_hardware
 from qedcode.hardware.telemetry import format_vram, vram_usage
 from qedcode.models.schemas import Event, Grade, Mode, SolveResult, Speed, TaskSpec
@@ -87,17 +88,6 @@ class TuiCallbacks:
 
     def cancelled(self) -> bool:
         return self.app.cancel_flag.is_set()
-
-
-def event_line(event: Event) -> str | None:
-    """The log line for an event (None for events the log does not show)."""
-    if event.kind in ("stage", "candidate", "log", "result"):
-        return event.message
-    if event.kind == "check":
-        return "  " + event.message
-    if event.kind == "warning":
-        return f"Warning: {event.message}"
-    return None
 
 
 class QedApp(App[None]):
