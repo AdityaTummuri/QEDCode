@@ -1,0 +1,52 @@
+# Scripted replies for bug zoo 001 (paginate_off_by_one): a good reply for every role.
+# The coder reply is the project's edits.txt, word for word (a test checks that).
+intake:
+  - |
+    KIND: bugfix
+    ACCEPTANCE:
+    - paginate returns exactly `size` items on every full page
+    - the last partial page keeps its last item
+    QUESTION: NONE
+locator:
+  - |
+    FILE: src/shop/pages.py
+test_writer:
+  - |
+    EDIT create_file path=tests/test_qed_paginate_off_by_one.py
+    ```python
+    from shop.pages import paginate
+
+
+    def test_full_page_has_page_size_items():
+        assert paginate([1, 2, 3, 4, 5], 1, 2) == [1, 2]
+
+
+    def test_last_partial_page_keeps_its_last_item():
+        assert paginate([1, 2, 3, 4, 5], 3, 2) == [5]
+    ```
+    FAILS NOW BECAUSE: paginate drops the last item of every page
+coder:
+  - |
+    PLAN:
+    - paginate must slice exactly `size` items, so the end index is start + size
+
+    EDIT search_replace path=src/shop/pages.py
+    <<<<<<< SEARCH
+        end = start + size - 1
+    =======
+        end = start + size
+    >>>>>>> REPLACE
+repairer:
+  - |
+    PLAN:
+    - paginate must slice exactly `size` items, so the end index is start + size
+
+    EDIT search_replace path=src/shop/pages.py
+    <<<<<<< SEARCH
+        end = start + size - 1
+    =======
+        end = start + size
+    >>>>>>> REPLACE
+explainer:
+  - |
+    paginate computed the end of each page as start + size - 1, so every page lost its last item. The end index is now start + size, so each page holds exactly the requested number of items.
