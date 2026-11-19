@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: ${{ matrix.os }} / py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Set up Python
+        run: uv python install ${{ matrix.python }}
+      - name: Install
+        run: uv sync --python ${{ matrix.python }}
+      - name: Git identity for tests
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "CI"
+      - name: Lint
+        run: uv run ruff check .
+      - name: Format check
+        run: uv run ruff format --check .
+      - name: Tests
+        run: uv run pytest -m "not gpu"
+      - name: Engine purity (no UI imports in engine modules)
+        if: runner.os == 'Linux'
+        run: |
+          if grep -rEn "from qedcode\.(tui|cli|mcp_server)|import qedcode\.(tui|cli|mcp_server)|from qedcode import (tui|cli|mcp_server)" \
+            src/qedcode/engine src/qedcode/verify src/qedcode/edits src/qedcode/vcs \
+            src/qedcode/project src/qedcode/runtime src/qedcode/hardware; then
+            echo "Engine modules must not import UI modules"; exit 1
+          fi
