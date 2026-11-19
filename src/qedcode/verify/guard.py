@@ -18,6 +18,18 @@ from qedcode.project.paths import is_protected, is_test_file, validate_path
 
 SUMMARY_LIMIT = 300
 DETAILS_LIMIT = 4000
+PROTECTED_MARKER = "Protected files changed:"
+
+
+def protected_from_checks(checks: Iterable[CheckResult]) -> list[str]:
+    """Protected files a scope check recorded as changed (the grade function reads this)."""
+    for check in checks:
+        if check.stage != "scope":
+            continue
+        for line in check.details.split("\n"):
+            if line.startswith(PROTECTED_MARKER):
+                return [p.strip() for p in line[len(PROTECTED_MARKER) :].split(",") if p.strip()]
+    return []
 
 
 # --------------------------------------------------------------------------- diff parsing
@@ -171,7 +183,8 @@ def scope_check(
             f"The change touches {total} lines but the limit at this speed is {limit}. "
             "Make a smaller change."
         )
-    details = "\n".join(problems)[:DETAILS_LIMIT]
+    marker = [f"{PROTECTED_MARKER} {', '.join(protected_changes)}"] if protected_changes else []
+    details = "\n".join(marker + problems)[:DETAILS_LIMIT]
     if role == "user":
         summary = (
             f"{len(problems)} thing(s) to look at in your change (not blocking)."

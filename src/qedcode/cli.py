@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Annotated
+
 import typer
 from rich.console import Console
 from rich.progress import (
@@ -16,6 +19,7 @@ from rich.table import Table
 
 from qedcode import __version__
 from qedcode.config import load_global, save_global
+from qedcode.engine import api
 from qedcode.hardware import detect as hardware_detect
 from qedcode.hardware.recommend import best_ctx_for, recommend
 from qedcode.runtime.catalog import CatalogError, load_catalog, local_path
@@ -84,6 +88,28 @@ def setup(
     except (KeyboardInterrupt, EOFError) as exc:
         typer.echo("\nSetup cancelled. Nothing more was changed; run `qed setup` to resume.")
         raise typer.Exit(1) from exc
+
+
+@app.command("verify")
+def verify_command(
+    receipt: Annotated[Path, typer.Argument(help="A receipt file (.qed/receipts/<task>.json).")],
+) -> None:
+    """Re-run a proof receipt and print VERIFIED or what no longer matches."""
+    console = Console()
+    result = api.verify(receipt, root=Path.cwd())
+    if result.verified:
+        from qedcode.verify.receipt import summary_line
+
+        console.print("[bold green]VERIFIED[/bold green]")
+        if result.receipt is not None:
+            console.print(summary_line(result.receipt), markup=False)
+        for note in result.notes:
+            console.print(note, markup=False)
+        return
+    console.print("[bold red]NOT VERIFIED[/bold red]")
+    for problem in result.mismatches:
+        console.print(f"- {problem}", markup=False, highlight=False)
+    raise typer.Exit(1)
 
 
 @app.command()

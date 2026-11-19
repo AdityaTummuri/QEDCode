@@ -39,6 +39,7 @@ class PytestOutcome:
     check: CheckResult = field(default_factory=lambda: CheckResult(stage="targeted", passed=False))
     exit_code: int | None = None
     duration_s: float = 0.0
+    bodies: dict[str, str] = field(default_factory=dict)  # trimmed traceback per failing test
 
     @property
     def passed_keys(self) -> list[str]:
@@ -80,9 +81,30 @@ def _first_line(text: str) -> str:
 
 def parse_junit(xml_text: str) -> tuple[list[TestResult], str]:
     """Parse JUnit XML into test results and a trimmed failure report for the repairer."""
+    results, bodies = parse_junit_full(xml_text)
+    shown = [
+        f"{r.outcome.upper()} {r.key}\n{bodies[r.key]}"
+        for r in results
+        if r.outcome in ("failed", "error")
+    ][:MAX_FAILURES_IN_DETAILS]
+    return results, "\n\n".join(shown)
+
+
+def failure_report(bodies: dict[str, str], results: list[TestResult], keys: list[str]) -> str:
+    """A trimmed failure report for just the given test keys (first few only)."""
+    by_key = {r.key: r for r in results}
+    parts = []
+    for key in keys[:MAX_FAILURES_IN_DETAILS]:
+        outcome = by_key[key].outcome.upper() if key in by_key else "FAILED"
+        parts.append(f"{outcome} {key}\n{bodies.get(key, '')}")
+    return "\n\n".join(parts)[:DETAILS_LIMIT]
+
+
+def parse_junit_full(xml_text: str) -> tuple[list[TestResult], dict[str, str]]:
+    """Parse JUnit XML into results and a trimmed traceback per failing test key."""
     root = ET.fromstring(xml_text)
     results: list[TestResult] = []
-    reports: list[str] = []
+    bodies: dict[str, str] = {}
     for case in root.iter("testcase"):
         classname = case.get("classname", "")
         name = case.get("name", "")
@@ -97,9 +119,9 @@ def parse_junit(xml_text: str) -> tuple[list[TestResult], str]:
                 body = child.text or child.get("message", "") or ""
                 break
         results.append(TestResult(key=key, outcome=outcome, message=message))
-        if outcome in ("failed", "error") and len(reports) < MAX_FAILURES_IN_DETAILS:
-            reports.append(f"{outcome.upper()} {key}\n{_trim_lines(body)}")
-    return results, "\n\n".join(reports)
+        if outcome in ("failed", "error"):
+            bodies[key] = _trim_lines(body)
+    return results, bodies
 
 
 def _tail(text: str, lines: int = 12) -> str:
@@ -188,12 +210,16 @@ def _interpret(
     timeout: float,
     log_path: str | None,
 ) -> PytestOutcome:
+    result_bodies: dict[str, str] = {}
+
     def outcome(
         status: Status, passed: bool, summary: str, results=None, details=""
     ) -> PytestOutcome:
         results = results or []
         check = _check(stage, passed, summary, result, results, details, log_path)
-        return PytestOutcome(status, results, check, result.exit_code, result.duration_s)
+        return PytestOutcome(
+            status, results, check, result.exit_code, result.duration_s, result_bodies
+        )
 
     if result.cancelled:
         return outcome("cancelled", False, "The test run was cancelled.")
@@ -227,9 +253,13 @@ def _interpret(
             details=_tail(combined),
         )
     try:
-        results, details = parse_junit(text)
+        results, bodies = parse_junit_full(text)
     except ET.ParseError:
         return outcome("error", False, "pytest wrote a report that could not be read.")
+    details = failure_report(
+        bodies, results, [r.key for r in results if r.outcome in ("failed", "error")]
+    )
+    result_bodies.update(bodies)
     failed = [r for r in results if r.outcome in ("failed", "error")]
     errors = [r for r in results if r.outcome == "error"]
     passed_count = sum(1 for r in results if r.outcome == "passed")

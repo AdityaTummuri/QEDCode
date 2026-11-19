@@ -85,3 +85,26 @@ def delete_snapshot(root: Path | str, task_id: str) -> None:
 
 def clear_tmp(root: Path | str) -> None:
     shutil.rmtree(Path(root) / QED_DIR / "tmp", ignore_errors=True)
+
+
+CANDIDATE_REF = "refs/qed/candidates"
+
+
+def candidate_ref(task_id: str, candidate_id: str) -> str:
+    return f"{CANDIDATE_REF}/{task_id}/{candidate_id}"
+
+
+def keep_candidate(root: Path | str, task_id: str, candidate_id: str, commit: str) -> None:
+    """Keep a candidate's commit alive (so its worktree can be removed) under a private ref."""
+    git_out(root, "update-ref", candidate_ref(task_id, candidate_id), commit)
+
+
+def delete_candidate_refs(root: Path | str, task_id: str) -> int:
+    """Delete every candidate ref of a task. Returns how many were removed."""
+    from qedcode.vcs.git import git
+
+    listed = git(root, "for-each-ref", "--format=%(refname)", f"{CANDIDATE_REF}/{task_id}/")
+    refs = [r for r in listed.stdout.split("\n") if r.strip()]
+    for ref in refs:
+        git(root, "update-ref", "-d", ref)
+    return len(refs)

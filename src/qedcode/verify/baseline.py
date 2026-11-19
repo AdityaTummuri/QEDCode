@@ -101,3 +101,43 @@ def baseline(
     return baseline_run(
         root, snapshot, project, full=full, related=related, run_dir=run_dir, cancelled=cancelled
     ).baseline
+
+
+def fails_on_base(
+    root: Path | str,
+    base_commit: str,
+    project: ProjectConfig,
+    test_path: str,
+    content: str,
+    *,
+    run_dir: Path | None = None,
+    name: str = "repro-base",
+    cancelled: Callable[[], bool] | None = None,
+) -> list[str] | None:
+    """Which tests of a new test file FAIL on the base code (keys of failed/error tests).
+
+    A repro test that passes on the base proves nothing, so the controller drops it. Returns None
+    when pytest could not run at all. Runs in its own worktree; the user's files are untouched.
+    """
+    root = Path(root)
+    checkout = worktree.create(root, base_commit, name)
+    try:
+        target = checkout / test_path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8", newline="")
+        outcome = run_pytest(
+            checkout,
+            project.python or sys.executable,
+            [test_path],
+            project.test_timeout_seconds,
+            stage="fbpa",
+            run_dir=run_dir,
+            command_prefix=expand_test_command(project),
+            cancelled=cancelled,
+        )
+    finally:
+        worktree.remove(root, checkout)
+        shutil.rmtree(checkout, ignore_errors=True)
+    if outcome.status in ("timeout", "cancelled", "error"):
+        return None
+    return [r.key for r in outcome.failing]

@@ -1,7 +1,7 @@
 # QEDCode progress
 
 ## Current step
-M4.3
+M4.4
 
 ## Done
 - Setup, 2026-11-20: AGENTS.md (from the AI Build Brief), CLAUDE.md, PROGRESS.md, .gitignore, docs/ committed.
@@ -22,6 +22,7 @@ M4.3
 - M3.4, 2026-11-20: edits/apply.py (all 5 ops via ast lineno/end_lineno/col_offset: decorators included in the replaced span, re-indent that leaves multi-line strings alone, name check with insert_after_symbol hint, 1/2 blank lines, add_import placement + dedupe, exact then tolerant search_replace with closest-line hints, create_file; atomic: nothing is written if any edit fails; CRLF/BOM kept; path rules, protected paths, test_writer limited to creating test files), project/paths.py (globs, path validation); 83 applier tests + all 10 bug zoo edits.txt make the hidden tests pass. Milestone M3 complete.
 - M4.1, 2026-11-20: verify/pytest_runner.py (pytest command from section 8, JUnit XML parsing with key classname::name, statuses ok/failed/no_tests/collection_error/timeout/cancelled/error, process-tree kill on timeout, worktree src+root first on PYTHONPATH), verify/baseline.py (baseline in its own worktree, known failures, runnable flag, BaselineRun with full-suite duration), project/context.py first part (related_tests by name and by import, select_targeted with the 4 rules).
 - M4.2, 2026-11-20: verify/lint.py (parse stage; lint stage = new-errors-only ruff fatal rules E9,F63,F7,F82, --isolated, base vs candidate), verify/guard.py (git diff parser, scope_check: protected paths, deletions, coder-created tests, added skip/xfail, removed asserts, per-speed size limit, report-only for role user; risk_check: all 15 risky patterns, sets needs_approval), engine/budget.py (the speed dial table), ruff is now a runtime dependency.
+- M4.3, 2026-11-20: verify/grade.py (the section-8 function; assign_grade is the only writer, a test enforces it), verify/cascade.py (apply,parse,scope,risk,lint,fbpa,targeted,full; stops at first failure; Events after every stage; known failures ignored; skipped stages are not recorded so the grade never counts a check that did not run; worktrees removed and commits kept under refs/qed/candidates), verify/receipt.py (build/save/load, one-line summary, plain-English unverified gaps, commands with {python}/{report}), verify/verify.py (checksum, base commit, patch apply, re-run commands, fail-before test must fail on base), engine/api.py (verify, resolve_root), 'qed verify'. Tests: every grade branch, 28 cascade scenarios on the real bug zoo, tamper detection.
 
 ## Known issues
 - LICENSE in the repo is GPL-3.0 (created with the repo); the plan's step 8.4 suggests MIT or Apache-2.0. Left as GPL-3.0 for the human to decide.
@@ -32,6 +33,7 @@ M4.3
 - llama.cpp 'releases/latest' is v1.0.0 with NO binaries now (builds live in b12xxx tags), and Linux CUDA builds DO exist now, unlike the brief. The installer pins DEFAULT_LLAMACPP_TAG=b12549 and Linux NVIDIA gets CUDA first, then Vulkan, then CPU. Asset names (win rocm instead of hip-radeon) were taken from the real b12549 release.
 - Interpreter detection deviates from the brief on purpose: with a uv.lock and no .venv it does NOT run 'uv run python' (uv run creates a .venv inside the user's project, even with --no-sync). It falls back to python3/python on PATH and tells the user to run 'uv sync'.
 - Design gap to handle in step 4.1: the project's interpreter is a path into the user's venv where the project may be installed in editable mode, so a worktree could import the user's code instead of the candidate. The pytest runner must put <worktree>/src and <worktree> first on PYTHONPATH.
+- Decision: the cascade's apply stage lets protected paths through the applier (allow_protected=True) so the diff-based scope stage rejects them, as the plan's step 4.2 and scenario 3 say ('rejected at scope'); edits.apply still refuses protected paths by default for direct callers.
 
 ## Values I must verify by hand
 - Real GPU detection (RTX 5060 Ti VRAM, AMD/Intel registry path, Windows PowerShell JSON) is only covered by mocked tests; confirm on the real machines in step 8.3.
