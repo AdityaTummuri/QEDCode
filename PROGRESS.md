@@ -1,7 +1,7 @@
 # QEDCode progress
 
 ## Current step
-M3.2
+M3.3
 
 ## Done
 - Setup, 2026-11-20: AGENTS.md (from the AI Build Brief), CLAUDE.md, PROGRESS.md, .gitignore, docs/ committed.
@@ -17,6 +17,7 @@ M3.2
 - M2.6, 2026-11-20: runtime/cloud.py (CloudClient over litellm with streaming, token usage counting, plain-English provider errors), runtime/secrets.py (keyring service 'qedcode' then provider env var; set_api_key stores in keyring only; mask_secrets + MaskingFilter on the app log), tests mock litellm and keyring and search config/logs/repo for a test key.
 - M2.7, 2026-11-20: setup_wizard.py + 'qed setup [--reset]' (hardware with override, mode, local model choices incl. Ollama/LM Studio/.gguf, one combined download list asked once, test prompt with tokens/s, mix helper, cloud model + key in keychain, 'claude mcp add' offer and snippets/docs links for OpenCode/Cline/Cursor); tests drive it with scripted answers and mocked hardware/installer/clients. Milestone M2 code complete.
 - M3.1, 2026-11-20: vcs/git.py (git via verify/run.py, hermetic flags, plain-English GitError), vcs/snapshot.py (temporary-index recipe, .qed/ in .git/info/exclude, refs/qed/snapshots/<id>, heavy dirs skipped), vcs/worktree.py (create, commit_all, diff, remove, prune, remove_all), vcs/patch.py (apply_to_user and undo_last with hash checks, last_apply.json), models/ids.py; run() now reads bytes (no newline translation) with exact= for diffs; tests in temp git repos incl. dirty/untracked/ignored/no commits/spaces/unicode/binary/CRLF, git status and .git/index identical after snapshot, apply and undo.
+- M3.2, 2026-11-20: project/detect.py (interpreter order .venv/venv/VIRTUAL_ENV/PATH, one-shot pytest probe, test files + static test count, ProjectConfig with default protected paths, first_run() + confirm_project() saving .qed/project.toml, git init + first commit helper, .gitignore offer, ask-first pytest install); all 10 bug zoo projects detect the right Python and pytest.
 
 ## Known issues
 - LICENSE in the repo is GPL-3.0 (created with the repo); the plan's step 8.4 suggests MIT or Apache-2.0. Left as GPL-3.0 for the human to decide.
@@ -25,6 +26,8 @@ M3.2
 - PyYAML added as a dependency: the brief requires YAML (catalog.yaml, FakeModel scripts) but its allowed-stack table does not list it. Human should add it to AGENTS.md section 2.
 - Ranking differs from the brief's example: 9B=1, 4B=2, Coder-7B=3, 2B=4 so bigger cards get the best model that fits; the 4B stays the default in config and wins on 4-6 GB cards. Change rank in catalog.yaml if you prefer otherwise.
 - llama.cpp 'releases/latest' is v1.0.0 with NO binaries now (builds live in b12xxx tags), and Linux CUDA builds DO exist now, unlike the brief. The installer pins DEFAULT_LLAMACPP_TAG=b12549 and Linux NVIDIA gets CUDA first, then Vulkan, then CPU. Asset names (win rocm instead of hip-radeon) were taken from the real b12549 release.
+- Interpreter detection deviates from the brief on purpose: with a uv.lock and no .venv it does NOT run 'uv run python' (uv run creates a .venv inside the user's project, even with --no-sync). It falls back to python3/python on PATH and tells the user to run 'uv sync'.
+- Design gap to handle in step 4.1: the project's interpreter is a path into the user's venv where the project may be installed in editable mode, so a worktree could import the user's code instead of the candidate. The pytest runner must put <worktree>/src and <worktree> first on PYTHONPATH.
 
 ## Values I must verify by hand
 - Real GPU detection (RTX 5060 Ti VRAM, AMD/Intel registry path, Windows PowerShell JSON) is only covered by mocked tests; confirm on the real machines in step 8.3.
