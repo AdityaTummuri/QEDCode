@@ -15,6 +15,7 @@ dependencies = [
     "pydantic>=2.14.4",
     "tomli-w>=1.2.0",
     "pyyaml>=6.0.3",
+    "psutil>=7.2.2",
 ]
 
 [project.scripts]
@@ -46,3 +47,6 @@ asyncio_default_fixture_loop_scope = "function"
 markers = [
     "gpu: needs a real GPU and a real local model; skipped in CI, run by hand",
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["E501"]  # scripted replies and fixtures contain long lines on purpose
