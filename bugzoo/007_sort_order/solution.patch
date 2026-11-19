@@ -1,0 +1,13 @@
+diff --git a/src/board/scores.py b/src/board/scores.py
+index 5a14ce2..ffc4f0c 100644
+--- a/src/board/scores.py
++++ b/src/board/scores.py
+@@ -3,7 +3,7 @@
+ 
+ def top_scores(scores, n=3):
+     """Return the n highest scores, best first."""
+-    return sorted(scores)[:n]
++    return sorted(scores, reverse=True)[:n]
+ 
+ 
+ def best_score(scores):

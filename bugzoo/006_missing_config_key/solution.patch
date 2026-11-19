@@ -1,0 +1,13 @@
+diff --git a/src/appconf/loader.py b/src/appconf/loader.py
+index a8bd3d9..c199c88 100644
+--- a/src/appconf/loader.py
++++ b/src/appconf/loader.py
+@@ -7,7 +7,7 @@ def load_config(path):
+     """Read a JSON settings file and return the settings the app uses."""
+     with open(path, encoding="utf-8") as handle:
+         data = json.load(handle)
+-    return {"name": data["name"], "timeout": data["timeout"]}
++    return {"name": data["name"], "timeout": data.get("timeout", 30)}
+ 
+ 
+ def describe(config):

@@ -1,0 +1,1 @@
+My shop's product list is off by one: every page shows one item fewer than the page size. Can you fix paginate?

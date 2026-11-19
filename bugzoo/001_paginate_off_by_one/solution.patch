@@ -1,0 +1,13 @@
+diff --git a/src/shop/pages.py b/src/shop/pages.py
+index 6293829..5379b57 100644
+--- a/src/shop/pages.py
++++ b/src/shop/pages.py
+@@ -4,7 +4,7 @@
+ def paginate(items, page, size):
+     """Return the items on a 1-based page of the given size."""
+     start = (page - 1) * size
+-    end = start + size - 1
++    end = start + size
+     return list(items[start:end])
+ 
+ 

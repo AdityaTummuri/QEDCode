@@ -1,0 +1,9 @@
+PLAN:
+- paginate must slice exactly `size` items, so the end index is start + size
+
+EDIT search_replace path=src/shop/pages.py
+<<<<<<< SEARCH
+    end = start + size - 1
+=======
+    end = start + size
+>>>>>>> REPLACE

@@ -1,0 +1,1 @@
+Please add a slugify(text) function to the text helpers: lowercase everything, turn spaces into dashes and drop punctuation.

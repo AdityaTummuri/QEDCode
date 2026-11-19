@@ -1,0 +1,11 @@
+PLAN:
+- the discount should apply at the threshold, so compare with >= instead of >
+
+EDIT replace_symbol path=src/store/pricing.py symbol=apply_discount
+```python
+def apply_discount(total):
+    """Orders of 100 or more get 10% off."""
+    if total >= DISCOUNT_THRESHOLD:
+        return round(total * (1 - DISCOUNT_RATE), 2)
+    return total
+```

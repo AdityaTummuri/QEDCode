@@ -1,0 +1,16 @@
+diff --git a/src/tagger/tags.py b/src/tagger/tags.py
+index 5234b56..1d3985a 100644
+--- a/src/tagger/tags.py
++++ b/src/tagger/tags.py
+@@ -1,8 +1,10 @@
+ """Tagging helpers."""
+ 
+ 
+-def add_tag(tag, tags=[]):
++def add_tag(tag, tags=None):
+     """Add `tag` to `tags` and return the list; with no list given, start a new one."""
++    if tags is None:
++        tags = []
+     tags.append(tag)
+     return tags
+ 

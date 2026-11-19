@@ -1,0 +1,12 @@
+PLAN:
+- use None as the default and create a new list inside the function
+
+EDIT replace_symbol path=src/tagger/tags.py symbol=add_tag
+```python
+def add_tag(tag, tags=None):
+    """Add `tag` to `tags` and return the list; with no list given, start a new one."""
+    if tags is None:
+        tags = []
+    tags.append(tag)
+    return tags
+```

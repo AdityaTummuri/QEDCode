@@ -1,0 +1,1 @@
+Cart.total() ignores the quantity of each item. Two pens at 2.50 should cost 5.00, not 2.50.

@@ -1,0 +1,16 @@
+PLAN:
+- add the new slugify function after word_count
+- it needs the re module
+
+EDIT add_import path=src/textutil/text.py
+```python
+import re
+```
+
+EDIT insert_after_symbol path=src/textutil/text.py symbol=word_count
+```python
+def slugify(text):
+    """Lowercase the text, drop punctuation and join the words with dashes."""
+    cleaned = re.sub(r"[^a-z0-9\s-]", "", text.lower())
+    return re.sub(r"\s+", "-", cleaned.strip())
+```

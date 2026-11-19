@@ -1,0 +1,13 @@
+diff --git a/src/stats/core.py b/src/stats/core.py
+index 744c1cc..f3a5251 100644
+--- a/src/stats/core.py
++++ b/src/stats/core.py
+@@ -5,7 +5,7 @@ def average(numbers):
+     """Return the mean of a list of numbers; 0 for an empty list."""
+     if not numbers:
+         return 0
+-    return sum(numbers) // len(numbers)
++    return sum(numbers) / len(numbers)
+ 
+ 
+ def spread(numbers):

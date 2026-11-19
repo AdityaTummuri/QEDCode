@@ -1,0 +1,1 @@
+add_tag keeps remembering tags from earlier calls when I don't pass a list. Every call without a list should start with a fresh empty one.

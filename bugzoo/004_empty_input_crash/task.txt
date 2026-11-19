@@ -1,0 +1,1 @@
+parse_csv_line crashes with an IndexError when the line is empty. It should just return an empty list.

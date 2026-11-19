@@ -1,0 +1,1 @@
+Customers who spend exactly 100 are not getting their 10% discount. It should start at 100 or more, not above 100.

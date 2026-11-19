@@ -1,0 +1,9 @@
+PLAN:
+- use true division instead of floor division
+
+EDIT search_replace path=src/stats/core.py
+<<<<<<< SEARCH
+    return sum(numbers) // len(numbers)
+=======
+    return sum(numbers) / len(numbers)
+>>>>>>> REPLACE

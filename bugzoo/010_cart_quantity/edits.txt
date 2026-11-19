@@ -1,0 +1,9 @@
+PLAN:
+- Cart.total must multiply each price by its quantity
+
+EDIT replace_symbol path=src/shopcart/cart.py symbol=Cart.total
+```python
+def total(self):
+    """Return the price of everything in the cart."""
+    return sum(item["price"] * item["quantity"] for item in self.items)
+```

@@ -1,0 +1,13 @@
+diff --git a/src/csvlite/parser.py b/src/csvlite/parser.py
+index 671c25c..3ed0c04 100644
+--- a/src/csvlite/parser.py
++++ b/src/csvlite/parser.py
+@@ -4,7 +4,7 @@
+ def parse_csv_line(line):
+     """Split one CSV line into trimmed fields. Lines starting with # are comments."""
+     line = line.strip()
+-    if line[0] == "#":
++    if not line or line.startswith("#"):
+         return []
+     return [field.strip() for field in line.split(",")]
+ 

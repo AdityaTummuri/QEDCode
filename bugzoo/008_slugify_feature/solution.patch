@@ -1,0 +1,22 @@
+diff --git a/src/textutil/text.py b/src/textutil/text.py
+index ddda783..a0db397 100644
+--- a/src/textutil/text.py
++++ b/src/textutil/text.py
+@@ -1,5 +1,7 @@
+ """Small text helpers."""
+ 
++import re
++
+ 
+ def truncate(text, width):
+     """Cut text to `width` characters, ending with '...' when it was shortened."""
+@@ -11,3 +13,9 @@ def truncate(text, width):
+ def word_count(text):
+     """Count the words in a piece of text."""
+     return len(text.split())
++
++
++def slugify(text):
++    """Lowercase the text, drop punctuation and join the words with dashes."""
++    cleaned = re.sub(r"[^a-z0-9\s-]", "", text.lower())
++    return re.sub(r"\s+", "-", cleaned.strip())

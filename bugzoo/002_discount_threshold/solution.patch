@@ -1,0 +1,13 @@
+diff --git a/src/store/pricing.py b/src/store/pricing.py
+index 4e6906f..a369b32 100644
+--- a/src/store/pricing.py
++++ b/src/store/pricing.py
+@@ -6,7 +6,7 @@ DISCOUNT_THRESHOLD = 100
+ 
+ def apply_discount(total):
+     """Orders of 100 or more get 10% off."""
+-    if total > DISCOUNT_THRESHOLD:
++    if total >= DISCOUNT_THRESHOLD:
+         return round(total * (1 - DISCOUNT_RATE), 2)
+     return total
+ 

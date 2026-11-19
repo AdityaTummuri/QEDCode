@@ -1,0 +1,9 @@
+PLAN:
+- sort in descending order before taking the first n
+
+EDIT search_replace path=src/board/scores.py
+<<<<<<< SEARCH
+    return sorted(scores)[:n]
+=======
+    return sorted(scores, reverse=True)[:n]
+>>>>>>> REPLACE

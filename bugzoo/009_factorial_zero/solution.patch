@@ -1,0 +1,13 @@
+diff --git a/src/mathx/numbers.py b/src/mathx/numbers.py
+index e5a75ca..dcc3f51 100644
+--- a/src/mathx/numbers.py
++++ b/src/mathx/numbers.py
+@@ -6,7 +6,7 @@ def factorial(n):
+     if n < 0:
+         raise ValueError("n must be 0 or more")
+     if n == 0:
+-        return 0
++        return 1
+     result = 1
+     for i in range(2, n + 1):
+         result *= i

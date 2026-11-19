@@ -1,0 +1,1 @@
+load_config crashes with a KeyError when my settings file has no "timeout". It should use 30 seconds when the key is missing.

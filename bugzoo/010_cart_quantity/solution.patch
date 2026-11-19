@@ -1,0 +1,10 @@
+diff --git a/src/shopcart/cart.py b/src/shopcart/cart.py
+index ca8e001..d528df8 100644
+--- a/src/shopcart/cart.py
++++ b/src/shopcart/cart.py
+@@ -17,4 +17,4 @@ class Cart:
+ 
+     def total(self):
+         """Return the price of everything in the cart."""
+-        return sum(item["price"] for item in self.items)
++        return sum(item["price"] * item["quantity"] for item in self.items)

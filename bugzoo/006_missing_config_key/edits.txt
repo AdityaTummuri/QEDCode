@@ -1,0 +1,11 @@
+PLAN:
+- read timeout with a default of 30 instead of requiring it
+
+EDIT replace_symbol path=src/appconf/loader.py symbol=load_config
+```python
+def load_config(path):
+    """Read a JSON settings file and return the settings the app uses."""
+    with open(path, encoding="utf-8") as handle:
+        data = json.load(handle)
+    return {"name": data["name"], "timeout": data.get("timeout", 30)}
+```

@@ -1,0 +1,1 @@
+average([1, 2]) gives me 1 but I expected 1.5. Please make average return the real mean.

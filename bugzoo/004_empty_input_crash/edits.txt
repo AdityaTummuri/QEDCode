@@ -1,0 +1,12 @@
+PLAN:
+- return [] for an empty line before looking at the first character
+
+EDIT replace_symbol path=src/csvlite/parser.py symbol=parse_csv_line
+```python
+def parse_csv_line(line):
+    """Split one CSV line into trimmed fields. Lines starting with # are comments."""
+    line = line.strip()
+    if not line or line.startswith("#"):
+        return []
+    return [field.strip() for field in line.split(",")]
+```
