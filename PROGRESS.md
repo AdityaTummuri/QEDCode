@@ -1,7 +1,7 @@
 # QEDCode progress
 
 ## Current step
-M6.4
+M7.1
 
 ## Done
 - Setup, 2026-11-20: AGENTS.md (from the AI Build Brief), CLAUDE.md, PROGRESS.md, .gitignore, docs/ committed.
@@ -31,6 +31,7 @@ M6.4
 - M6.1, 2026-11-20: tui/app.py (Textual: header with model/backend/GPU/state, speed+mode line, scrolling log, task input, footer with keys; the engine runs in a worker thread and Events reach the log through call_from_thread; Esc cancels; 'qed' with no arguments opens it), tui/widgets.py, tui/screens.py, tui/app.tcss, hardware/telemetry.py (VRAM via nvidia-ml-py optional extra or AMD sysfs, else n/a); pilot tests with FakeModel incl. 'screen never freezes' and 'Esc leaves no worktrees'.
 - M6.2, 2026-11-20: results view (candidate cards 'c1 failed (parse) | c3 A', result panel with grade/summary/explanation, only grade A gets the accent colour, full-screen diff with syntax highlighting on d, explain on e, receipt on r with checks and plain-English gaps, help on ?, gentle hints when there is no result yet); pilot tests.
 - M6.3, 2026-11-20: TUI actions from the keyboard (a apply with confirm for grade C/D, u undo, h try harder at the next speed from the best try, m cycle speed, s settings screen saving mode/model/keep-alive/helper), dialogs for risky-pattern approval (shows the lines), helper approval (says code will be sent) and the intake question (answer or skip), slash commands /check /verify /models /speed /help; TuiCallbacks implements the Callbacks protocol; pilot tests.
+- M6.4, 2026-11-20: first run and model lifecycle in the TUI (offers 'qed setup' when there is no global config, git init + first commit for a folder that is not a repo, shows the detected Python/pytest/test count and asks once before saving .qed/project.toml, offers to install pytest and to add .qed/ to .gitignore; the model loads in a worker with a 'Loading model...' line while the input stays usable and a task submitted early waits; idle watcher for the shared server; 'q' unloads per config and cancels a running task); pilot tests. Milestone M6 complete.
 
 ## Known issues
 - LICENSE in the repo is GPL-3.0 (created with the repo); the plan's step 8.4 suggests MIT or Apache-2.0. Left as GPL-3.0 for the human to decide.
@@ -55,6 +56,7 @@ M6.4
 - qed models download qwen3.5-4b-q4km (step 2.5) was not run for real in this unattended run (no model downloads, as requested). Run it once by hand and confirm the size prompt, the progress bar and that the SHA-256 passes.
 - qed setup on your PC (step 2.7 real-model check): finishes, downloads the recommended model, prints a test answer with tokens per second; qed doctor shows the model server healthy; with vram_gb = 4 in the config qed models recommend picks a smaller setup (smaller context), with 6 a medium one.
 - Git on Windows (step 3.1): the vcs tests have only been run on macOS here. Check the CI run on Windows, especially CRLF files with core.autocrlf=true and long paths.
+- TUI by hand (step 6.4 'Done when'): in a bug zoo copy run 'qed', type the task, watch the tries, press a and see the files change, press u and see them return; Esc during a task leaves no folders in .qed/worktrees/; after q nvidia-smi shows the model gone from VRAM; it looks right in Windows Terminal, macOS Terminal and a Linux terminal. Only the headless Textual pilot was used here.
 
 ## Real-model results
 - NOT RUN (unattended, no model downloads): step 5.4 real-model check. When ready run 'uv run python bugzoo/run_zoo.py --speed normal' and then '--speed fast', and write the A/B/no-fix counts, the time per task and any 'wrong A/B' here. Every wrong grade A is a bug to fix before M6 ships.

@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from rich.text import Text
-from textual.app import App, ComposeResult
+from textual.app import App, ComposeResult, SuspendNotSupported
 from textual.binding import Binding
 from textual.screen import ModalScreen
 from textual.widgets import Footer, Input, RichLog
@@ -251,13 +251,20 @@ class QedApp(App[None]):
             )
         )
         if wants and self.setup_runner is not None:
-            with self.suspend():
-                self.setup_runner()
+            self._run_in_terminal(self.setup_runner)
             self.config = load_global()
             self.speed, self.mode = self.config.engine.speed, self.config.engine.mode
         elif not wants:
             self.write_log("Skipping setup. Run `qed setup` any time to choose a model.")
         return True
+
+    def _run_in_terminal(self, function: Callable[[], None]) -> None:
+        """Run terminal-style code (the setup wizard) with the screen suspended, if possible."""
+        try:
+            with self.suspend():
+                function()
+        except SuspendNotSupported:
+            function()
 
     async def _ensure_git(self) -> bool:
         if is_git_repo(self.root) and has_commits(self.root):
