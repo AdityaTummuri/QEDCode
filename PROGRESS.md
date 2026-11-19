@@ -1,7 +1,7 @@
 # QEDCode progress
 
 ## Current step
-M3.1
+M3.2
 
 ## Done
 - Setup, 2026-11-20: AGENTS.md (from the AI Build Brief), CLAUDE.md, PROGRESS.md, .gitignore, docs/ committed.
@@ -16,6 +16,7 @@ M3.1
 - M2.5, 2026-11-20: installer.download_model (size shown, asks first, huggingface_hub with pinned revision, SHA-256 + size check, resumes on retry, disk-space check), remove_model, 'qed models download|use|remove' (--yes to skip prompts), best_ctx_for; huggingface_hub mocked in tests, nothing downloaded.
 - M2.6, 2026-11-20: runtime/cloud.py (CloudClient over litellm with streaming, token usage counting, plain-English provider errors), runtime/secrets.py (keyring service 'qedcode' then provider env var; set_api_key stores in keyring only; mask_secrets + MaskingFilter on the app log), tests mock litellm and keyring and search config/logs/repo for a test key.
 - M2.7, 2026-11-20: setup_wizard.py + 'qed setup [--reset]' (hardware with override, mode, local model choices incl. Ollama/LM Studio/.gguf, one combined download list asked once, test prompt with tokens/s, mix helper, cloud model + key in keychain, 'claude mcp add' offer and snippets/docs links for OpenCode/Cline/Cursor); tests drive it with scripted answers and mocked hardware/installer/clients. Milestone M2 code complete.
+- M3.1, 2026-11-20: vcs/git.py (git via verify/run.py, hermetic flags, plain-English GitError), vcs/snapshot.py (temporary-index recipe, .qed/ in .git/info/exclude, refs/qed/snapshots/<id>, heavy dirs skipped), vcs/worktree.py (create, commit_all, diff, remove, prune, remove_all), vcs/patch.py (apply_to_user and undo_last with hash checks, last_apply.json), models/ids.py; run() now reads bytes (no newline translation) with exact= for diffs; tests in temp git repos incl. dirty/untracked/ignored/no commits/spaces/unicode/binary/CRLF, git status and .git/index identical after snapshot, apply and undo.
 
 ## Known issues
 - LICENSE in the repo is GPL-3.0 (created with the repo); the plan's step 8.4 suggests MIT or Apache-2.0. Left as GPL-3.0 for the human to decide.
@@ -31,6 +32,7 @@ M3.1
 - llama.cpp (step 2.4): the real download+extract+start was NOT exercised in this unattended run (the auto-mode classifier blocked downloading a binary). On your PC run qed setup / the installer once: CUDA build on Windows, Vulkan on Linux, check llama-server starts with a GGUF and answers once, and that two qed doctor runs start only one server.
 - qed models download qwen3.5-4b-q4km (step 2.5) was not run for real in this unattended run (no model downloads, as requested). Run it once by hand and confirm the size prompt, the progress bar and that the SHA-256 passes.
 - qed setup on your PC (step 2.7 real-model check): finishes, downloads the recommended model, prints a test answer with tokens per second; qed doctor shows the model server healthy; with vram_gb = 4 in the config qed models recommend picks a smaller setup (smaller context), with 6 a medium one.
+- Git on Windows (step 3.1): the vcs tests have only been run on macOS here. Check the CI run on Windows, especially CRLF files with core.autocrlf=true and long paths.
 
 ## Real-model results
 -

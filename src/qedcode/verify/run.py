@@ -121,11 +121,13 @@ def run(
     log_path: Path | str | None = None,
     stdin_text: str | None = None,
     cancelled: Callable[[], bool] | None = None,
+    exact: bool = False,
 ) -> RunResult:
     """Run one command (list args, no shell) and always return a RunResult; never raises.
 
     `env` entries are added after scrubbing. A timeout or a True from `cancelled()` kills the whole
-    process tree.
+    process tree. Output is read as bytes (line endings are never translated); `exact=True` keeps
+    undecodable bytes so a diff can be fed back to `git apply` unchanged.
     """
     argv = [os.fspath(a) for a in args]
     cwd_path = Path(cwd) if cwd is not None else None
@@ -140,9 +142,6 @@ def run(
             stdin=subprocess.PIPE if stdin_text is not None else subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
             **_popen_kwargs(),
         )
     except (OSError, ValueError) as exc:
@@ -152,9 +151,10 @@ def run(
             _write_log(Path(log_path), result, cwd_path)
         return result
 
+    errors = "surrogateescape" if exact else "replace"
     deadline = None if timeout is None else started + timeout
-    pending_input = stdin_text
-    out = err = ""
+    pending_input = None if stdin_text is None else stdin_text.encode("utf-8", "surrogateescape")
+    out = err = b""
     while True:
         try:
             out, err = proc.communicate(input=pending_input, timeout=_POLL_SECONDS)
@@ -171,10 +171,11 @@ def run(
             try:
                 out, err = proc.communicate(timeout=5)
             except (subprocess.TimeoutExpired, ValueError):
-                out = err = ""
+                out = err = b""
             break
     result.exit_code = proc.returncode
-    result.stdout, result.stderr = _trim(out or ""), _trim(err or "")
+    result.stdout = _trim((out or b"").decode("utf-8", errors))
+    result.stderr = _trim((err or b"").decode("utf-8", "replace"))
     result.duration_s = time.monotonic() - started
     if log_path:
         _write_log(Path(log_path), result, cwd_path)

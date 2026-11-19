@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import importlib.util
+import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -49,3 +51,58 @@ def _isolated_qedcode_home(tmp_path_factory: pytest.TempPathFactory, monkeypatch
     home = tmp_path_factory.mktemp("qedcode_home")
     monkeypatch.setenv("QEDCODE_HOME", str(home))
     return home
+
+
+@pytest.fixture(autouse=True)
+def _hermetic_git(monkeypatch) -> None:
+    """Tests never read the developer's git config (signing, hooks, odd settings)."""
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
+    monkeypatch.setenv("GIT_CONFIG_SYSTEM", os.devnull)
+    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    for who in ("AUTHOR", "COMMITTER"):
+        monkeypatch.setenv(f"GIT_{who}_NAME", "Test")
+        monkeypatch.setenv(f"GIT_{who}_EMAIL", "test@example.com")
+
+
+def run_git(repo: Path, *args: str, check: bool = True) -> str:
+    """Run git in `repo` for test setup and checks; returns stdout."""
+    proc = subprocess.run(
+        ["git", *args], cwd=repo, capture_output=True, text=True, encoding="utf-8", check=False
+    )
+    if check and proc.returncode != 0:
+        raise AssertionError(f"git {' '.join(args)} failed: {proc.stderr}")
+    return proc.stdout
+
+
+def make_repo(
+    path: Path, files: dict[str, str | bytes] | None = None, *, commit: bool = True
+) -> Path:
+    """Create a git repo at `path` with `files` (committed unless commit=False)."""
+    path.mkdir(parents=True, exist_ok=True)
+    run_git(path, "init", "-q", "-b", "main")
+    write_files(path, files or {})
+    if commit and files:
+        run_git(path, "add", "-A")
+        run_git(path, "commit", "-q", "-m", "initial")
+    return path
+
+
+def write_files(root: Path, files: dict[str, str | bytes]) -> None:
+    for rel, content in files.items():
+        target = root / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if isinstance(content, bytes):
+            target.write_bytes(content)
+        else:
+            target.write_bytes(content.encode("utf-8"))
+
+
+def tree_state(root: Path) -> dict[str, bytes]:
+    """Every file under `root` (except .git and .qed) with its bytes, for before/after checks."""
+    state: dict[str, bytes] = {}
+    for path in sorted(root.rglob("*")):
+        rel = path.relative_to(root).as_posix()
+        if rel.startswith((".git/", ".qed/")) or rel in (".git", ".qed") or not path.is_file():
+            continue
+        state[rel] = path.read_bytes()
+    return state
