@@ -446,6 +446,9 @@ def test_claude_code_connection_is_offered_only_when_claude_exists() -> None:
     assert "Connected" in io.transcript
     for name in ("OpenCode", "Cline", "Cursor"):
         assert name in io.transcript
+    assert '"command": ["qed", "mcp"]' in io.transcript  # OpenCode's documented shape
+    assert '"mcpServers": {"qedcode": {"command": "qed", "args": ["mcp"]}}' in io.transcript
+    assert "formats change" in io.transcript
 
 
 def test_claude_code_connection_failure_and_decline() -> None:

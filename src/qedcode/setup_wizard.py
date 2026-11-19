@@ -41,6 +41,13 @@ MCP_DOCS = {
     "Cline": "https://docs.cline.bot/mcp/mcp-overview",
     "Cursor": "https://cursor.com/docs (search for 'MCP')",
 }
+# Ready-to-paste snippets in each tool's documented shape (checked 2026-11-20). These formats
+# change between releases, so the setup prints the docs link next to every snippet.
+MCP_SNIPPETS = {
+    "OpenCode": '{"mcp": {"servers": {"qedcode": {"type": "local", "command": ["qed", "mcp"]}}}}',
+    "Cline": '{"mcpServers": {"qedcode": {"command": "qed", "args": ["mcp"]}}}',
+    "Cursor": '{"mcpServers": {"qedcode": {"command": "qed", "args": ["mcp"]}}}',
+}
 CLOUD_PROVIDERS = [
     ("openrouter", "OpenRouter (many models, one key)"),
     ("anthropic", "Anthropic"),
@@ -519,9 +526,13 @@ def _step_agents(io: Prompter, deps: SetupDeps) -> None:
                     f"That did not work ({(done.error or done.output)[:160]}). "
                     "You can run the command yourself later."
                 )
-    io.say("Other agents: add an MCP server that runs the command `qed` with the argument `mcp`.")
+    io.say(
+        "Other agents: add QEDCode as an MCP server (command `qed`, argument `mcp`). "
+        "Their config formats change, so check each tool's docs if a snippet does not work:"
+    )
     for name, url in MCP_DOCS.items():
         io.say(f"  {name}: {url}")
+        io.say(f"    {MCP_SNIPPETS[name]}")
 
 
 # --------------------------------------------------------------------------- terminal prompter
