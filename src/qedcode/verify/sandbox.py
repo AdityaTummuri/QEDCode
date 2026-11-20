@@ -168,8 +168,8 @@ class DockerSandbox:
 
 def sandbox_for(project: ProjectConfig, root: Path | str) -> DockerSandbox | None:
     """The sandbox to use for this project, or None when tests run on the host."""
-    if project.sandbox != "docker":
-        return None
+    if project.sandbox != "docker" or project.language != "python":
+        return None  # the sealed test box runs Python projects only (AGENTS.md 15.3)
     return DockerSandbox(
         image=project.sandbox_image or default_image(root),
         memory=project.sandbox_memory,

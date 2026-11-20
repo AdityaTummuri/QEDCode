@@ -1,0 +1,84 @@
+{
+ "numFailedTestSuites": 2,
+ "numFailedTests": 1,
+ "numPassedTestSuites": 0,
+ "numPassedTests": 1,
+ "numPendingTestSuites": 0,
+ "numPendingTests": 1,
+ "numRuntimeErrorTestSuites": 1,
+ "numTodoTests": 0,
+ "numTotalTestSuites": 2,
+ "numTotalTests": 3,
+ "success": false,
+ "testResults": [
+  {
+   "assertionResults": [],
+   "coverage": {},
+   "message": "  \u25cf Test suite failed to run\n\n    Cannot find module './missing' from 'src/broken.test.js'\n\n    > 1 | const { nope } = require('./missing');\n        |                  ^\n      2 | it('never', () => { expect(nope).toBe(1); });\n      3 |\n\n      at Resolver._throwModNotFoundError (node_modules/jest-resolve/build/resolver.js:427:11)\n      at Object.require (src/broken.test.js:1:18)\n",
+   "name": "/proj/src/broken.test.js",
+   "status": "failed",
+   "summary": ""
+  },
+  {
+   "assertionResults": [
+    {
+     "ancestorTitles": [
+      "math",
+      "add"
+     ],
+     "failureDetails": [
+      {
+       "matcherResult": {
+        "actual": -1,
+        "expected": 3,
+        "message": "expect(received).toBe(expected) // Object.is equality\n\nExpected: 3\nReceived: -1",
+        "name": "toBe",
+        "pass": false
+       }
+      }
+     ],
+     "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality\n\nExpected: 3\nReceived: -1\n    at Object.toBe (/proj/src/math.test.js:4:42)\n    at Promise.then.completed (/proj/node_modules/jest-circus/build/utils.js:298:28)\n    at new Promise (<anonymous>)\n    at callAsyncCircusFn (/proj/node_modules/jest-circus/build/utils.js:231:10)\n    at _callCircusTest (/proj/node_modules/jest-circus/build/run.j"
+     ],
+     "fullName": "math add adds",
+     "invocations": 1,
+     "numPassingAsserts": 0,
+     "retryReasons": [],
+     "status": "failed",
+     "title": "adds"
+    },
+    {
+     "ancestorTitles": [
+      "math",
+      "add"
+     ],
+     "failureDetails": [],
+     "failureMessages": [],
+     "fullName": "math add adds zero",
+     "invocations": 1,
+     "numPassingAsserts": 1,
+     "retryReasons": [],
+     "status": "passed",
+     "title": "adds zero"
+    },
+    {
+     "ancestorTitles": [
+      "math"
+     ],
+     "failureDetails": [],
+     "failureMessages": [],
+     "fullName": "math later",
+     "invocations": 1,
+     "numPassingAsserts": 0,
+     "retryReasons": [],
+     "status": "pending",
+     "title": "later"
+    }
+   ],
+   "message": "  \u25cf math \u203a add \u203a adds\n\n    expect(received).toBe(expected) // Object.is equality\n\n    Expected: 3\n    Received: -1\n\n      2 | describe('math', () => {\n      3 |   describe('add', () => {\n    > 4 |     it('adds', () => { expect(add(1, 2)).toBe(3); });\n        |                                          ^\n      5 |     it('adds zero', () => { expect(add(0, 0)).toBe(0); });\n      6 |   });\n      7 |  ",
+   "name": "/proj/src/math.test.js",
+   "status": "failed",
+   "summary": ""
+  }
+ ]
+}

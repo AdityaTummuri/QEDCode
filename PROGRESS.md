@@ -1,7 +1,7 @@
 # QEDCode progress
 
 ## Current step
-Post-v1 #3 JS/TS step 3: test runners (node, vitest, jest) and wiring
+Post-v1 #3 JS/TS step 4: prompts (test_writer style), end-to-end on a JS project, docs
 
 ## Done
 - Setup, 2026-11-20: AGENTS.md (from the AI Build Brief), CLAUDE.md, PROGRESS.md, .gitignore, docs/ committed.
@@ -41,6 +41,7 @@ Post-v1 #3 JS/TS step 3: test runners (node, vitest, jest) and wiring
 - Post-v1 #2 Sealed test box (v1.1), 2026-11-20: AGENTS.md 15.2; verify/sandbox.py (DockerSandbox: docker run --network none --pull never --cap-drop ALL --read-only --tmpfs /tmp --pids-limit --memory [--cpus] [--user], path mapping, container removed on timeout/cancel; Dockerfile + clean HEAD export), run_pytest(sandbox=...) used by baseline, cascade and verify; ProjectConfig sandbox fields; Receipt.sandbox + sealed note instead of the network limit; engine/sandbox_setup.py (asks before building, smoke test, build log); 'qed sandbox [status|setup|off]'; doctor check; 29 tests with a fake docker. Full gate: 931 passed, 1 skipped.
 - Post-v1 #3 JS/TS step 1, 2026-11-20: AGENTS.md 15.3 (design, new deps tree-sitter + js/ts grammars); edits/js_symbols.py (syntax check, symbols, replace_symbol keeping 'export', insert_after_symbol, add_import) wired into the applier by file extension; 38 tests.
 - Post-v1 #3 JS/TS step 2, 2026-11-20: language plumbing: ProjectConfig language/test_runner/package_manager and JS protected defaults, is_test_file for JS, project/detect_js.py (package.json, runner, package manager, Node version, test files, language choice), detect_project and the first-run text for JS, JS-aware repo map / related tests / repro test path / build_context, JS tamper and risky-pattern guards, tree-sitter parse stage, lint skipped with a reason; 59 tests.
+- Post-v1 #3 JS/TS step 3, 2026-11-20: test runners: verify/node_reporter.mjs (QEDCode's own reporter for node --test: file, ancestors, whole-file load failures with the real stderr), verify/js_runner.py (node, vitest, jest from node_modules/.bin, never npx; node_modules symlinked only while tests run; same PytestOutcome; collection errors), verify/runners.py dispatcher used by baseline, cascade and qed verify (receipts record placeholder commands, JS receipts re-run by their runner); sealed test box is Python-only. Parsing tested on real vitest/jest/node reports (fixtures), real node --test runs in the tests; live smoke test against real vitest 3 and jest 29. 27 tests.
 
 ## Known issues
 - LICENSE in the repo is GPL-3.0 (created with the repo); the plan's step 8.4 suggests MIT or Apache-2.0. Left as GPL-3.0 for the human to decide.

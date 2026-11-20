@@ -27,7 +27,6 @@ from qedcode.models.schemas import (
     TaskSpec,
 )
 from qedcode.project.context import select_targeted
-from qedcode.project.detect import expand_test_command
 from qedcode.project.paths import is_js_path, is_test_file
 from qedcode.vcs import worktree
 from qedcode.vcs.snapshot import keep_candidate
@@ -45,9 +44,8 @@ from qedcode.verify.pytest_runner import (
     PytestOutcome,
     failure_report,
     file_level_failure,
-    run_pytest,
 )
-from qedcode.verify.sandbox import sandbox_for
+from qedcode.verify.runners import run_tests
 
 DETAILS_LIMIT = 4000
 
@@ -237,16 +235,15 @@ def _base_failures_for(ctx: CascadeContext, wt: Path, tests: list[str]) -> list[
             target = base / rel
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(wt / rel, target)
-        out = run_pytest(
+        out = run_tests(
             base,
-            ctx.python,
+            ctx.project,
+            ctx.root,
             tests,
             ctx.project.test_timeout_seconds,
             stage="fbpa",
             run_dir=ctx.run_dir,
-            command_prefix=expand_test_command(ctx.project),
             cancelled=ctx.cancelled,
-            sandbox=sandbox_for(ctx.project, ctx.root),
         )
     finally:
         worktree.remove(ctx.root, base)
@@ -256,16 +253,15 @@ def _base_failures_for(ctx: CascadeContext, wt: Path, tests: list[str]) -> list[
 def _run_tests(
     ctx: CascadeContext, wt: Path, selection: list[str] | None, stage: str
 ) -> PytestOutcome:
-    out = run_pytest(
+    out = run_tests(
         wt,
-        ctx.python,
+        ctx.project,
+        ctx.root,
         selection,
         ctx.project.test_timeout_seconds,
         stage="full" if stage == "full" else ("fbpa" if stage == "fbpa" else "targeted"),
         run_dir=ctx.run_dir,
-        command_prefix=expand_test_command(ctx.project),
         cancelled=ctx.cancelled,
-        sandbox=sandbox_for(ctx.project, ctx.root),
     )
     if out.status == "cancelled":
         raise Cancelled

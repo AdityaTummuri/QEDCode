@@ -15,11 +15,14 @@ from pathlib import Path
 
 from qedcode.config import ProjectConfig, load_project
 from qedcode.models.schemas import CheckResult, Receipt
+from qedcode.project.detect_js import detect_js, js_config
 from qedcode.vcs import worktree
 from qedcode.vcs.git import git
-from qedcode.verify.pytest_runner import failed_before, run_pytest
+from qedcode.verify.js_runner import is_js_command, selection_from
+from qedcode.verify.pytest_runner import failed_before
 from qedcode.verify.receipt import load_receipt
-from qedcode.verify.sandbox import DockerSandbox, sandbox_for
+from qedcode.verify.runners import run_tests
+from qedcode.verify.sandbox import sandbox_for
 
 PYTHON = "{python}"
 
@@ -101,7 +104,8 @@ def verify_receipt(
         )
         return result
     cfg = project or load_project(root)
-    python = cfg.python or sys.executable
+    if any(is_js_command(c) for c in receipt.commands) and cfg.language != "javascript":
+        cfg = js_config(detect_js(root))  # a JavaScript receipt in a folder not set up yet
     timeout = cfg.test_timeout_seconds
     sandbox = sandbox_for(cfg, root)
     if receipt.sandbox == "docker" and sandbox is None:
@@ -109,8 +113,8 @@ def verify_receipt(
             "This receipt was made in a sealed test box (Docker), but the sealed test box is off "
             "here, so its tests were re-run on this computer. Run `qed sandbox setup` to match it."
         )
-    _check_before(root, receipt, python, timeout, mismatch, cancelled, sandbox)
-    _check_after(root, receipt, _pairs(receipt), python, timeout, mismatch, cancelled, sandbox)
+    _check_before(root, receipt, cfg, timeout, mismatch, cancelled)
+    _check_after(root, receipt, _pairs(receipt), cfg, timeout, mismatch, cancelled)
     if not receipt.commands:
         result.notes.append(
             "This receipt has no test commands to re-run; only the patch was checked."
@@ -120,32 +124,43 @@ def verify_receipt(
 
 def _run_command(
     wt: Path,
+    root: Path,
     command: list[str],
-    python: str,
+    cfg: ProjectConfig,
     timeout: float,
     cancelled: Callable[[], bool] | None,
-    sandbox: DockerSandbox | None = None,
 ):
-    return run_pytest(
+    """Re-run one recorded command: JavaScript commands by their runner, pytest as recorded."""
+    if is_js_command(command):
+        js = (
+            cfg
+            if cfg.language == "javascript"
+            else cfg.model_copy(update={"language": "javascript"})
+        )
+        return run_tests(
+            wt, js, root, selection_from(command), timeout, stage="targeted", cancelled=cancelled
+        )
+    py = cfg if cfg.language == "python" else cfg.model_copy(update={"language": "python"})
+    python = py.python or sys.executable
+    return run_tests(
         wt,
-        python,
+        py,
+        root,
         _selection_from(command),
         timeout,
         stage="targeted",
-        command_prefix=_prefix_from(command, python),
         cancelled=cancelled,
-        sandbox=sandbox,
+        command_prefix=_prefix_from(command, python),
     )
 
 
 def _check_before(
     root: Path,
     receipt: Receipt,
-    python: str,
+    cfg: ProjectConfig,
     timeout: float,
     mismatch: Callable[[str], None],
     cancelled: Callable[[], bool] | None,
-    sandbox: DockerSandbox | None = None,
 ) -> None:
     """Every fail-before-pass-after test must FAIL on the base (with only the new tests added)."""
     if not receipt.fbpa_tests:
@@ -160,7 +175,7 @@ def _check_before(
         if error:
             mismatch(f"The new test files from the patch could not be added to the base: {error}")
             return
-        out = _run_command(wt, fbpa_command, python, timeout, cancelled, sandbox)
+        out = _run_command(wt, root, fbpa_command, cfg, timeout, cancelled)
         outcomes = out.as_map()
         for key in receipt.fbpa_tests:
             if not failed_before(key, outcomes):
@@ -176,11 +191,10 @@ def _check_after(
     root: Path,
     receipt: Receipt,
     pairs: list[tuple[CheckResult, list[str]]],
-    python: str,
+    cfg: ProjectConfig,
     timeout: float,
     mismatch: Callable[[str], None],
     cancelled: Callable[[], bool] | None,
-    sandbox: DockerSandbox | None = None,
 ) -> None:
     wt = worktree.create(root, receipt.base_commit, f"verify-{receipt.task.id}-after")
     try:
@@ -190,7 +204,7 @@ def _check_after(
             return
         known = set(receipt.known_failures)
         for check, command in pairs:
-            out = _run_command(wt, command, python, timeout, cancelled, sandbox)
+            out = _run_command(wt, root, command, cfg, timeout, cancelled)
             if out.status in ("timeout", "error", "cancelled"):
                 mismatch(f"The {check.stage} check could not be re-run: {out.check.summary}")
                 continue

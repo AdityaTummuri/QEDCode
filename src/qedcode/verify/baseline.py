@@ -7,18 +7,16 @@ failures": they are never blamed on a candidate.
 from __future__ import annotations
 
 import shutil
-import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 from qedcode.config import ProjectConfig
 from qedcode.models.schemas import Baseline
-from qedcode.project.detect import expand_test_command
 from qedcode.vcs import worktree
 from qedcode.vcs.git import git
-from qedcode.verify.pytest_runner import PytestOutcome, run_pytest
-from qedcode.verify.sandbox import sandbox_for
+from qedcode.verify.pytest_runner import PytestOutcome
+from qedcode.verify.runners import run_tests
 
 
 @dataclass
@@ -62,17 +60,15 @@ def baseline_run(
         )
     checkout = worktree.create(root, snapshot, name)
     try:
-        python = project.python or sys.executable
-        outcome = run_pytest(
+        outcome = run_tests(
             checkout,
-            python,
+            project,
+            root,
             selection,
             project.test_timeout_seconds,
             stage="full" if full else "targeted",
             run_dir=run_dir,
-            command_prefix=expand_test_command(project),
             cancelled=cancelled,
-            sandbox=sandbox_for(project, root),
         )
     finally:
         worktree.remove(root, checkout)
@@ -133,16 +129,15 @@ def fails_on_base(
         target = checkout / test_path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8", newline="")
-        outcome = run_pytest(
+        outcome = run_tests(
             checkout,
-            project.python or sys.executable,
+            project,
+            root,
             [test_path],
             project.test_timeout_seconds,
             stage="fbpa",
             run_dir=run_dir,
-            command_prefix=expand_test_command(project),
             cancelled=cancelled,
-            sandbox=sandbox_for(project, root),
         )
     finally:
         worktree.remove(root, checkout)
