@@ -60,6 +60,9 @@ def main(
     ),
 ) -> None:
     """Open QEDCode in the current folder."""
+    from qedcode.logging_setup import setup_logging
+
+    setup_logging()  # tracebacks and details go to ~/.qedcode/logs/qedcode.log, not the screen
     if ctx.invoked_subcommand is None:
         from qedcode.tui.app import run_tui
 
@@ -333,10 +336,47 @@ def verify_command(
 
 
 @app.command()
-def doctor() -> None:
-    """Check this computer and show what QEDCode found."""
+def doctor(
+    update_engine: Annotated[
+        bool,
+        typer.Option("--update-engine", help="Move to the newest llama.cpp build (asks first)."),
+    ] = False,
+) -> None:
+    """Check this computer, the project and the model, and say how to fix what is wrong."""
+    from qedcode.engine import doctor as doctor_module
+
     console = Console()
-    console.print(hardware_table(hardware_detect.detect()))
+    config = load_global()
+    hw = hardware_detect.current_hardware()
+    if update_engine:
+        try:
+            message = doctor_module.update_engine(
+                config, hw, lambda prompt: typer.confirm(prompt, default=False)
+            )
+        except InstallDeclined as exc:
+            console.print(str(exc), markup=False)
+            raise typer.Exit(1) from exc
+        except InstallError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(2) from exc
+        if message.startswith("Updated"):
+            save_global(config)
+        console.print(message, markup=False)
+    checks = doctor_module.run_doctor(api.resolve_root(), config, hw=hw)
+    table = Table(title="QEDCode doctor", title_justify="left")
+    for column in ("", "check", "what was found"):
+        table.add_column(column, no_wrap=column != "what was found")
+    marks = {"ok": "ok", "warn": "warn", "fail": "FAIL"}
+    for check in checks:
+        table.add_row(marks[check.status], check.name, check.detail)
+    console.print(table)
+    problems = [c for c in checks if c.status != "ok"]
+    for check in problems:
+        console.print(f"[bold]{check.name}[/bold]: {check.fix}", highlight=False)
+    ok, warnings, failures = doctor_module.summarize(checks)
+    console.print(f"\n{ok} ok, {warnings} warning(s), {failures} problem(s).", markup=False)
+    if failures:
+        raise typer.Exit(1)
 
 
 models_app = typer.Typer(

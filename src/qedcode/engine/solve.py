@@ -124,6 +124,7 @@ class _Run:
         self.emit("stage", "Taking a snapshot of your project...")
         worktree.prune(self.root)
         cleanup_old_candidates(self.root)
+        prune_old_runs(self.root)
         self.snap = snapshot(self.root, self.spec.id)
         self.project = self.project or project_config_for(self.root, self.notes)
         self.run_dir = self.root / ".qed" / "runs" / self.spec.id
@@ -477,6 +478,20 @@ def read_last_result(root: Path | str) -> dict | None:
         return json.loads((Path(root) / ".qed" / LAST_RESULT).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
+
+
+def prune_old_runs(root: Path, keep: int = 20) -> int:
+    """Delete the oldest `.qed/runs/<task id>/` folders, keeping the newest `keep`."""
+    import shutil
+
+    runs = root / ".qed" / "runs"
+    if not runs.exists():
+        return 0
+    folders = sorted(p for p in runs.iterdir() if p.is_dir())  # ids start with a timestamp
+    stale = folders[: max(len(folders) - keep, 0)]
+    for folder in stale:
+        shutil.rmtree(folder, ignore_errors=True)
+    return len(stale)
 
 
 def cleanup_old_candidates(root: Path) -> None:

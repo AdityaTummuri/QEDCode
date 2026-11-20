@@ -62,3 +62,4 @@ markers = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["E501"]  # scripted replies and fixtures contain long lines on purpose
+"src/qedcode/engine/doctor.py" = ["E501"]  # each fix is one readable sentence

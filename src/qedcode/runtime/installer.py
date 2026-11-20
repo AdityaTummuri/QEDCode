@@ -410,7 +410,10 @@ def extract_archive(archive: Path, destination: Path) -> None:
             for member in zf.infolist():
                 target = (destination / member.filename).resolve()
                 if not target.is_relative_to(root):
-                    raise InstallError(f"{archive.name} contains an unsafe path; not unpacking it.")
+                    raise InstallError(
+                        f"{archive.name} contains an unsafe path, so nothing was unpacked. "
+                        "Try the download again later; if it keeps happening, report it."
+                    )
             zf.extractall(destination)
         return
     with tarfile.open(archive, "r:gz") as tf:
@@ -422,7 +425,8 @@ def extract_archive(archive: Path, destination: Path) -> None:
                 if not target.is_relative_to(root) or member.issym() or member.islnk():
                     if not (member.issym() and target.is_relative_to(root)):
                         raise InstallError(
-                            f"{archive.name} contains an unsafe path; not unpacking it."
+                            f"{archive.name} contains an unsafe path, so nothing was unpacked. "
+                            "Try the download again later; if it keeps happening, report it."
                         ) from None
             tf.extractall(destination)  # noqa: S202 - members were checked just above
 

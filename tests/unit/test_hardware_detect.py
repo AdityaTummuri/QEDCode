@@ -362,7 +362,7 @@ def test_config_round_trip() -> None:
 # ------------------------------------------------------------------ qed doctor
 
 
-def test_qed_doctor_prints_the_hardware_table(monkeypatch) -> None:
+def test_qed_doctor_shows_the_hardware_check(monkeypatch, tmp_path) -> None:
     info = HardwareInfo(
         vendor="nvidia",
         gpu_name="NVIDIA GeForce RTX 5060 Ti",
@@ -372,9 +372,9 @@ def test_qed_doctor_prints_the_hardware_table(monkeypatch) -> None:
         cuda_version="12.8",
         source="nvidia-smi",
     )
-    monkeypatch.setattr("qedcode.hardware.detect.detect", lambda *a, **k: info)
+    monkeypatch.setattr("qedcode.hardware.detect.current_hardware", lambda *a, **k: info)
+    monkeypatch.chdir(tmp_path)
     result = CliRunner().invoke(app, ["doctor"])
-    assert result.exit_code == 0
-    assert "RTX 5060 Ti" in result.stdout
-    assert "15.9 GB" in result.stdout
+    assert "QEDCode doctor" in result.stdout and "hardware" in result.stdout
+    assert "RTX 5060 Ti" in result.stdout and "15.9 GB" in result.stdout
     assert "nvidia-smi" in result.stdout

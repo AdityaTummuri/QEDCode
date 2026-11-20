@@ -77,7 +77,7 @@ def apply_to_user(
     """
     root = Path(root)
     if not patch.strip():
-        raise PatchRefused("The change is empty, so there is nothing to apply.")
+        raise PatchRefused("The change is empty, so there is nothing to apply. Run the task again.")
     files = patch_files(root, patch)
     before = {f: _hash_working(root, f) for f in files}
     expected = {f: _hash_in_commit(root, snapshot, f) for f in files}
@@ -138,7 +138,10 @@ def undo_last(root: Path | str) -> list[str]:
     root = Path(root)
     record = last_apply(root)
     if record is None:
-        raise PatchRefused("There is nothing to undo: QEDCode has not applied a change here.")
+        raise PatchRefused(
+            "There is nothing to undo: QEDCode has not applied a change here. "
+            "Apply a finished result first with `qed apply`."
+        )
     files: list[str] = list(record["files"])
     changed = _changed(root, files, record["after"])
     if changed:

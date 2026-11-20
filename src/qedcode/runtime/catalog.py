@@ -99,17 +99,29 @@ def parse_catalog(text: str, where: str = "catalog.yaml") -> Catalog:
     try:
         data = yaml.safe_load(text)
     except yaml.YAMLError as exc:
-        raise CatalogError(f"The model catalog ({where}) is not valid YAML: {exc}") from exc
+        raise CatalogError(
+            f"The model catalog ({where}) is not valid YAML: {exc}. "
+            "Reinstall QEDCode, or fix the file if you edited it."
+        ) from exc
     if not isinstance(data, list):
-        raise CatalogError(f"The model catalog ({where}) must be a list of models.")
+        raise CatalogError(
+            f"The model catalog ({where}) must be a list of models. "
+            "Reinstall QEDCode, or fix the file if you edited it."
+        )
     try:
         catalog = Catalog(entries=[CatalogEntry.model_validate(item) for item in data])
     except ValidationError as exc:
-        raise CatalogError(f"The model catalog ({where}) has an invalid entry: {exc}") from exc
+        raise CatalogError(
+            f"The model catalog ({where}) has an invalid entry: {exc}. "
+            "Reinstall QEDCode, or fix the entry if you edited the file."
+        ) from exc
     ids = [e.id for e in catalog.entries]
     duplicates = sorted({i for i in ids if ids.count(i) > 1})
     if duplicates:
-        raise CatalogError(f"The model catalog ({where}) repeats ids: {', '.join(duplicates)}.")
+        raise CatalogError(
+            f"The model catalog ({where}) repeats ids: {', '.join(duplicates)}. "
+            "Give every model its own id."
+        )
     return catalog
 
 
@@ -121,7 +133,10 @@ def load_catalog(path: Path | None = None) -> Catalog:
     try:
         return parse_catalog(Path(path).read_text(encoding="utf-8"), str(path))
     except OSError as exc:
-        raise CatalogError(f"Cannot read the model catalog {path}: {exc}") from exc
+        raise CatalogError(
+            f"Cannot read the model catalog {path}: {exc}. "
+            "Check that the file exists and can be read."
+        ) from exc
 
 
 def local_path(entry: CatalogEntry) -> Path:

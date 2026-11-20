@@ -364,7 +364,10 @@ class QedApp(App[None]):
             if self.cancel_flag.is_set():
                 raise WorkCancelled
         if self.client is None:
-            raise ModelError(self.model_error or "The model is not available.")
+            raise ModelError(
+                self.model_error
+                or "The model is not available. Check the messages above, then restart QEDCode."
+            )
         return self.client
 
     # ------------------------------------------------------------------ running tasks

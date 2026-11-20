@@ -172,6 +172,12 @@ def load_receipt(path: Path | str) -> Receipt:
     try:
         return Receipt.model_validate_json(Path(path).read_text(encoding="utf-8"))
     except OSError as exc:
-        raise ValueError(f"Cannot read the receipt {path}: {exc}") from exc
+        raise ValueError(
+            f"Cannot read the receipt {path}: {exc}. Check the path (receipts are saved in "
+            ".qed/receipts/)."
+        ) from exc
     except ValueError as exc:
-        raise ValueError(f"{path} is not a valid QEDCode receipt ({str(exc)[:120]}).") from exc
+        raise ValueError(
+            f"{path} is not a valid QEDCode receipt ({str(exc)[:120]}). "
+            "Pass a file from .qed/receipts/."
+        ) from exc
