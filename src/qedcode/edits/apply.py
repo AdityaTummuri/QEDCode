@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from qedcode.config import DEFAULT_PROTECTED
+from qedcode.edits import js_symbols
 from qedcode.models.schemas import EditOp
 from qedcode.project.paths import is_protected, is_test_file, normalize_path, validate_path
 
@@ -549,6 +550,18 @@ def apply_edits_report(
     return report
 
 
+def _apply_js(edit: EditOp, rel: str, current: _File) -> str:
+    """The three symbol operations for JavaScript and TypeScript files (tree-sitter)."""
+    try:
+        if edit.op == "replace_symbol":
+            return js_symbols.replace_symbol(rel, current.text, edit.symbol or "", edit.code)
+        if edit.op == "insert_after_symbol":
+            return js_symbols.insert_after_symbol(rel, current.text, edit.symbol or "", edit.code)
+        return js_symbols.add_import(rel, current.text, edit.code)
+    except js_symbols.JsEditError as exc:
+        raise _EditError(str(exc)) from None
+
+
 def _apply_one(
     files: _Files,
     root: Path,
@@ -577,13 +590,15 @@ def _apply_one(
         raise _EditError(
             f"{rel} does not exist. Check the path, or use create_file to make a new file."
         )
-    if edit.op in ("replace_symbol", "insert_after_symbol", "add_import") and not rel.endswith(
-        ".py"
-    ):
+    symbol_op = edit.op in ("replace_symbol", "insert_after_symbol", "add_import")
+    if symbol_op and not rel.endswith(".py") and not js_symbols.is_js_file(rel):
         raise _EditError(
-            f"{edit.op} only works on Python (.py) files; use search_replace for {rel}."
+            f"{edit.op} only works on Python, JavaScript and TypeScript files; "
+            f"use search_replace for {rel}."
         )
-    if edit.op == "replace_symbol":
+    if symbol_op and js_symbols.is_js_file(rel):
+        new_text = _apply_js(edit, rel, current)
+    elif edit.op == "replace_symbol":
         new_text = _replace_symbol(rel, current, edit.symbol or "", edit.code)
     elif edit.op == "insert_after_symbol":
         new_text = _insert_after_symbol(rel, current, edit.symbol or "", edit.code)

@@ -36,6 +36,9 @@ dependencies = [
     "ruff>=0.17.6",
     "textual>=8.2.8",
     "mcp>=2.3.0",
+    "tree-sitter>=0.26.1",
+    "tree-sitter-javascript>=0.25.0",
+    "tree-sitter-typescript>=0.23.2",
 ]
 
 [project.scripts]

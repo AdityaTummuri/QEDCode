@@ -1108,3 +1108,33 @@ Each feature below is built in the order of the build plan's "After v1" table. A
 **Failure messages.** No Docker, daemon not running, or image missing: the baseline is "not runnable" and the message says what to do (`start Docker`, `qed sandbox setup`, or `qed sandbox off`). The cascade never silently falls back to running tests on the host.
 
 **v1.1 limits.** Python projects only; Linux containers; no GPU; the project's dependencies are frozen into the image at setup; tests that need the network fail (by design).
+
+### 15.3 JavaScript and TypeScript (v1.1)
+
+**What it does.** A project with a `package.json` works like a Python project: QEDCode finds the files, writes a test that fails now, makes several tries, checks each one and grades it A to D. The test runner is Node's built-in `node --test` (no install needed), Vitest or Jest, chosen from the project. TypeScript is supported through the grammar (edits, parse check) and through Vitest or Jest; the built-in runner needs Node 22.18 or newer to run `.ts` files.
+
+**New dependencies (allowed from this section on):** `tree-sitter`, `tree-sitter-javascript`, `tree-sitter-typescript` (prebuilt wheels, no compiler). No Node package is ever installed or downloaded by QEDCode.
+
+**Modules touched.**
+
+| Module | Change |
+| --- | --- |
+| `edits/js_symbols.py` (new) | tree-sitter parsing of `.js .jsx .mjs .cjs .ts .tsx .mts .cts`: syntax check, symbol list, `replace_symbol`, `insert_after_symbol`, `add_import` |
+| `edits/apply.py` | the three symbol ops dispatch by file extension (Python `ast` or tree-sitter); `search_replace` and `create_file` are language-neutral |
+| `config.py`, `project/detect.py` | `ProjectConfig.language` is `python` or `javascript` (includes TypeScript); `test_runner` (`pytest`, `node`, `vitest`, `jest`); detection of the package manager and runner from `package.json` |
+| `project/paths.py`, `config.py` | test-file patterns (`*.test.*`, `*.spec.*`, `__tests__/`) and JavaScript protected defaults (`package.json`, lock files, `tsconfig*.json`, runner configs) |
+| `verify/guard.py` | skip/only/assert-removal patterns and risky patterns (`child_process`, `eval`, `new Function`, network calls, `fs.rm`, `process.exit`) for JS/TS files |
+| `verify/lint.py`, `verify/cascade.py` | the parse stage covers JS/TS files (tree-sitter); the lint stage stays Python-only (skipped with a reason for JS) |
+| `verify/js_runner.py` (new), `verify/node_reporter.mjs` (new), `verify/runners.py` (new) | run the tests, read their results into the same `PytestOutcome`; `run_tests` picks the runner by `project.test_runner`; baseline, cascade and `qed verify` call `run_tests` |
+| `project/context.py`, `project/repo_map.py` | related tests by name and imports, and the repo map, for JS/TS |
+| `engine/prompts/test_writer.txt` | `{test_framework}` slot (a style hint for pytest, node:test, Vitest or Jest) |
+
+**Runners.** Each file selection runs as one command: `node --test --test-reporter <node_reporter.mjs> --test-reporter-destination <report.json> <files>`; Vitest as `vitest run --reporter=json --outputFile <report.json> <files>`; Jest as `jest --json --outputFile <report.json> --ci <files>`. Vitest and Jest are started from `node_modules/.bin` (never `npx`, so nothing is downloaded). The worktree gets a `node_modules` symlink to the project's, so no install is needed. Results become keys `<file>::<full test name>`. A test file that fails to load (syntax error, bad import) is a file-level failure, handled like a pytest collection error.
+
+**Rules.**
+
+- Same safety rules as Python: the model never runs commands, worktree isolation, protected test paths, risky-pattern guard. The command allowlist gains `node` and the runner binaries under `node_modules/.bin`.
+- Symbols: top-level functions, classes, `const`/`let` declarations with one declarator, TypeScript interfaces, type aliases and enums, each possibly wrapped in `export`; class methods as `Class.method`. A replacement keeps the `export` keyword of the original.
+- `add_import` accepts only ES `import ...` lines; CommonJS `require` goes through `insert_after_symbol` or `search_replace`.
+
+**v1.1 limits.** No linter stage for JS/TS (parse check only, so grade C needs a parse, B and A need tests); the sealed test box is not available for JS projects (it runs Python only, so `sandbox = "docker"` is refused for them); `node_modules` is shared with the project through a symlink, so a test could write into it; Go, Rust and Java are not supported.
