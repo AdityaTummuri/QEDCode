@@ -13,6 +13,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BUGZOO_DIR = REPO_ROOT / "bugzoo"
+FAKE_SERVER_PATH = REPO_ROOT / "tests" / "fixtures" / "fake_llama_server.py"
 
 
 def zoo_project_names() -> list[str]:
@@ -120,3 +121,39 @@ def _reset_qedcode_logging():
             logger.removeHandler(handler)
             handler.close()
     logger.propagate = True
+
+
+def _make_memory_keyring():
+    from keyring.backend import KeyringBackend
+    from keyring.errors import PasswordDeleteError
+
+    class _MemoryKeyring(KeyringBackend):
+        priority = 1
+
+        def __init__(self) -> None:
+            self.store: dict[tuple[str, str], str] = {}
+
+        def set_password(self, service, username, password):
+            self.store[(service, username)] = password
+
+        def get_password(self, service, username):
+            return self.store.get((service, username))
+
+        def delete_password(self, service, username):
+            if (service, username) not in self.store:
+                raise PasswordDeleteError("not stored")
+            del self.store[(service, username)]
+
+    return _MemoryKeyring()
+
+
+@pytest.fixture
+def memory_keyring():
+    """An in-memory system keychain, so tests never touch the real one."""
+    import keyring
+
+    previous = keyring.get_keyring()
+    backend = _make_memory_keyring()
+    keyring.set_keyring(backend)
+    yield backend
+    keyring.set_keyring(previous)

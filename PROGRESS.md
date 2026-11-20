@@ -1,7 +1,7 @@
 # QEDCode progress
 
 ## Current step
-M8.2
+M8.3 (by hand) then M8.4
 
 ## Done
 - Setup, 2026-11-20: AGENTS.md (from the AI Build Brief), CLAUDE.md, PROGRESS.md, .gitignore, docs/ committed.
@@ -35,6 +35,7 @@ M8.2
 - M7.1, 2026-11-20: mcp_server.py (tools solve/check/verify/status with the argument lists and results from the brief; JobRunner = background thread per job, one job per project (in-process and .qed/lock) so a second call returns status busy, status polling, progress notifications through the SDK, non-interactive callbacks so risky code is rejected and the helper is only used if the config pre-approves it, lazy model start and idle unload, shutdown cancels jobs), 'qed mcp', engine/events.py shared by CLI, TUI and MCP; tests through direct calls, the in-memory MCP client (incl. progress) and a real stdio subprocess.
 - M7.2, 2026-11-20: 'qed setup' offers 'claude mcp add qedcode -- qed mcp' when the claude command exists and prints ready-to-paste snippets in each tool's current documented shape (OpenCode mcp.servers, Cline/Cursor mcpServers) with docs links; README rewritten with a 'Use with agents' section (tools table, timeouts, busy/non-interactive rules). Milestone M7 complete.
 - M8.1, 2026-11-20: full 'qed doctor' (git, project, project Python, pytest in it, ruff, hardware, engine build, model file/Ollama/LM Studio/cloud key, model server health, free disk space, leftover worktrees, logs) with a plain-English fix for every warning/failure, exit 1 on problems, '--update-engine' (asks first); every raised user-facing error now says what happened, why and what to do next, enforced by tests/unit/test_error_messages.py; logging set up at CLI start (rotating qedcode.log 5 MB x 3, llama-server.log rotated at spawn), old .qed/runs pruned to the newest 20.
+- M8.2, 2026-11-20: 'qed uninstall [--all] [--yes]' (engine/uninstall.py): lists what it will remove with sizes and asks once; project mode removes .qed/, QEDCode's git refs and worktrees and the .qed/ line it added to .git/info/exclude (your files and .gitignore untouched); --all also removes ~/.qedcode and the API keys it saved in the keychain; any QEDCode-owned model server is stopped first.
 
 ## Known issues
 - LICENSE in the repo is GPL-3.0 (created with the repo); the plan's step 8.4 suggests MIT or Apache-2.0. Left as GPL-3.0 for the human to decide.

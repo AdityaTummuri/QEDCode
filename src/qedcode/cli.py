@@ -313,6 +313,35 @@ def mcp_command() -> None:
     run_stdio()
 
 
+@app.command("uninstall")
+def uninstall_command(
+    everything: Annotated[
+        bool,
+        typer.Option("--all", help="Also remove ~/.qedcode (engines, models, logs, config, keys)."),
+    ] = False,
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask first.")] = False,
+) -> None:
+    """Remove the project's .qed/ folder (and with --all, everything QEDCode installed)."""
+    from qedcode.engine import uninstall as uninstall_module
+
+    console = Console()
+    root = api.resolve_root()
+
+    def ask(prompt: str) -> bool:
+        console.print(prompt, markup=False)
+        return True if yes else typer.confirm("Remove these?", default=False)
+
+    if everything:
+        done = uninstall_module.uninstall_all(root, ask)
+    else:
+        done = uninstall_module.uninstall_project(root, ask)
+    if not done:
+        console.print("Nothing was removed.", markup=False)
+        raise typer.Exit(1)
+    for line in done:
+        console.print(line, markup=False)
+
+
 @app.command("verify")
 def verify_command(
     receipt: Annotated[Path, typer.Argument(help="A receipt file (.qed/receipts/<task>.json).")],
