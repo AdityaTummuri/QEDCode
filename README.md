@@ -109,7 +109,9 @@ Grade A · repro test failed before, passes now · 7/7 tests pass · lint clean 
 
 Along with the fix it adds the test that proves it, and saves a receipt. `qed verify` re-checks the
 patch's checksum, then re-runs the tests on the original code and on the patched code in fresh
-copies, and reports `VERIFIED` only if every recorded result still holds:
+copies, and reports `VERIFIED` only if every recorded result still holds. A receipt is treated as
+data, never as a list of commands: `qed verify` only runs your project's own test command on test
+files inside the project, so a receipt someone hands you cannot start anything else:
 
 ```text
 $ qed verify .qed/receipts/<task id>.json
@@ -471,7 +473,14 @@ helper model unless your config pre-approves it (`[helper] ask_before_use = fals
 - Work happens in git worktrees under `.qed/worktrees/`; your working tree is written only by
   `qed apply` / `qed undo`, which refuse if a touched file changed since the snapshot.
 - The model never runs commands. Only fixed commands built by QEDCode run: git, your project's
-  Python with pytest, ruff, Node with your test runner, and the llama.cpp server.
+  Python with pytest, ruff, Node with your test runner, and the llama.cpp server. File names the
+  model writes may not contain quotes or control characters or start with `-`, so they can never
+  be read as options or hide from the checks.
+- QEDCode's own git commands (snapshots, candidate commits, worktrees) never run git hooks, and
+  ignore `GIT_DIR`, `GIT_INDEX_FILE` and similar variables, so `qed check` is safe to call from a
+  pre-commit hook and never touches your index.
+- Receipts are data: `qed verify` refuses a receipt that asks to run anything other than your
+  project's test command (see `test_command` in `.qed/project.toml`) on files inside the project.
 - Existing tests and test configuration are protected: a candidate that edits, deletes, skips or
   weakens them is rejected. A candidate that adds risky code (`subprocess`, network, `eval`, ...)
   needs your approval and can then reach grade B at most.
@@ -498,7 +507,9 @@ helper model unless your config pre-approves it (`[helper] ask_before_use = fals
 | "pytest is not installed" | `qed` offers to install it into your project's Python (it asks first) |
 | Node tests report the runner is missing | Run `npm install` (or `pnpm`/`yarn install`) in the project yourself: QEDCode never installs Node packages |
 | The model is slow | Use `qed solve --speed fast`, a smaller model (`qed models use <id>`), or check `qed doctor` for CPU-only mode |
-| Out of VRAM | `qed models recommend` picks a smaller model or context; lower `ctx` under `[local]` in the config |
+| Out of VRAM | `qed models recommend` picks a smaller model or context; lower `ctx` under `[local]` in the config. A running model server restarts by itself when `ctx` or `kv_cache` changes |
+| "Another QEDCode task is already running" but nothing is | The lock in `.qed/lock` is taken over automatically once its process is gone; if a crash left it, wait a few seconds and try again |
+| `qed verify` says a receipt "is not safe to run here" | The receipt asks for a command other than this project's test command. Only re-run receipts QEDCode wrote in this project, or fix `test_command` in `.qed/project.toml` |
 | A test hangs | Lower `test_timeout_seconds` in `.qed/project.toml`; `qed sandbox setup` runs Python tests with the network off |
 | Something was left behind after a crash | `qed doctor` lists it; `git worktree prune` and deleting `.qed/worktrees/` is safe |
 
