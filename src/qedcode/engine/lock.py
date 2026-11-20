@@ -66,6 +66,19 @@ def lock_holder(root: Path | str) -> dict | None:
     return info if _alive(info) else None
 
 
+def _release(path: Path, attempts: int = 40) -> None:
+    """Delete the lock file, retrying briefly: on Windows a file another process is reading at
+    that moment (`lock_holder` from a second job) cannot be deleted."""
+    for attempt in range(attempts):
+        try:
+            path.unlink(missing_ok=True)
+            return
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(0.025)
+
+
 @contextmanager
 def project_lock(root: Path | str, task: str = "") -> Iterator[None]:
     """Hold the project lock while a job runs; raises ProjectBusy if a live job holds it."""
@@ -77,7 +90,10 @@ def project_lock(root: Path | str, task: str = "") -> Iterator[None]:
         except FileExistsError:
             holder = lock_holder(root)
             if holder is None:
-                path.unlink(missing_ok=True)  # the owner died: take the lock over
+                try:
+                    path.unlink(missing_ok=True)  # the owner died: take the lock over
+                except OSError:
+                    pass  # another job is taking it over right now; the next round decides
                 continue
             who = f"process {holder['pid']}" if holder.get("pid") else "a task that is starting"
             if holder.get("task"):
@@ -96,4 +112,4 @@ def project_lock(root: Path | str, task: str = "") -> Iterator[None]:
     try:
         yield
     finally:
-        path.unlink(missing_ok=True)
+        _release(path)

@@ -404,3 +404,29 @@ def test_a_long_answer_keeps_the_server_marked_as_in_use(manager, make_spec, mon
     monkeypatch.setattr(llamacpp, "TOUCH_EVERY_S", 0.0)
     client.chat([{"role": "user", "content": "a b c d e"}], temperature=0, max_tokens=50)
     assert len(touches) >= 3  # before, during the stream and after
+
+
+def test_lock_files_are_released_even_while_another_client_is_reading_them(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Windows refuses to delete a file someone is reading; the release must retry, not stick."""
+    from qedcode.engine.lock import lock_path, project_lock
+    from qedcode.runtime.server_manager import FileLock
+
+    real_unlink = Path.unlink
+    refusals = {"left": 0}
+
+    def busy_unlink(self, missing_ok=False):
+        if refusals["left"] > 0:
+            refusals["left"] -= 1
+            raise PermissionError(32, "The process cannot access the file")
+        return real_unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", busy_unlink)
+    server_lock = tmp_path / "run" / "server.lock"
+    with FileLock(server_lock):
+        refusals["left"] = 3
+    assert not server_lock.exists()
+    with project_lock(tmp_path, "t-1"):
+        refusals["left"] = 3
+    assert not lock_path(tmp_path).exists()

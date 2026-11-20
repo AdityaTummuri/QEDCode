@@ -40,6 +40,9 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
   uninstall never reports a folder as removed when it could not be removed.
 - The terminal UI no longer crashes when its status refresh fires while a dialog is open or the
   app is closing.
+- Windows: releasing the model-server lock or the project lock retries when another QEDCode
+  process is reading the file at that moment, instead of leaving the lock stuck (every other
+  client then waited 60 seconds and failed).
 - The repository keeps LF line endings on every OS (`.gitattributes`), so the bug zoo and test
   fixtures are the same on Windows.
 

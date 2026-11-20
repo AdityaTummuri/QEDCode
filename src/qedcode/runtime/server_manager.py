@@ -227,6 +227,19 @@ def _atomic_write(path: Path, text: str) -> None:
             time.sleep(0.02)
 
 
+def release_file(path: Path, attempts: int = 40) -> None:
+    """Delete a lock file. On Windows a file cannot be deleted while another process is reading
+    it (a waiting client checks who holds the lock), so retry briefly instead of leaving it."""
+    for attempt in range(attempts):
+        try:
+            path.unlink(missing_ok=True)
+            return
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(0.025)
+
+
 class FileLock:
     """A cross-platform lock file; a lock whose owner died (or is very old) is taken over."""
 
@@ -254,7 +267,7 @@ class FileLock:
             return self
 
     def __exit__(self, *exc: object) -> None:
-        self.path.unlink(missing_ok=True)
+        release_file(self.path)
 
     def _drop_if_stale(self) -> None:
         try:
@@ -263,7 +276,10 @@ class FileLock:
         except (OSError, ValueError):
             return
         if (owner and not psutil.pid_exists(owner)) or age > self.stale_after:
-            self.path.unlink(missing_ok=True)
+            try:
+                self.path.unlink(missing_ok=True)
+            except OSError:
+                pass  # someone else is reading or replacing it: look again on the next round
 
 
 # --------------------------------------------------------------------------- the manager
@@ -317,7 +333,7 @@ class ServerManager:
         if state is None:
             return None
         if not _process_matches(state.pid, state.create_time):
-            self.state_path.unlink(missing_ok=True)
+            release_file(self.state_path)
             return None
         return state
 
@@ -401,7 +417,7 @@ class ServerManager:
             last_used=now,
         )
         self._write_state(info)
-        self.used_path.unlink(missing_ok=True)
+        release_file(self.used_path)
         log.info("Started llama-server pid %s on port %s for %s", proc.pid, port, spec.model_id)
         return info
 
@@ -410,7 +426,7 @@ class ServerManager:
         announced = False
         while time.monotonic() < deadline:
             if not _process_matches(info.pid, info.create_time):
-                self.state_path.unlink(missing_ok=True)
+                release_file(self.state_path)
                 raise ServerStartError(self._explain_exit())
             try:
                 status = httpx.get(f"{info.base_url}/health", timeout=2.0).status_code
@@ -451,8 +467,8 @@ class ServerManager:
 
     def _stop_locked(self, info: ServerInfo) -> None:
         kill_process_tree(info.pid)
-        self.state_path.unlink(missing_ok=True)
-        self.used_path.unlink(missing_ok=True)
+        release_file(self.state_path)
+        release_file(self.used_path)
         log.info("Stopped llama-server pid %s", info.pid)
 
     def stop(self) -> bool:
@@ -460,7 +476,7 @@ class ServerManager:
         with FileLock(self.lock_path):
             info = self.info()
             if info is None:
-                self.state_path.unlink(missing_ok=True)
+                release_file(self.state_path)
                 return False
             self._stop_locked(info)
             return True
