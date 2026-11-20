@@ -28,6 +28,7 @@ from pydantic import BaseModel
 from qedcode.config import logs_dir, run_dir
 from qedcode.logging_setup import rotate_file
 from qedcode.runtime.client import ModelError
+from qedcode.runtime.quiet import QUIET_BATCH, QUIET_UBATCH, lower_priority
 from qedcode.verify.run import kill_process_tree, run, spawn_detached
 
 log = logging.getLogger("qedcode.server")
@@ -84,6 +85,8 @@ class ServerSpec:
     cwd: Path | None = None
     env: dict[str, str] = field(default_factory=dict)
     flags_cache: Path | None = None
+    quiet: bool = False  # quiet mode: fewer threads, smaller batches, lower priority
+    threads: int = 0  # CPU threads in quiet mode (0 = the server's default)
 
 
 @dataclass
@@ -170,7 +173,23 @@ def build_server_args(spec: ServerSpec, port: int, flags: ServerFlags) -> list[s
         args += ["--flash-attn", "on"] if flags.flash_attn_takes_value else ["--flash-attn"]
         if spec.kv_cache == "q8_0" and flags.has("-ctk", "--cache-type-k"):
             args += ["-ctk", "q8_0", "-ctv", "q8_0"]
+    if spec.quiet:
+        args += quiet_args(spec, flags)
     return args
+
+
+def quiet_args(spec: ServerSpec, flags: ServerFlags) -> list[str]:
+    """The extra flags of quiet mode (only those this llama-server build understands)."""
+    extra: list[str] = []
+    if spec.threads > 0 and flags.has("-t", "--threads"):
+        extra += ["--threads", str(spec.threads)]
+        if flags.has("-tb", "--threads-batch"):
+            extra += ["--threads-batch", str(spec.threads)]
+    if flags.has("-b", "--batch-size"):
+        extra += ["--batch-size", str(QUIET_BATCH)]
+    if flags.has("-ub", "--ubatch-size"):
+        extra += ["--ubatch-size", str(QUIET_UBATCH)]
+    return extra
 
 
 def _process_matches(pid: int, create_time: float) -> bool:
@@ -347,6 +366,8 @@ class ServerManager:
         args = build_server_args(spec, port, flags)
         rotate_file(self.log_path)
         proc = spawn_detached(args, cwd=spec.cwd, env=spec.env, log_path=self.log_path)
+        if spec.quiet:
+            lower_priority(proc.pid)
         try:
             create_time = psutil.Process(proc.pid).create_time()
         except psutil.Error:

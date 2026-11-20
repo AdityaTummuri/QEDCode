@@ -83,8 +83,10 @@ def make_client(
 
 
 def _make_local(config: GlobalConfig, transport) -> ModelClient:
+    from qedcode.runtime.quiet import effective_keep_alive
+
     local = config.local
-    keep_alive = config.engine.keep_alive_minutes
+    keep_alive = effective_keep_alive(config)
     if local.backend == "ollama":
         from qedcode.runtime.ollama import OllamaClient
 

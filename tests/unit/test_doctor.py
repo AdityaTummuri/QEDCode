@@ -302,6 +302,7 @@ def test_run_doctor_covers_every_item_of_the_plan(tmp_path: Path) -> None:
         "model server",
         "disk space",
         "sealed test box",
+        "quiet mode",
         "leftover copies",
         "logs",
     ]

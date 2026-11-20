@@ -169,6 +169,7 @@ def make_deps(
         model_present=lambda entry: model_present,
         make_client=make_client,
         which=lambda name: "/usr/bin/claude" if claude and name == "claude" else None,
+        home=lambda: global_config_path().parent / "no-agents-here",  # never the real home
         run_command=run_command,
         get_key=lambda provider: spy.keys.get(provider),
         set_key=lambda provider, key: spy.keys.__setitem__(provider, key),

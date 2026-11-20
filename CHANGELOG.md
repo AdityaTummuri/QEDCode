@@ -18,6 +18,11 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
   know `it.skip`, `.only`, removed `expect(...)` lines and risky Node APIs; `qed doctor` checks
   Node and the runner. New dependencies: `tree-sitter`, `tree-sitter-javascript`,
   `tree-sitter-typescript`. No linter stage for JS/TS and no sealed test box for it yet.
+- **Quiet mode** (v1.1): `qed quiet [on|off|auto]`; half the CPU threads, smaller batches, lower
+  priority, a 3 second pause between model calls and a 2 minute keep-alive.
+- **One-click agent connect** (v1.1): `qed connect [agent] [--list] [--yes]` and the last step of
+  `qed setup` register `qed mcp` with Claude Code and OpenCode (their own commands) and with Cline's
+  CLI settings and Cursor's global MCP file (merged, backed up, asked first).
 
 ## [0.1.0] - 2026-11-20
 

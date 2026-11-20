@@ -403,6 +403,20 @@ def check_sandbox(root: Path) -> Check:
     return _ok("sealed test box", f"on and working (image {state.image}, network off)")
 
 
+def check_quiet(config: GlobalConfig) -> Check:
+    """Quiet mode: always fine, but say what it does when it is on."""
+    from qedcode.runtime.quiet import is_quiet
+
+    setting = config.engine.quiet
+    if setting == "off":
+        return _ok("quiet mode", "off (turn it on with `qed quiet on` to run cooler and quieter)")
+    state = "active now" if is_quiet(config) else "waiting for battery power"
+    return _ok(
+        "quiet mode",
+        f"{setting} ({state}): half the CPU threads, a low priority and short pauses between tries",
+    )
+
+
 def check_leftovers(root: Path) -> Check:
     left = worktree.list_worktrees(root) if root.exists() else []
     if left:
@@ -459,6 +473,7 @@ def run_doctor(
         lambda: check_server(config),
         lambda: check_disk(config, folder),
         lambda: check_sandbox(folder),
+        lambda: check_quiet(config),
         lambda: check_leftovers(folder),
         check_logs,
     ]

@@ -426,6 +426,85 @@ def sandbox_off_command() -> None:
         Console().print("The sealed test box was already off.", markup=False)
 
 
+@app.command("quiet")
+def quiet_command(
+    setting: Annotated[
+        str | None,
+        typer.Argument(help="on, off or auto (auto = on while running on battery)."),
+    ] = None,
+) -> None:
+    """Show or set quiet mode: less heat, fan noise and battery use (slower)."""
+    console = Console()
+    config = load_global()
+    if setting is None:
+        console.print(f"Quiet mode is {config.engine.quiet}.", markup=False)
+        return
+    if setting not in ("on", "off", "auto"):
+        typer.echo(f"'{setting}' is not a setting. Use `qed quiet on`, `off` or `auto`.", err=True)
+        raise typer.Exit(2)
+    config.engine.quiet = setting  # type: ignore[assignment]
+    save_global(config)
+    explain = {
+        "on": "The model now runs on half the CPU threads at a low priority, with short pauses "
+        "between tries, and unloads after 2 idle minutes. Results are the same, only slower.",
+        "off": "The model runs at full speed again.",
+        "auto": "Quiet mode will switch on by itself while the computer runs on battery.",
+    }[setting]
+    console.print(f"Quiet mode is {setting}. {explain}", markup=False)
+    console.print(
+        "A model server that is already running keeps its old settings until it restarts.",
+        markup=False,
+    )
+
+
+@app.command("connect")
+def connect_command(
+    agent: Annotated[
+        str | None,
+        typer.Argument(help="claude, opencode, cline or cursor (default: every agent found)."),
+    ] = None,
+    list_only: Annotated[
+        bool, typer.Option("--list", help="Show which agents are found and connected.")
+    ] = False,
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask first.")] = False,
+) -> None:
+    """Connect QEDCode (the `qed mcp` server) to your coding agents, after showing what changes."""
+    from qedcode import agents_connect
+
+    console = Console()
+    env = agents_connect.Environment()
+    statuses = agents_connect.detect_agents(env)
+    if list_only:
+        table = Table(title="Coding agents", title_justify="left")
+        for column in ("agent", "found", "connected", "how"):
+            table.add_column(column)
+        for s in statuses:
+            how = "runs a command" if s.method == "command" else s.target
+            table.add_row(
+                s.name, "yes" if s.detected else "no", "yes" if s.connected else "no", how
+            )
+        console.print(table)
+        return
+
+    def ask(prompt: str) -> bool:
+        console.print(prompt, markup=False)
+        return True if yes else typer.confirm("Go ahead?", default=False)
+
+    wanted = [agent] if agent else [s.key for s in statuses if s.detected and not s.connected]
+    if not wanted:
+        console.print(
+            "No agent to connect: none found, or all are connected already.", markup=False
+        )
+        return
+    failed = False
+    for key in wanted:
+        result = agents_connect.connect(key, ask, env)
+        console.print(result.message, markup=False)
+        failed = failed or not result.ok
+    if failed:
+        raise typer.Exit(1)
+
+
 @app.command("uninstall")
 def uninstall_command(
     everything: Annotated[

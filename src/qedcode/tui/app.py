@@ -36,6 +36,7 @@ from qedcode.project.detect import (
     install_pytest,
 )
 from qedcode.runtime.client import ModelClient, ModelError, make_client
+from qedcode.runtime.quiet import effective_keep_alive
 from qedcode.tui.screens import (
     HELP_TEXT,
     AskScreen,
@@ -347,7 +348,7 @@ class QedApp(App[None]):
             self.client = client
             manager = getattr(client, "manager", None)
             if manager is not None and hasattr(manager, "start_idle_watcher"):
-                manager.start_idle_watcher(self.config.engine.keep_alive_minutes)
+                manager.start_idle_watcher(effective_keep_alive(self.config))
         except ModelError as exc:
             self.model_error = str(exc)
         except Exception as exc:  # noqa: BLE001 - never let a loading bug kill the screen

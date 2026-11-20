@@ -29,6 +29,7 @@ from qedcode.engine.events import event_line
 from qedcode.engine.lock import lock_holder
 from qedcode.models.schemas import Event, SolveResult, Speed
 from qedcode.runtime.client import ModelClient
+from qedcode.runtime.quiet import effective_keep_alive
 
 DEFAULT_WAIT_SECONDS = 600
 POLL_SECONDS = 0.25
@@ -176,7 +177,7 @@ class QedMcpService:
             return
         from qedcode.runtime.server_manager import ServerManager
 
-        ServerManager().start_idle_watcher(cfg.engine.keep_alive_minutes)
+        ServerManager().start_idle_watcher(effective_keep_alive(cfg))
         self._watcher_started = True
 
     async def _wait(self, job: Job, seconds: float, ctx: Context | None) -> bool:

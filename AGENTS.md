@@ -1140,3 +1140,34 @@ Each feature below is built in the order of the build plan's "After v1" table. A
 - `add_import` accepts only ES `import ...` lines; CommonJS `require` goes through `insert_after_symbol` or `search_replace`.
 
 **v1.1 limits.** No linter stage for JS/TS (parse check only, so grade C needs a parse, B and A need tests); the sealed test box is not available for JS projects (it runs Python only, so `sandbox = "docker"` is refused for them); `node_modules` is shared with the project through a symlink, so a test could write into it; Go, Rust and Java are not supported.
+
+### 15.4 Quiet mode and one-click agent connect (v1.1)
+
+**Quiet mode** limits heat, fan noise and battery use on laptops. `[engine] quiet = "off" | "auto" | "on"`; `auto` means on while the computer runs on battery. When quiet is on:
+
+- `llama-server` starts with half of the physical CPU cores (`--threads`, `--threads-batch`) and smaller batches (`-b 256 -ub 128`), only for flags the installed build understands; and its process priority is lowered right after start (`nice 10`, or "below normal" on Windows).
+- The controller waits 3 seconds (`QUIET_PAUSE_S`) between model calls (never before the first one, never with a cloud model, and a cancel ends the wait at once) so the computer can cool down.
+- The model unloads after at most 2 idle minutes.
+- Nothing about correctness changes: the same checks run and the same grades are given. Quiet mode is slower.
+- A shared server that is already running keeps its flags until it next starts.
+- `qed quiet [on|off|auto]` sets it; `qed doctor` shows it.
+
+| Module | Change |
+| --- | --- |
+| `runtime/quiet.py` (new) | `is_quiet(config)`, `quiet_threads()`, `lower_priority(pid)` |
+| `runtime/server_manager.py`, `runtime/llamacpp.py` | `ServerSpec.quiet/threads`; extra flags; priority after spawn; shorter keep-alive |
+| `engine/solve.py`, `engine/api.py` | `pause_s` between model calls |
+| `config.py`, `cli.py`, `engine/doctor.py` | `quiet` setting, `qed quiet`, doctor row |
+
+**One-click agent connect.** `qed connect [claude|opencode|cline|cursor] [--yes]` and the last step of `qed setup` connect QEDCode (the `qed mcp` server) to each agent found on the computer, after showing exactly what will change and asking. `qed connect --list` shows what is connected.
+
+| Agent | How | Detected when |
+| --- | --- | --- |
+| Claude Code | runs `claude mcp add qedcode -- <qed> mcp` | `claude` is on the PATH |
+| OpenCode | runs `opencode mcp add qedcode -- <qed> mcp` (the documented command; its config file is not edited by hand) | `opencode` is on the PATH |
+| Cline | merges `mcpServers.qedcode` into `~/.cline/data/settings/cline_mcp_settings.json` (or `$CLINE_MCP_SETTINGS_PATH`), the documented CLI settings file | that file's folder or the variable exists |
+| Cursor | merges `mcpServers.qedcode` into `~/.cursor/mcp.json` (path not verified against Cursor's docs by the build: always previewed and asked) | `~/.cursor` exists |
+
+Rules: the `qed` command is written as an absolute path when it is found on the PATH (editors started from a dock do not see the shell's PATH). A JSON file is changed only when it parses as plain JSON; otherwise nothing is written and the snippet is shown instead. An existing file gets a timestamped backup copy first; an existing `qedcode` entry that already matches is left alone, and one that differs is replaced only after a second question. Files are written in one step (temp file, then rename). Cline's IDE extension keeps its settings elsewhere (open it with "Configure MCP Servers" in the panel); only the documented CLI file is ever written. Connecting never needs the network.
+
+**v1.1 limits.** Per-project agent configs are not written; no agent is ever started.

@@ -71,6 +71,7 @@ class EngineConfig(_Section):
     keep_alive_minutes: int = 10
     unload_on_exit: bool = True
     learn: bool = True  # remember applied A/B fixes and show similar ones to the local model
+    quiet: Literal["off", "auto", "on"] = "off"  # gentler model runs; auto = on battery
 
 
 class LocalConfig(_Section):

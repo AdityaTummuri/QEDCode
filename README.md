@@ -29,6 +29,10 @@ QED is the Latin *quod erat demonstrandum*, "which was to be demonstrated": ever
 | **C** Checked | The code parses and lints, but no test covers the change | Read the change before applying |
 | **D** Not checked | No check could run, and it says why | Treat it as a suggestion |
 
+**Quiet mode.** On a laptop, `qed quiet on` (or `auto`: only on battery) starts the model on half
+the CPU threads at a low priority, pauses a few seconds between tries and unloads the model sooner.
+The checks and grades are the same, it is just slower, cooler and quieter.
+
 **It learns your project.** When you apply a fix with grade A or B, QEDCode remembers it in
 `.qed/memory.db` (on your computer only). The next similar task shows the local model up to two of
 those fixes as examples. Turn it off with `learn = false` under `[engine]` in the config, look at
@@ -79,6 +83,8 @@ qed check [--speed ...] [--base <ref>] [--json]    grade the changes you made yo
 qed verify <receipt.json>             re-run a proof receipt: VERIFIED or what no longer matches
 qed apply [task id] / qed undo        apply a finished result / take the last apply back out
 qed models [list|recommend|download <id>|use <id>|remove <id>]
+qed connect [agent] [--list] [--yes]  connect QEDCode to Claude Code, OpenCode, Cline, Cursor
+qed quiet [on|off|auto]               gentler, cooler model runs (slower)
 qed sandbox [status|setup|off]        run your tests in Docker with the network off
 qed memory [list|forget <#>|clear]    the fixes QEDCode remembers and shows the model as examples
 qed doctor [--update-engine]          check git, Python, pytest, ruff, GPU, engine, model, disk
@@ -97,8 +103,14 @@ as a tool. They get the fix, its grade and the proof receipt, and the model serv
 terminal UI (only one `llama-server` runs).
 
 ```bash
-claude mcp add qedcode -- qed mcp        # Claude Code (`qed setup` offers to run this for you)
+qed connect                              # finds your agents, shows what changes, asks first
+claude mcp add qedcode -- qed mcp        # the same thing for Claude Code by hand
 ```
+
+`qed connect` (and the last step of `qed setup`) handles four agents: it runs `claude mcp add`
+for Claude Code, runs `opencode mcp add` for OpenCode, and merges a `qedcode` entry into Cline's CLI
+settings file and Cursor's `~/.cursor/mcp.json` (with a backup copy; a file that is not plain JSON
+is never touched, you get the snippet instead). `qed connect --list` shows what is connected.
 
 For other agents add an MCP server that runs the command `qed` with the argument `mcp`. Their config
 formats change, so check each tool's docs:

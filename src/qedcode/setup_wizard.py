@@ -17,6 +17,7 @@ from typing import Protocol
 
 import httpx
 
+from qedcode import agents_connect
 from qedcode.config import GlobalConfig, global_config_path, load_global, save_global
 from qedcode.hardware import detect as hw_detect
 from qedcode.hardware.detect import HardwareInfo, info_from_config, with_overrides
@@ -92,6 +93,7 @@ class SetupDeps:
     model_present: Callable[[CatalogEntry], bool] = lambda e: local_path(e).is_file()
     make_client: Callable[[GlobalConfig], ModelClient] = make_client
     which: Callable[[str], str | None] = shutil.which
+    home: Callable[[], Path] = Path.home
     run_command: Callable[[list[str]], RunResult] = lambda args: run(args, timeout=90)
     get_key: Callable[[str], str | None] = get_api_key
     set_key: Callable[[str, str], None] = set_api_key
@@ -513,26 +515,31 @@ def _ask_key(io: Prompter, deps: SetupDeps, provider: str) -> None:
 
 
 def _step_agents(io: Prompter, deps: SetupDeps) -> None:
-    if deps.which("claude"):
-        command = ["claude", "mcp", "add", "qedcode", "--", "qed", "mcp"]
-        if io.confirm(
-            "Connect QEDCode to Claude Code now? (runs: " + " ".join(command) + ")", default=True
-        ):
-            done = deps.run_command(command)
-            if done.ok:
-                io.say("Connected. In Claude Code, ask it to use the qedcode tool.")
-            else:
-                io.say(
-                    f"That did not work ({(done.error or done.output)[:160]}). "
-                    "You can run the command yourself later."
-                )
-    io.say(
-        "Other agents: add QEDCode as an MCP server (command `qed`, argument `mcp`). "
-        "Their config formats change, so check each tool's docs if a snippet does not work:"
+    env = agents_connect.Environment(
+        home=deps.home(), which=deps.which, run_command=deps.run_command
     )
-    for name, url in MCP_DOCS.items():
-        io.say(f"  {name}: {url}")
-        io.say(f"    {MCP_SNIPPETS[name]}")
+    left: list[str] = []
+    for status in agents_connect.detect_agents(env):
+        if status.connected:
+            io.say(f"{status.name} is already connected to QEDCode.")
+            continue
+        if not status.detected:
+            left.append(status.name)
+            continue
+        result = agents_connect.connect(status.key, lambda q: io.confirm(q, default=True), env)
+        io.say(result.message)
+        if not result.ok:
+            left.append(status.name)
+    pending = [name for name in MCP_DOCS if name in left]
+    if pending:
+        io.say(
+            "Other agents: add QEDCode as an MCP server (command `qed`, argument `mcp`), or run "
+            "`qed connect` later. Their config formats change, so check each tool's docs if a "
+            "snippet does not work:"
+        )
+        for name in pending:
+            io.say(f"  {name}: {MCP_DOCS[name]}")
+            io.say(f"    {MCP_SNIPPETS[name]}")
 
 
 # --------------------------------------------------------------------------- terminal prompter

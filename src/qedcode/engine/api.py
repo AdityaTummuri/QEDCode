@@ -21,6 +21,7 @@ from qedcode.engine.solve import solve as _solve
 from qedcode.models.schemas import Callbacks, Grade, Mode, SolveResult, Speed, TaskSpec
 from qedcode.project.memory import Lesson, Memory
 from qedcode.runtime.client import ModelClient, ModelError, make_client
+from qedcode.runtime.quiet import pause_seconds
 from qedcode.vcs.git import GitError, has_commits, is_git_repo, repo_root
 from qedcode.vcs.patch import PatchRefused, apply_to_user, undo_last
 from qedcode.verify.receipt import load_receipt, receipt_path
@@ -132,6 +133,7 @@ def solve(
         allow_test_edits=allow_test_edits,
         resume=resume,
         learn=cfg.engine.learn,
+        pause_s=pause_seconds(cfg),
     )
     if apply and result.status == "done" and result.best is not None:
         if result.best.grade in (Grade.A, Grade.B):

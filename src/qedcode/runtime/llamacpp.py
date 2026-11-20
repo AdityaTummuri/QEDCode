@@ -10,6 +10,7 @@ import httpx
 from qedcode.config import GlobalConfig
 from qedcode.runtime.client import ModelError
 from qedcode.runtime.openai_compat import OpenAICompatClient
+from qedcode.runtime.quiet import is_quiet, quiet_threads
 from qedcode.runtime.server_manager import ServerInfo, ServerManager, ServerSpec
 
 # Qwen-style chat templates can think out loud; QEDCode wants only the formatted reply.
@@ -118,6 +119,7 @@ def make_llamacpp_client(config: GlobalConfig) -> LlamaCppClient:
     )
 
     hw = current_hardware()
+    quiet = is_quiet(config)
     tag = config.local.llamacpp_tag or DEFAULT_LLAMACPP_TAG
     engine = find_installed_engine(hw, tag)
     if engine is None:
@@ -137,5 +139,7 @@ def make_llamacpp_client(config: GlobalConfig) -> LlamaCppClient:
         cwd=engine.bin_dir,
         env=engine_env(engine),
         flags_cache=engine.directory / "flags.json",
+        quiet=quiet,
+        threads=quiet_threads() if quiet else 0,
     )
     return LlamaCppClient(spec, unload_on_exit=config.engine.unload_on_exit)

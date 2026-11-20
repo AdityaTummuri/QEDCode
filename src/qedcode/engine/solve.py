@@ -83,6 +83,9 @@ class _Run:
     resume: SolveResult | None
     learn: bool = False
     examples: str = ""
+    pause_s: float = 0.0  # quiet mode: wait between model calls
+    sleep: Callable[[float], None] = time.sleep
+    calls_made: int = 0
     spec: TaskSpec = field(init=False)
     notes: list[str] = field(default_factory=list)
     pool: list[Candidate] = field(default_factory=list)
@@ -113,6 +116,19 @@ class _Run:
     def check_cancel(self) -> None:
         if self.cb.cancelled():
             raise Cancelled
+
+    def cooldown(self) -> None:
+        """Quiet mode: let the computer cool down before the next model call (never the first)."""
+        first = self.calls_made == 0
+        self.calls_made += 1
+        if first or self.pause_s <= 0:
+            return
+        self.emit("log", f"Quiet mode: pausing {self.pause_s:g} seconds to keep the computer cool.")
+        waited = 0.0
+        while waited < self.pause_s and not self.cb.cancelled():
+            step = min(0.1, self.pause_s - waited)
+            self.sleep(step)
+            waited += step
 
     def done_trying(self) -> bool:
         return any(
@@ -305,6 +321,7 @@ class _Run:
         for number, temperature in enumerate(temperatures_for(self.speed), start=1):
             if self.should_stop() or self.done_trying():
                 break
+            self.cooldown()
             self.emit("stage", f"Try {number}: asking the model (temperature {temperature})...")
             reply = self.roles.coder(
                 self.spec,
@@ -331,6 +348,7 @@ class _Run:
             if near is None:
                 break
             self.repaired.add(near.id)
+            self.cooldown()
             self.emit("stage", f"Repairing {near.id} (it failed at {near.failed_stage})...")
             files = (
                 files_at_commit(self.root, near.commit, changed_paths(near.diff))
@@ -553,6 +571,8 @@ def solve(
     settings: SpeedSettings | None = None,
     resume: SolveResult | None = None,
     learn: bool = False,
+    pause_s: float = 0.0,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> SolveResult:
     """Run one task end to end and return a graded, explained result (or the reason there is none).
 
@@ -577,6 +597,8 @@ def solve(
         settings=settings or settings_for(speed),
         resume=resume,
         learn=learn,
+        pause_s=pause_s,
+        sleep=sleep,
     )
     run.spec = task
     try:
