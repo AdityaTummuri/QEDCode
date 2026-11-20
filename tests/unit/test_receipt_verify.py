@@ -359,3 +359,45 @@ def test_the_projects_own_test_command_is_allowed(proven) -> None:
     case, _, receipt, _ = proven
     for command in receipt.commands:
         assert unsafe_command(command, case.ctx.project) is None
+
+
+# ------------------------------------------------------------------ which Python re-runs the tests
+
+
+def _project_with_venv(tmp_path: Path) -> Path:
+    import os
+    import sys
+
+    root = tmp_path / "proj"
+    (root / "tests").mkdir(parents=True)
+    (root / "tests" / "test_x.py").write_text("def test_x():\n    assert True\n")
+    (root / "pyproject.toml").write_text('[project]\nname = "x"\nversion = "0"\n')
+    bindir = root / ".venv" / ("Scripts" if os.name == "nt" else "bin")
+    bindir.mkdir(parents=True)
+    target = bindir / ("python.exe" if os.name == "nt" else "python")
+    target.symlink_to(sys.executable)
+    return root
+
+
+@pytest.mark.skipif(__import__("os").name == "nt", reason="symlinks need extra rights on Windows")
+def test_an_unconfirmed_project_reruns_with_its_detected_python(tmp_path: Path) -> None:
+    """Found by the agent skill's CI: with QEDCode installed as a `uv tool` (no pytest in its own
+    environment), verify used QEDCode's interpreter and called a sound receipt NOT VERIFIED."""
+    from qedcode.verify.verify import _project_config
+
+    root = _project_with_venv(tmp_path)
+    notes: list[str] = []
+    cfg = _project_config(root, notes)
+    assert Path(cfg.python).parent.parent == root / ".venv"
+    assert any("detected Python" in n for n in notes)
+
+
+def test_a_confirmed_project_config_wins_over_detection(tmp_path: Path) -> None:
+    from qedcode.config import ProjectConfig, save_project
+    from qedcode.verify.verify import _project_config
+
+    root = tmp_path / "proj"
+    root.mkdir()
+    save_project(root, ProjectConfig(python="/opt/py/bin/python", confirmed=True))
+    notes: list[str] = []
+    assert _project_config(root, notes).python == "/opt/py/bin/python" and notes == []

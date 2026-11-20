@@ -15,6 +15,11 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
   `qed setup` ends with a one-line pointer to it.
 
 ### Fixed
+- `qed verify` (and the MCP `verify` tool) re-runs tests with the project's detected Python, the
+  same one `qed check` uses, when the project settings were never confirmed in the terminal UI.
+  It used QEDCode's own interpreter instead, so with QEDCode installed as a `uv tool` (no pytest
+  there) a sound receipt from an agent or MCP run came back NOT VERIFIED. Found by the agent
+  skill's new contract test in CI.
 - A candidate that changes no code outside tests (only comments or formatting, judged by the
   Python syntax tree) is now graded C instead of B. Its tests passed only because nothing changed.
   The receipt names the gap. Found by Benchy's scripted self-test.

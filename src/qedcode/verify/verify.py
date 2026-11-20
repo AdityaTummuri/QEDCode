@@ -15,6 +15,7 @@ from pathlib import Path
 
 from qedcode.config import ProjectConfig, load_project
 from qedcode.models.schemas import CheckResult, Receipt
+from qedcode.project.detect import detect_project
 from qedcode.project.detect_js import detect_js, js_config
 from qedcode.project.paths import validate_path
 from qedcode.vcs import worktree
@@ -135,7 +136,7 @@ def verify_receipt(
             "made (its snapshot must still exist)."
         )
         return result
-    cfg = project or load_project(root)
+    cfg = project or _project_config(root, result.notes)
     if any(is_js_command(c) for c in receipt.commands) and cfg.language != "javascript":
         cfg = js_config(detect_js(root))  # a JavaScript receipt in a folder not set up yet
     refused = [why for c in receipt.commands if (why := unsafe_command(c, cfg))]
@@ -159,6 +160,20 @@ def verify_receipt(
             "This receipt has no test commands to re-run; only the patch was checked."
         )
     return result
+
+
+def _project_config(root: Path, notes: list[str]) -> ProjectConfig:
+    """The confirmed project config, else the detected one, the same choice `qed check` makes.
+
+    Without this, a folder never opened in the terminal UI re-ran its receipts with QEDCode's own
+    interpreter (no pytest when QEDCode is a `uv tool`), so a sound receipt was NOT VERIFIED."""
+    saved = load_project(root)
+    if saved.confirmed:
+        return saved
+    detected = detect_project(root)
+    if detected.config.language == "python" and detected.config.python:
+        notes.append(f"Re-ran the tests with the detected Python ({detected.config.python}).")
+    return detected.config
 
 
 def _run_command(
