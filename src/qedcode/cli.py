@@ -378,6 +378,54 @@ def memory_clear_command(
     Console().print(f"Forgot {count} fix(es).", markup=False)
 
 
+sandbox_app = typer.Typer(
+    help="The sealed test box: run your tests in Docker with the network off.",
+    invoke_without_command=True,
+    no_args_is_help=False,
+)
+app.add_typer(sandbox_app, name="sandbox")
+
+
+@sandbox_app.callback()
+def sandbox_default(ctx: typer.Context) -> None:
+    if ctx.invoked_subcommand is None:
+        sandbox_status_command()
+
+
+@sandbox_app.command("status")
+def sandbox_status_command() -> None:
+    """Show whether the sealed test box is on and ready."""
+    Console().print(api.sandbox_status().describe(), markup=False)
+
+
+@sandbox_app.command("setup")
+def sandbox_setup_command(
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask first.")] = False,
+) -> None:
+    """Build the sealed test box (asks first: it downloads an image and your dependencies)."""
+    console = Console()
+
+    def ask(prompt: str) -> bool:
+        console.print(prompt, markup=False)
+        return True if yes else typer.confirm("Build it?", default=False)
+
+    result = api.sandbox_setup(
+        confirm=ask, on_progress=lambda text: console.print(text, markup=False)
+    )
+    console.print(result.message, markup=False)
+    if not result.ok:
+        raise typer.Exit(1)
+
+
+@sandbox_app.command("off")
+def sandbox_off_command() -> None:
+    """Run tests on this computer again."""
+    if api.sandbox_off():
+        Console().print("The sealed test box is off: tests run on this computer.", markup=False)
+    else:
+        Console().print("The sealed test box was already off.", markup=False)
+
+
 @app.command("uninstall")
 def uninstall_command(
     everything: Annotated[

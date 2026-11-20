@@ -20,6 +20,7 @@ from qedcode.runtime import installer
 from qedcode.vcs import worktree
 from qedcode.vcs.git import has_commits, is_git_repo
 from qedcode.verify.run import run
+from qedcode.verify.sandbox import DockerSandbox
 
 Status = Literal["ok", "warn", "fail"]
 GIB = 1024**3
@@ -335,6 +336,31 @@ def check_disk(config: GlobalConfig, root: Path | None = None) -> Check:
     return _ok("disk space", f"{free / GIB:.1f} GB free in {probe}")
 
 
+def check_sandbox(root: Path) -> Check:
+    """The sealed test box: off is fine; on needs Docker and a built image that works."""
+    from qedcode.engine import sandbox_setup
+
+    state = sandbox_setup.status(root)
+    if state.mode == "off":
+        return _ok(
+            "sealed test box",
+            "off: tests run on this computer (turn on with `qed sandbox setup`, needs Docker)",
+        )
+    if not state.docker_ready:
+        return _bad("sealed test box", "on, but Docker is not usable", state.docker_message)
+    if not state.image_built:
+        return _bad(
+            "sealed test box",
+            f"on, but the image '{state.image}' is not built",
+            "Run `qed sandbox setup` (it explains what it downloads and asks first), "
+            "or `qed sandbox off`.",
+        )
+    works, why = DockerSandbox(image=state.image).smoke_test()
+    if not works:
+        return _bad("sealed test box", "the image starts but cannot run tests", why)
+    return _ok("sealed test box", f"on and working (image {state.image}, network off)")
+
+
 def check_leftovers(root: Path) -> Check:
     left = worktree.list_worktrees(root) if root.exists() else []
     if left:
@@ -386,6 +412,7 @@ def run_doctor(
         lambda: check_model(config),
         lambda: check_server(config),
         lambda: check_disk(config, folder),
+        lambda: check_sandbox(folder),
         lambda: check_leftovers(folder),
         check_logs,
     ]

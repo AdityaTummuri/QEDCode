@@ -8,6 +8,10 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
 - **Learns your project** (v1.1): applied A/B fixes are remembered in `.qed/memory.db` (SQLite FTS5)
   and similar ones are shown to the local model as examples. `qed memory [list|forget|clear]`,
   `[engine] learn`.
+- **Sealed test box** (v1.1): `qed sandbox [status|setup|off]` builds a Docker image (asking first)
+  and runs every project test in a container with `--network none`, read-only root, dropped
+  capabilities and memory/pid limits. Timeouts and cancels remove the container. Receipts record
+  `sandbox`; `qed doctor` checks it.
 
 ## [0.1.0] - 2026-11-20
 

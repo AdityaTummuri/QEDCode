@@ -64,6 +64,7 @@ qed check [--speed ...] [--base <ref>] [--json]    grade the changes you made yo
 qed verify <receipt.json>             re-run a proof receipt: VERIFIED or what no longer matches
 qed apply [task id] / qed undo        apply a finished result / take the last apply back out
 qed models [list|recommend|download <id>|use <id>|remove <id>]
+qed sandbox [status|setup|off]        run your tests in Docker with the network off
 qed memory [list|forget <#>|clear]    the fixes QEDCode remembers and shows the model as examples
 qed doctor [--update-engine]          check git, Python, pytest, ruff, GPU, engine, model, disk
                                       and say how to fix each problem
@@ -120,8 +121,9 @@ helper model unless your config pre-approves it (`[helper] ask_before_use = fals
   needs your approval and can then reach grade B at most.
 - Every download is announced with its size and asked first; API keys live only in the system
   keychain or environment variables; project commands run with secret-looking variables removed.
-- Known v1 limit: tests run on your computer, without network blocking or a container. Every
-  receipt says so under "not proven".
+- By default tests run on your computer, without network blocking or a container, and every
+  receipt says so under "not proven". `qed sandbox setup` (needs Docker) builds a **sealed test
+  box**: all tests then run in a container with the network off, and the receipt says so.
 
 ## Develop
 

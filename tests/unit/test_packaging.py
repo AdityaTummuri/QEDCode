@@ -64,6 +64,7 @@ def test_readme_documents_install_and_every_command() -> None:
         "qed verify",
         "qed apply",
         "qed undo",
+        "qed sandbox",
         "qed memory",
         "qed doctor",
         "qed uninstall",

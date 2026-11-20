@@ -91,6 +91,10 @@ class ProjectConfig(_Section):
     test_timeout_seconds: int = 300
     protected: list[str] = Field(default_factory=lambda: list(DEFAULT_PROTECTED))
     confirmed: bool = False
+    sandbox: Literal["off", "docker"] = "off"  # "docker": run tests in a sealed container
+    sandbox_image: str = ""  # set by `qed sandbox setup`
+    sandbox_memory: str = "4g"
+    sandbox_cpus: float = 0.0  # 0 = no limit
 
 
 # --------------------------------------------------------------------------- locations

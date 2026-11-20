@@ -47,6 +47,7 @@ from qedcode.verify.pytest_runner import (
     file_level_failure,
     run_pytest,
 )
+from qedcode.verify.sandbox import sandbox_for
 
 DETAILS_LIMIT = 4000
 
@@ -245,6 +246,7 @@ def _base_failures_for(ctx: CascadeContext, wt: Path, tests: list[str]) -> list[
             run_dir=ctx.run_dir,
             command_prefix=expand_test_command(ctx.project),
             cancelled=ctx.cancelled,
+            sandbox=sandbox_for(ctx.project, ctx.root),
         )
     finally:
         worktree.remove(ctx.root, base)
@@ -263,6 +265,7 @@ def _run_tests(
         run_dir=ctx.run_dir,
         command_prefix=expand_test_command(ctx.project),
         cancelled=ctx.cancelled,
+        sandbox=sandbox_for(ctx.project, ctx.root),
     )
     if out.status == "cancelled":
         raise Cancelled

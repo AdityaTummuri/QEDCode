@@ -915,6 +915,10 @@ test_timeout_seconds = 300
 protected = ["tests/**", "test/**", "**/test_*.py", "**/*_test.py", "**/conftest.py",
              "pytest.ini", "tox.ini", "setup.cfg", "pyproject.toml", "noxfile.py", ".github/**"]
 confirmed = true
+sandbox = "off"                   # off | docker: run tests in a sealed container (section 15.2)
+sandbox_image = ""                # set by `qed sandbox setup`
+sandbox_memory = "4g"
+sandbox_cpus = 0.0                # 0 = no limit
 ```
 
 **Python interpreter detection order:** `.venv/` then `venv/` in the repo (`Scripts/python.exe` on Windows, `bin/python` elsewhere); an active `VIRTUAL_ENV`; `uv run python` when `uv.lock` exists; `python3`, then `python` on PATH. Show the choice and let the user change it. If pytest is missing in that interpreter, offer to install it there (ask first).
@@ -1031,7 +1035,7 @@ QEDCode runs code that a model wrote on the user's computer, so safety is part o
 | Broken install or runaway downloads | Ask before every download with sizes; checksums when listed; everything under `QEDCODE_HOME`; `qed uninstall --all` |
 | Lost user work | Apply refuses when files changed since the snapshot; undo with the same check; worktrees cleaned up |
 
-**Known v1 limit, stated to users:** tests run on the host without network blocking or a container. The `unverified` list in every receipt says so. The sealed test box (Docker, network off) is planned for v1.1.
+**Known v1 limit, stated to users:** tests run on the host without network blocking or a container. The `unverified` list in every receipt says so. The sealed test box (Docker, network off) is available since v1.1 as an opt-in (`qed sandbox setup`, section 15.2); with it on, the receipt says so instead.
 
 **Definition of done for every step:**
 
@@ -1075,3 +1079,32 @@ Each feature below is built in the order of the build plan's "After v1" table. A
 - A broken or unreadable `memory.db` is never fatal: it is ignored, a warning is logged, and `qed memory clear` recreates it.
 
 **v1.1 limits.** Keyword matching only (no embeddings); one memory per project; lessons are not shared between projects or people.
+
+### 15.2 Sealed test box (v1.1)
+
+**What it does.** With `sandbox = "docker"` every project test run (baseline, repro check, candidate checks, full suite, `qed verify`) happens inside a Docker container with the network off, so a bad test or a bad candidate cannot reach the internet or damage the computer. This removes the v1 limit "tests run on the host without network blocking".
+
+**Modules touched.**
+
+| Module | Change |
+| --- | --- |
+| `verify/sandbox.py` (new) | `DockerSandbox`: builds the `docker run` command, kills a timed-out container, checks Docker and the image; `dockerfile_text`, `build_context`, `sandbox_for(project, root)` |
+| `verify/pytest_runner.py` | `run_pytest(..., sandbox=None)`: when set, the same pytest command runs through the container; the recorded command stays the host-form one so receipts look the same |
+| `verify/baseline.py`, `verify/cascade.py`, `verify/verify.py` | pass `sandbox_for(project, root)` to `run_pytest` |
+| `config.py` | `ProjectConfig`: `sandbox` (`off` or `docker`), `sandbox_image`, `sandbox_memory`, `sandbox_cpus` |
+| `models/schemas.py`, `verify/receipt.py` | `Receipt.sandbox` (`""` or `"docker"`); with a sandbox the network line leaves the `unverified` list |
+| `engine/sandbox_setup.py` (new), `engine/api.py` | `sandbox_status`, `sandbox_setup` (asks first), `sandbox_off` |
+| `engine/doctor.py`, `cli.py` | a doctor check; `qed sandbox [status\|setup\|off]` |
+
+**The container.** `docker run --rm --init --name qed-<id> --pull never --network none --cap-drop ALL --security-opt no-new-privileges --read-only --tmpfs /tmp --pids-limit 1024 --memory <m> [--cpus <n>] [--user <uid>:<gid>] -v <worktree>:/work -v <run dir>:/qed-out -w /work -e PYTHONPATH=... -e HOME=/tmp <image> python -m pytest ... --junitxml /qed-out/<report>`.
+
+- The worktree is mounted read-write (it is a throw-away copy); the user's tree is never mounted.
+- `--pull never`: Docker must never download anything by itself. A missing image is an error that says `qed sandbox setup`.
+- A timeout or cancel kills the `docker` client and then runs `docker rm -f <name>`, so no container keeps running.
+- Paths inside the command are mapped: the worktree becomes `/work`, the report folder `/qed-out`, the interpreter `python`.
+
+**The image.** `qed sandbox setup` is the only step that uses the network. It shows what will be downloaded (the `python:<major.minor>-slim` base image if it is not local, and the project's dependencies through pip), asks, then runs `docker build` on a clean export of `HEAD` (no `.git`, `.qed`, virtualenvs). The Dockerfile installs `pytest`, then `requirements*.txt` if present, then the project itself in editable mode. The image tag is saved in `.qed/project.toml` (`sandbox_image`). Dependencies are read at build time: when they change, run `qed sandbox setup` again.
+
+**Failure messages.** No Docker, daemon not running, or image missing: the baseline is "not runnable" and the message says what to do (`start Docker`, `qed sandbox setup`, or `qed sandbox off`). The cascade never silently falls back to running tests on the host.
+
+**v1.1 limits.** Python projects only; Linux containers; no GPU; the project's dependencies are frozen into the image at setup; tests that need the network fail (by design).

@@ -19,6 +19,7 @@ from qedcode.vcs import worktree
 from qedcode.vcs.git import git
 from qedcode.verify.pytest_runner import failed_before, run_pytest
 from qedcode.verify.receipt import load_receipt
+from qedcode.verify.sandbox import DockerSandbox, sandbox_for
 
 PYTHON = "{python}"
 
@@ -102,8 +103,14 @@ def verify_receipt(
     cfg = project or load_project(root)
     python = cfg.python or sys.executable
     timeout = cfg.test_timeout_seconds
-    _check_before(root, receipt, python, timeout, mismatch, cancelled)
-    _check_after(root, receipt, _pairs(receipt), python, timeout, mismatch, cancelled)
+    sandbox = sandbox_for(cfg, root)
+    if receipt.sandbox == "docker" and sandbox is None:
+        result.notes.append(
+            "This receipt was made in a sealed test box (Docker), but the sealed test box is off "
+            "here, so its tests were re-run on this computer. Run `qed sandbox setup` to match it."
+        )
+    _check_before(root, receipt, python, timeout, mismatch, cancelled, sandbox)
+    _check_after(root, receipt, _pairs(receipt), python, timeout, mismatch, cancelled, sandbox)
     if not receipt.commands:
         result.notes.append(
             "This receipt has no test commands to re-run; only the patch was checked."
@@ -117,6 +124,7 @@ def _run_command(
     python: str,
     timeout: float,
     cancelled: Callable[[], bool] | None,
+    sandbox: DockerSandbox | None = None,
 ):
     return run_pytest(
         wt,
@@ -126,6 +134,7 @@ def _run_command(
         stage="targeted",
         command_prefix=_prefix_from(command, python),
         cancelled=cancelled,
+        sandbox=sandbox,
     )
 
 
@@ -136,6 +145,7 @@ def _check_before(
     timeout: float,
     mismatch: Callable[[str], None],
     cancelled: Callable[[], bool] | None,
+    sandbox: DockerSandbox | None = None,
 ) -> None:
     """Every fail-before-pass-after test must FAIL on the base (with only the new tests added)."""
     if not receipt.fbpa_tests:
@@ -150,7 +160,7 @@ def _check_before(
         if error:
             mismatch(f"The new test files from the patch could not be added to the base: {error}")
             return
-        out = _run_command(wt, fbpa_command, python, timeout, cancelled)
+        out = _run_command(wt, fbpa_command, python, timeout, cancelled, sandbox)
         outcomes = out.as_map()
         for key in receipt.fbpa_tests:
             if not failed_before(key, outcomes):
@@ -170,6 +180,7 @@ def _check_after(
     timeout: float,
     mismatch: Callable[[str], None],
     cancelled: Callable[[], bool] | None,
+    sandbox: DockerSandbox | None = None,
 ) -> None:
     wt = worktree.create(root, receipt.base_commit, f"verify-{receipt.task.id}-after")
     try:
@@ -179,7 +190,7 @@ def _check_after(
             return
         known = set(receipt.known_failures)
         for check, command in pairs:
-            out = _run_command(wt, command, python, timeout, cancelled)
+            out = _run_command(wt, command, python, timeout, cancelled, sandbox)
             if out.status in ("timeout", "error", "cancelled"):
                 mismatch(f"The {check.stage} check could not be re-run: {out.check.summary}")
                 continue

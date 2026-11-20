@@ -1,7 +1,7 @@
 # QEDCode progress
 
 ## Current step
-Post-v1 step 2: Sealed test box (AGENTS.md 15.2 first)
+Post-v1 step 3: JavaScript and TypeScript (AGENTS.md 15.3 first)
 
 ## Done
 - Setup, 2026-11-20: AGENTS.md (from the AI Build Brief), CLAUDE.md, PROGRESS.md, .gitignore, docs/ committed.
@@ -38,6 +38,7 @@ Post-v1 step 2: Sealed test box (AGENTS.md 15.2 first)
 - M8.2, 2026-11-20: 'qed uninstall [--all] [--yes]' (engine/uninstall.py): lists what it will remove with sizes and asks once; project mode removes .qed/, QEDCode's git refs and worktrees and the .qed/ line it added to .git/info/exclude (your files and .gitignore untouched); --all also removes ~/.qedcode and the API keys it saved in the keychain; any QEDCode-owned model server is stopped first.
 - M8.4, 2026-11-20: release prep. Version 0.1.0 (pyproject, __version__, CHANGELOG.md), package metadata, README install via uv tool / pipx, demo placeholder, qed doctor/uninstall documented, .github/workflows/release.yml (PyPI trusted publishing on v* tags, checks tag = version and runs tests first; no tag pushed), tests/unit/test_packaging.py. The built wheel was installed in a clean venv and ran. M8.3 (real hardware pass) is human only, listed below. v1 is complete: full gate 883 passed, 1 skipped.
 - Post-v1 #1 Learns your project (v1.1), 2026-11-20: AGENTS.md 15.1; project/memory.py (SQLite FTS5 in .qed/memory.db, bm25 over request+files+diff, newest 200 kept, damaged database ignored); apply_result remembers A/B fixes (only after apply; learn flag follows the config given to solve); the coder prompt gets up to 2 similar earlier fixes (15% of context, max 1200 tokens, none under 6000 ctx, never for cloud mode or the helper); 'qed memory [list|forget|clear]'; [engine] learn. 19 new tests.
+- Post-v1 #2 Sealed test box (v1.1), 2026-11-20: AGENTS.md 15.2; verify/sandbox.py (DockerSandbox: docker run --network none --pull never --cap-drop ALL --read-only --tmpfs /tmp --pids-limit --memory [--cpus] [--user], path mapping, container removed on timeout/cancel; Dockerfile + clean HEAD export), run_pytest(sandbox=...) used by baseline, cascade and verify; ProjectConfig sandbox fields; Receipt.sandbox + sealed note instead of the network limit; engine/sandbox_setup.py (asks before building, smoke test, build log); 'qed sandbox [status|setup|off]'; doctor check; 29 tests with a fake docker. Full gate: 931 passed, 1 skipped.
 
 ## Known issues
 - LICENSE in the repo is GPL-3.0 (created with the repo); the plan's step 8.4 suggests MIT or Apache-2.0. Left as GPL-3.0 for the human to decide.
@@ -68,6 +69,8 @@ Post-v1 step 2: Sealed test box (AGENTS.md 15.2 first)
 
 - Step 8.3 real hardware pass (human only): on the RTX 5060 Ti PC (Windows) and the 4 GB / 6 GB laptop run: `uv tool install` of the built wheel, `qed setup`, `qed doctor` (every row should be ok, or its fix should work), one bug zoo task at normal speed, `qed uninstall`, `qed uninstall --all`. Record the machine, the model and the times here. Also try Linux and an AMD or Intel GPU. The wheel itself was smoke-tested in a clean venv on macOS (qed --version, models list, prompts and MCP tools load).
 - Release (step 8.4): the PyPI side needs a one-time trusted-publisher entry (project `qedcode`, workflow `release.yml`, environment `pypi`) and the repository URLs in pyproject.toml checked. The workflow only runs on a `v*` tag; no tag was pushed. Replace the demo placeholder in README.md with a real recording.
+
+- Sealed test box (post-v1 #2): only tested with a fake `docker` script (tests/fixtures/fake_docker.py); Docker is not installed on the build machine. With real Docker run `qed sandbox setup` in a bug zoo copy, then `qed solve` and check: the image builds, `docker ps` shows no leftover qed-* container after a Esc cancel or a timeout, tests that open a socket fail, files in the worktree are not root-owned on Linux (`--user`), and that Docker Desktop on Windows/macOS can mount `.qed/worktrees` and the temp report folder. Confirm the base image size note (about 150 MB) and that `--read-only` + `--tmpfs /tmp` does not break common test suites.
 
 ## Real-model results
 - NOT RUN (unattended, no model downloads): step 5.4 real-model check. When ready run 'uv run python bugzoo/run_zoo.py --speed normal' and then '--speed fast', and write the A/B/no-fix counts, the time per task and any 'wrong A/B' here. Every wrong grade A is a bug to fix before M6 ships.

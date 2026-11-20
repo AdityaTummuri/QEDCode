@@ -140,6 +140,7 @@ class Receipt(BaseModel):
     unverified: list[str] = Field(default_factory=list)  # plain-English gaps
     model_info: dict = Field(default_factory=dict)  # backend, model, ctx, temps, helper_used
     commands: list[list[str]] = Field(default_factory=list)  # what verify re-runs
+    sandbox: str = ""  # "docker" when the tests ran in the sealed test box, else ""
 
 
 class SolveResult(BaseModel):

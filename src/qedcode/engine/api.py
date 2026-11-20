@@ -240,3 +240,28 @@ def memory_forget(lesson_id: int, root: Path | str | None = None) -> bool:
 def memory_clear(root: Path | str | None = None) -> int:
     """Forget everything for this project; returns how many fixes were forgotten."""
     return Memory(resolve_root(root)).clear()
+
+
+def sandbox_status(root: Path | str | None = None):
+    """Is the sealed test box (Docker, network off) on, and is it ready to use?"""
+    from qedcode.engine import sandbox_setup
+
+    return sandbox_setup.status(resolve_root(root))
+
+
+def sandbox_setup(
+    root: Path | str | None = None,
+    confirm=None,
+    on_progress=None,
+):
+    """Build the sealed test box image (asks first, because it downloads) and turn it on."""
+    from qedcode.engine import sandbox_setup as setup_module
+
+    return setup_module.setup(resolve_root(root), confirm or (lambda _prompt: False), on_progress)
+
+
+def sandbox_off(root: Path | str | None = None) -> bool:
+    """Run tests on this computer again. False when the sealed test box was already off."""
+    from qedcode.engine import sandbox_setup as setup_module
+
+    return setup_module.turn_off(resolve_root(root))

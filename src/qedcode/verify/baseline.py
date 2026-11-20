@@ -18,6 +18,7 @@ from qedcode.project.detect import expand_test_command
 from qedcode.vcs import worktree
 from qedcode.vcs.git import git
 from qedcode.verify.pytest_runner import PytestOutcome, run_pytest
+from qedcode.verify.sandbox import sandbox_for
 
 
 @dataclass
@@ -71,6 +72,7 @@ def baseline_run(
             run_dir=run_dir,
             command_prefix=expand_test_command(project),
             cancelled=cancelled,
+            sandbox=sandbox_for(project, root),
         )
     finally:
         worktree.remove(root, checkout)
@@ -140,6 +142,7 @@ def fails_on_base(
             run_dir=run_dir,
             command_prefix=expand_test_command(project),
             cancelled=cancelled,
+            sandbox=sandbox_for(project, root),
         )
     finally:
         worktree.remove(root, checkout)

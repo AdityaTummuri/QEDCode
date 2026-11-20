@@ -17,6 +17,10 @@ from qedcode.verify.guard import parse_diff, protected_from_checks, risk_finding
 
 RECEIPTS_DIR = Path(".qed") / "receipts"
 NETWORK_NOTE = "Tests ran on this computer without network blocking (v1 limitation)."
+SEALED_NOTE = (
+    "Tests ran in a sealed Docker container with the network off; the project's dependencies "
+    "are the ones installed when the box was built (`qed sandbox setup`)."
+)
 
 
 def receipt_path(root: Path | str, task_id: str) -> Path:
@@ -73,6 +77,7 @@ def unverified_gaps(
     task: TaskSpec,
     fbpa_tests: list[str],
     model_info: dict,
+    sandboxed: bool = False,
 ) -> list[str]:
     """Every gap in the proof, in plain English."""
     gaps: list[str] = []
@@ -112,7 +117,7 @@ def unverified_gaps(
         gaps.append(
             f"Parts of your code were sent to a cloud model ({model_info.get('model', '')})."
         )
-    gaps.append(NETWORK_NOTE)
+    gaps.append(SEALED_NOTE if sandboxed else NETWORK_NOTE)
     return gaps
 
 
@@ -153,9 +158,12 @@ def build_receipt(
         checks=cand.checks,
         protected_changes=protected_from_checks(cand.checks),
         grade=cand.grade,
-        unverified=unverified_gaps(cand, baseline, task, fbpa_tests, model_info),
+        unverified=unverified_gaps(
+            cand, baseline, task, fbpa_tests, model_info, sandboxed=project.sandbox == "docker"
+        ),
         model_info=model_info,
         commands=commands,
+        sandbox="docker" if project.sandbox == "docker" else "",
     )
 
 

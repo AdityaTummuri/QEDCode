@@ -21,6 +21,7 @@ from typing import Literal
 
 from qedcode.models.schemas import CheckResult, Stage, TestResult
 from qedcode.verify.run import RunResult, run
+from qedcode.verify.sandbox import DockerSandbox, explain_failure
 
 DETAILS_LIMIT = 4000
 SUMMARY_LIMIT = 300
@@ -161,8 +162,12 @@ def run_pytest(
     command_prefix: Sequence[str] | None = None,
     cancelled: Callable[[], bool] | None = None,
     env: dict[str, str] | None = None,
+    sandbox: DockerSandbox | None = None,
 ) -> PytestOutcome:
-    """Run pytest in `worktree`. `selection` is a list of files/node ids; None or [] runs it all."""
+    """Run pytest in `worktree`. `selection` is a list of files/node ids; None or [] runs it all.
+
+    With a `sandbox` the same command runs in a Docker container with the network off; the
+    recorded command stays the host-form one so receipts look the same either way."""
     worktree = Path(worktree)
     temp_dir: Path | None = None
     if run_dir is None:
@@ -190,9 +195,14 @@ def run_pytest(
         "PYTEST_ADDOPTS": "",
         **(env or {}),
     }
-    result = run(
-        args, cwd=worktree, timeout=timeout, env=run_env, log_path=log_path, cancelled=cancelled
-    )
+    if sandbox is None:
+        result = run(
+            args, cwd=worktree, timeout=timeout, env=run_env, log_path=log_path, cancelled=cancelled
+        )
+    else:
+        result = _run_in_container(
+            sandbox, args, worktree, run_dir, report, python, run_env, timeout, log_path, cancelled
+        )
     try:
         return _interpret(
             result, report, python, stage, timeout, str(log_path) if temp_dir is None else None
@@ -200,6 +210,36 @@ def run_pytest(
     finally:
         if temp_dir is not None:
             shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def _run_in_container(
+    sandbox: DockerSandbox,
+    args: list[str],
+    worktree: Path,
+    run_dir: Path,
+    report: Path,
+    python: str,
+    env: dict[str, str],
+    timeout: float,
+    log_path: Path,
+    cancelled: Callable[[], bool] | None,
+) -> RunResult:
+    name = sandbox.new_name()
+    launch = sandbox.command(
+        args, worktree=worktree, run_dir=run_dir, python=python, name=name, env=env
+    )
+    result = run(
+        launch, cwd=worktree, timeout=timeout, env=env, log_path=log_path, cancelled=cancelled
+    )
+    if result.timed_out or result.cancelled:
+        sandbox.kill(name)  # killing the docker client does not stop the container
+    if not report.exists():
+        reason = explain_failure(result, sandbox)
+        if reason:
+            result.error = reason
+    result.args = list(args)  # record the host-form command: receipts look the same
+    result.extra["sandbox"] = sandbox.image
+    return result
 
 
 def _interpret(
