@@ -4,6 +4,12 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
 
 ## [Unreleased]
 
+### Changed
+- **License**: QEDCode is now licensed under the Apache License 2.0 (was GNU GPL-3.0). A `NOTICE`
+  file carries the copyright notice, and the package metadata uses the SPDX expression
+  `Apache-2.0`. Versions up to and including commit `a7fbe17`, including the 0.1.0 entry below,
+  were released under GPL-3.0.
+
 ### Security
 - `qed verify` and the MCP `verify` tool no longer run whatever a receipt file asks for. Only the
   project's own test command (or the default `{python} -m pytest`) may run, and the test selection

@@ -16,7 +16,7 @@ only the best *verified* change, with a grade, a plain-English explanation and a
 ![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-444)
 ![Runs](https://img.shields.io/badge/runs-100%25%20local%20by%20default-2ea44f)
 ![Tests](https://img.shields.io/badge/automated%20tests-1%2C118-2ea44f)
-![License](https://img.shields.io/badge/license-GPL--3.0-blue)
+![License](https://img.shields.io/badge/license-Apache--2.0-blue)
 
 </div>
 
@@ -528,3 +528,12 @@ uv run python bugzoo/run_zoo.py --speed normal   # real-model numbers (needs `qe
 
 The build rules live in `AGENTS.md`; `PROGRESS.md` records what is done, what was verified by
 hand and what still needs a real GPU.
+
+## License
+
+QEDCode is licensed under the [Apache License 2.0](LICENSE). See [NOTICE](NOTICE) for the
+copyright and attribution notice that must be kept when you redistribute QEDCode or a work based
+on it.
+
+Versions up to and including commit `a7fbe17` were released under the GNU GPL-3.0; that licence
+still applies to copies of those versions.
