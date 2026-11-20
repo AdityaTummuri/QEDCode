@@ -413,3 +413,30 @@ def test_repair_candidates_start_from_the_near_miss_commit(tmp_path: Path) -> No
     assert repair.grade is Grade.A
     assert "# almost" not in repair.diff  # the diff is against the snapshot, not the near-miss
     assert repair.diff.count("+    end = start + size\n") == 1
+
+
+COMMENT_ONLY = """PLAN:
+- add a note
+
+EDIT search_replace path=src/shop/pages.py
+<<<<<<< SEARCH
+    end = start + size - 1
+=======
+    # end of the page
+    end = start + size - 1
+>>>>>>> REPLACE
+"""
+
+
+def test_a_comment_only_change_is_grade_c_not_b(tmp_path: Path) -> None:
+    """Its tests pass only because nothing changed; that is no evidence for the task."""
+    case = zoo_case(tmp_path, repro=False)
+    cand = evaluate_candidate(case.ctx, case.candidate(COMMENT_ONLY), run_full=True)
+    assert cand.code_changed is False
+    assert cand.grade is Grade.C
+
+
+def test_a_real_fix_counts_as_a_code_change(tmp_path: Path) -> None:
+    case = zoo_case(tmp_path, repro=False)
+    cand = evaluate_candidate(case.ctx, case.candidate(), run_full=True)
+    assert cand.code_changed is True and cand.grade is Grade.B

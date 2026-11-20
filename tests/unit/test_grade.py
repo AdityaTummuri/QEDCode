@@ -114,3 +114,9 @@ def test_no_other_module_assigns_a_grade() -> None:
         if ".grade =" in text or "grade=Grade" in text or ".grade=" in text:
             offenders.append(str(path.relative_to(src)))
     assert offenders == []
+
+
+def test_a_change_that_alters_no_code_is_capped_at_c() -> None:
+    c = cand(ck("parse"), ck("fbpa"), ck("targeted"), tests=5, full=True)
+    c.code_changed = False
+    assert grade(c, BASE) is Grade.C

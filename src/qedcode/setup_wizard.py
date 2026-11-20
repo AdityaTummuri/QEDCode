@@ -185,6 +185,10 @@ def run_setup(io: Prompter, deps: SetupDeps | None = None, *, reset: bool = Fals
     io.say(
         f"Saved your settings to {global_config_path()}. Run `qed` in a project folder to start."
     )
+    io.say(
+        "Optional: `qed benchy install` adds a benchmark that compares QEDCode with your model "
+        "on its own. Nothing is installed unless you run it."
+    )
     return result
 
 

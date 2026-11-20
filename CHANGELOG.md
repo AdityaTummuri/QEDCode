@@ -4,6 +4,17 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
 
 ## [Unreleased]
 
+### Added
+- `qed benchy [status|install|uninstall|run|report|selftest|suites|share]`: optional link to
+  [QEDCode Benchy](https://github.com/AdityaTummuri/QEDCode-benchy), which compares QEDCode with
+  the same model used on its own. Installing asks first; nothing runs unless you type the command.
+  `qed setup` ends with a one-line pointer to it.
+
+### Fixed
+- A candidate that changes no code outside tests (only comments or formatting, judged by the
+  Python syntax tree) is now graded C instead of B. Its tests passed only because nothing changed.
+  The receipt names the gap. Found by Benchy's scripted self-test.
+
 ### Changed
 - **License**: QEDCode is now licensed under the Apache License 2.0 (was GNU GPL-3.0). A `NOTICE`
   file carries the copyright notice, and the package metadata uses the SPDX expression

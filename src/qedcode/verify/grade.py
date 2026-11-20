@@ -3,7 +3,8 @@
 A = a test failed before and passes now, the full suite shows no regressions, nothing protected
     changed and no risky pattern needed approval.
 B = relevant tests pass with no regressions, but no fail-before-pass-after test or no full run.
-C = static checks pass but no relevant test ran.
+C = static checks pass but no relevant test ran, or the change alters no code outside tests
+    (only comments or formatting), so passing tests say nothing about it.
 D = no check could run.
 None = rejected.
 """
@@ -39,6 +40,8 @@ def grade(c: Candidate, base: Baseline) -> Grade | None:
         return Grade.D  # nothing could be checked
     if not tests_ran:
         return Grade.C  # checked, not tested
+    if not c.code_changed:
+        return Grade.C  # tests pass, but they would pass without the change too
     g = Grade.A if passed(c, "fbpa") and c.full_suite_ran else Grade.B
     if g is Grade.A and (needed_risk_approval(c) or c_has_protected_changes(c)):
         g = Grade.B  # proof is weaker: cap at B

@@ -425,6 +425,7 @@ qed doctor [--update-engine]          check git, Python, pytest, ruff, GPU, engi
                                       and say how to fix each problem
 qed uninstall [--all] [--yes]         remove .qed/ here (--all: also ~/.qedcode and saved keys)
 qed mcp                               the MCP server over stdio (see below)
+qed benchy [install|run|report|...]  optional: measure QEDCode against your model on its own
 ```
 
 In the terminal UI: type a task and press Enter, then `a` apply, `d` diff, `e` explain, `h` try

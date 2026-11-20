@@ -32,7 +32,7 @@ QEDCode is a local-first coding engine that makes small LLMs (4–6 GB VRAM) rel
 Breaking any rule below is a bug, even if the feature works.
 
 1. **Engine purity.** `engine/`, `verify/`, `edits/`, `vcs/`, `project/`, `runtime/` and `hardware/` never import `tui/`, `cli.py` or `mcp_server.py`. UIs call only `qedcode.engine.api` and receive progress as `Event` objects through a callback.
-2. **The model never runs commands.** Only fixed commands built by QEDCode code run: git, the project's Python with pytest, ruff, and the llama.cpp server. Never use `shell=True`. Model text is never used as a command or argument, except file paths validated to sit inside the worktree.
+2. **The model never runs commands.** Only fixed commands built by QEDCode code run: git, the project's Python with pytest, ruff, and the llama.cpp server (plus the optional Benchy commands of section 15.5, run only when the user types `qed benchy ...`). Never use `shell=True`. Model text is never used as a command or argument, except file paths validated to sit inside the worktree.
 3. **No success without evidence.** Every result returned to any UI carries a grade computed only in `verify/grade.py` and a `Receipt`. No other code path may set or upgrade a grade.
 4. **The user's working tree is read-only until apply.** All writes happen in worktrees under `.qed/worktrees/`. Only `vcs/patch.py` (`apply_to_user`, `undo_last`) writes to the user's files, and it refuses if those files changed since the snapshot.
 5. **Existing tests are protected.** Candidates that edit, delete, skip or weaken protected files are rejected unless the task explicitly allows it. Only the test-writer role may add test files.
@@ -1171,3 +1171,17 @@ Each feature below is built in the order of the build plan's "After v1" table. A
 Rules: the `qed` command is written as an absolute path when it is found on the PATH (editors started from a dock do not see the shell's PATH). A JSON file is changed only when it parses as plain JSON; otherwise nothing is written and the snippet is shown instead. An existing file gets a timestamped backup copy first; an existing `qedcode` entry that already matches is left alone, and one that differs is replaced only after a second question. Files are written in one step (temp file, then rename). Cline's IDE extension keeps its settings elsewhere (open it with "Configure MCP Servers" in the panel); only the documented CLI file is ever written. Connecting never needs the network.
 
 **v1.1 limits.** Per-project agent configs are not written; no agent is ever started.
+
+### 15.5 Optional Benchy link (v1.1)
+
+[QEDCode Benchy](https://github.com/AdityaTummuri/QEDCode-benchy) is a separate project that measures QEDCode against the same model used on its own, judged by hidden tests. QEDCode only installs, removes and launches it; all benchmark code lives in Benchy. This is not telemetry: nothing is collected or sent by QEDCode.
+
+| Command | What runs |
+| --- | --- |
+| `qed benchy` / `qed benchy status` | nothing (shows whether Benchy is installed) |
+| `qed benchy install [--from <path or spec>] [--yes]` | after a yes: `uv pip install --python <QEDCode's python> <spec>` (or `<python> -m pip install`) |
+| `qed benchy uninstall [--yes]` | after a yes: the matching uninstall; reports in `~/.qedcode/benchy/reports` are kept |
+| `qed benchy run\|report\|selftest\|suites\|share ...` | `<QEDCode's python> -m benchy <command> <the user's arguments>` |
+
+Rules: Benchy is never required, never installed without a yes and never started by QEDCode on its own (no background runs, no reminders). `qed setup` ends with one line naming `qed benchy install`; it does not ask. All code is in `benchy_link.py` (a front-door module like `agents_connect.py`; the engine never imports it), with list arguments and no shell.
+

@@ -92,6 +92,11 @@ def unverified_gaps(
     if known:
         shown = ", ".join(known[:5]) + (", ..." if len(known) > 5 else "")
         gaps.append(f"{len(known)} test(s) were already failing before this change: {shown}")
+    if not cand.code_changed:
+        gaps.append(
+            "The change alters no code outside tests (only comments or formatting), so passing "
+            "tests say nothing about it."
+        )
     if cand.tests_passed == 0:
         gaps.append("No existing test covered this change.")
     if not fbpa_tests:

@@ -426,6 +426,86 @@ def sandbox_off_command() -> None:
         Console().print("The sealed test box was already off.", markup=False)
 
 
+benchy_app = typer.Typer(
+    help="Optional: measure QEDCode against the same model on its own (QEDCode Benchy).",
+    invoke_without_command=True,
+    no_args_is_help=False,
+)
+app.add_typer(benchy_app, name="benchy")
+_PASS_THROUGH = {"allow_extra_args": True, "ignore_unknown_options": True}
+
+
+@benchy_app.callback()
+def benchy_default(ctx: typer.Context) -> None:
+    if ctx.invoked_subcommand is None:
+        benchy_status_command()
+
+
+@benchy_app.command("status")
+def benchy_status_command() -> None:
+    """Show whether Benchy is installed and how to use it."""
+    from qedcode import benchy_link
+
+    for line in benchy_link.status_lines():
+        Console().print(line, markup=False)
+
+
+@benchy_app.command("install")
+def benchy_install_command(
+    source: Annotated[
+        str | None,
+        typer.Option("--from", help="Install from this folder or pip spec instead of GitHub."),
+    ] = None,
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask first.")] = False,
+) -> None:
+    """Install Benchy into QEDCode's environment (asks first)."""
+    from qedcode import benchy_link
+
+    console = Console()
+
+    def ask(prompt: str) -> bool:
+        console.print(prompt, markup=False)
+        return True if yes else typer.confirm("Install it?", default=False)
+
+    result = benchy_link.install(ask, source or benchy_link.DEFAULT_SOURCE)
+    console.print(result.message, markup=False)
+    if not result.ok:
+        raise typer.Exit(1)
+
+
+@benchy_app.command("uninstall")
+def benchy_uninstall_command(
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask first.")] = False,
+) -> None:
+    """Remove Benchy (your saved reports are kept)."""
+    from qedcode import benchy_link
+
+    result = benchy_link.uninstall(lambda p: yes or typer.confirm(p, default=False))
+    Console().print(result.message, markup=False)
+    if not result.ok:
+        raise typer.Exit(1)
+
+
+def _benchy_pass_through(name: str, summary: str) -> None:
+    @benchy_app.command(name, help=summary, context_settings=_PASS_THROUGH, add_help_option=False)
+    def _command(ctx: typer.Context) -> None:
+        from qedcode import benchy_link
+
+        code = benchy_link.launch([name, *ctx.args])
+        if code:
+            raise typer.Exit(code)
+
+
+for _name, _summary in (
+    ("run", "Run a benchmark: baseline vs. QEDCode (see `qed benchy run --help`)."),
+    ("report", "Show local benchmark reports."),
+    ("selftest", "Check Benchy end to end with scripted models (no GPU)."),
+    ("suites", "List or check benchmark suites."),
+    ("share", "Preview or export a sanitized result for the community results."),
+):
+    _benchy_pass_through(_name, _summary)
+
+
 @app.command("quiet")
 def quiet_command(
     setting: Annotated[

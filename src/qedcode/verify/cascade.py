@@ -10,6 +10,7 @@ a check that did not really run. Only `verify/grade.py` turns the result into a 
 
 from __future__ import annotations
 
+import ast
 import shutil
 import sys
 from collections.abc import Callable
@@ -29,6 +30,7 @@ from qedcode.models.schemas import (
 from qedcode.project.context import select_targeted
 from qedcode.project.paths import is_js_path, is_test_file
 from qedcode.vcs import worktree
+from qedcode.vcs.git import GitError, git_out
 from qedcode.vcs.snapshot import keep_candidate
 from qedcode.verify import grade as grading
 from qedcode.verify.guard import (
@@ -218,6 +220,28 @@ def _is_test_path(path: str) -> bool:
     return is_test_file(path) or path.endswith("conftest.py")
 
 
+def changes_code(root: Path, base_commit: str, wt: Path, files: list[FileDiff]) -> bool:
+    """False when every change outside tests is a .py file whose syntax tree is unchanged.
+
+    That catches candidates that only add comments or reformat: their tests pass because nothing
+    changed, which is no evidence for the task. Anything we cannot compare counts as a change.
+    """
+    code = [f for f in files if not _is_test_path(f.path)]
+    if not code:
+        return False
+    for f in code:
+        if f.status != "modified" or f.binary or not f.path.endswith(".py"):
+            return True
+        try:
+            before = git_out(root, "show", f"{base_commit}:{f.path}", strip=False)
+            after = (wt / f.path).read_text(encoding="utf-8")
+            if ast.dump(ast.parse(before)) != ast.dump(ast.parse(after)):
+                return True
+        except (GitError, OSError, SyntaxError, ValueError):
+            return True
+    return False
+
+
 def _added_test_files(ctx: CascadeContext, files: list[FileDiff]) -> list[str]:
     added = {f.path for f in files if f.status == "added" and is_test_file(f.path)}
     if ctx.repro is not None:
@@ -339,6 +363,7 @@ def _run_stages(ctx: CascadeContext, cand: Candidate, wt: Path, run_full: bool) 
             return
     else:
         _skip(ctx, cand, "parse", "no source files changed")
+    cand.code_changed = changes_code(ctx.root, ctx.base_commit, wt, files)
     _check_cancel(ctx)
     scope = scope_check(
         cand.diff,
