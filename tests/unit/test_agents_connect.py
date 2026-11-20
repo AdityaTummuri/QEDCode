@@ -34,7 +34,13 @@ def make_env(
 ) -> ac.Environment:
     home = tmp_path / "home"
     home.mkdir(exist_ok=True)
-    paths = {"qed": QED, "claude": "/usr/bin/claude", "opencode": "/usr/bin/opencode"}
+    paths = {
+        "qed": QED,
+        "claude": "/usr/bin/claude",
+        "opencode": "/usr/bin/opencode",
+        "agy": "/usr/bin/agy",
+        "code": "/usr/bin/code",
+    }
     return ac.Environment(
         home=home,
         which=lambda name: paths[name] if name in have and name in paths else None,
@@ -74,14 +80,22 @@ def cursor_file(env: ac.Environment) -> Path:
 
 def test_nothing_is_found_on_an_empty_computer(tmp_path: Path) -> None:
     found = ac.detect_agents(make_env(tmp_path))
-    assert [s.key for s in found] == ["claude", "opencode", "cline", "cursor"]
+    assert [s.key for s in found] == [
+        "claude",
+        "opencode",
+        "cline",
+        "cursor",
+        "antigravity",
+        "vscode",
+    ]
     assert not any(s.detected or s.connected for s in found)
 
 
 def test_agents_are_detected_by_their_command_or_settings_folder(tmp_path: Path) -> None:
-    env = make_env(tmp_path, have=("qed", "claude", "opencode"))
+    env = make_env(tmp_path, have=("qed", "claude", "opencode", "code"))
     (env.home / ".cursor").mkdir()
     (env.home / ".cline" / "data" / "settings").mkdir(parents=True)
+    (env.home / ".gemini" / "config").mkdir(parents=True)
     by_key = {s.key: s for s in ac.detect_agents(env)}
     assert all(by_key[k].detected for k in ac.AGENTS)
     assert by_key["claude"].method == "command" and by_key["cursor"].method == "file"
@@ -89,6 +103,10 @@ def test_agents_are_detected_by_their_command_or_settings_folder(tmp_path: Path)
     assert by_key["opencode"].target == f"opencode mcp add qedcode -- {QED} mcp"
     assert by_key["cursor"].target == str(env.home / ".cursor" / "mcp.json")
     assert by_key["cline"].target.endswith("cline_mcp_settings.json")
+    assert by_key["antigravity"].method == "file"
+    assert by_key["antigravity"].target == str(env.home / ".gemini" / "config" / "mcp_config.json")
+    assert by_key["vscode"].method == "command"
+    assert by_key["vscode"].target.startswith("code --add-mcp ")
     assert not any(s.connected for s in by_key.values())
 
 
@@ -312,7 +330,9 @@ def test_an_agent_that_is_not_installed_is_reported(tmp_path: Path) -> None:
 
 def test_an_unknown_agent_lists_the_choices(tmp_path: Path) -> None:
     result = ac.connect("vim", never, make_env(tmp_path))
-    assert not result.ok and "claude, opencode, cline, cursor" in result.message
+    assert (
+        not result.ok and "claude, opencode, cline, cursor, antigravity, vscode" in result.message
+    )
 
 
 def test_snippets_are_valid_json_in_each_documented_shape() -> None:
@@ -324,6 +344,119 @@ def test_snippets_are_valid_json_in_each_documented_shape() -> None:
     assert cursor == {"mcpServers": {"qedcode": {"command": "qed", "args": ["mcp"]}}}
     assert json.loads(ac.snippet("cline", "qed"))["mcpServers"]["qedcode"]["disabled"] is False
     assert ac.snippet("claude", "qed") == "claude mcp add qedcode -- qed mcp"
+
+
+# ------------------------------------------------------------------ Antigravity (section 15.6)
+
+
+def antigravity_file(env: ac.Environment) -> Path:
+    return ac.antigravity_settings_path(env)
+
+
+def test_antigravity_is_found_by_agy_or_its_settings_folders_not_by_gemini_cli(
+    tmp_path: Path,
+) -> None:
+    env = make_env(tmp_path)
+    (env.home / ".gemini").mkdir()
+    (env.home / ".gemini" / "settings.json").write_text("{}")  # plain Gemini CLI
+    assert not ac.antigravity_present(env)
+    for folder in ("config", "antigravity", "antigravity-cli"):
+        (tmp_path / folder).mkdir()
+        other = make_env(tmp_path / folder)
+        (other.home / ".gemini" / folder).mkdir(parents=True)
+        assert ac.antigravity_present(other), folder
+    (tmp_path / "cli").mkdir()
+    assert ac.antigravity_present(make_env(tmp_path / "cli", have=("qed", "agy")))
+
+
+def test_antigravity_without_agy_merges_its_global_file(tmp_path: Path) -> None:
+    env = make_env(tmp_path)
+    path = antigravity_file(env)
+    path.parent.mkdir(parents=True)
+    original = {"mcpServers": {"rea": {"command": "npx", "args": ["rea"], "disabled": True}}}
+    path.write_text(json.dumps(original))
+    result = ac.connect("antigravity", yes, env)
+    assert result.ok and result.changed and result.backup
+    data = json.loads(path.read_text())
+    assert data["mcpServers"]["rea"] == original["mcpServers"]["rea"]
+    assert data["mcpServers"]["qedcode"] == {"command": QED, "args": ["mcp"]}
+    assert "Connect QEDCode to Antigravity?" in yes.prompts[0]  # type: ignore[attr-defined]
+    assert next(s for s in ac.detect_agents(env) if s.key == "antigravity").connected
+    again = ac.connect("antigravity", never, env)
+    assert again.ok and not again.changed and "already connected" in again.message
+
+
+def test_antigravity_with_agy_runs_its_command_after_the_same_questions(tmp_path: Path) -> None:
+    spy = Spy()
+    env = make_env(tmp_path, have=("qed", "agy"), spy=spy)
+    path = antigravity_file(env)
+    path.parent.mkdir(parents=True)
+    path.write_text('{"mcpServers": {}}')
+    result = ac.connect("antigravity", yes, env)
+    assert result.ok and result.changed
+    assert spy.commands == [["agy", "mcp", "add", "qedcode", "--", QED, "mcp"]]
+    assert "runs `agy mcp add qedcode -- " in yes.prompts[0]  # type: ignore[attr-defined]
+    assert result.backup and json.loads(Path(result.backup).read_text()) == {"mcpServers": {}}
+    assert path.read_text() == '{"mcpServers": {}}'  # agy writes the file, QEDCode does not
+
+
+def test_antigravity_with_agy_still_asks_before_replacing_a_different_entry(
+    tmp_path: Path,
+) -> None:
+    spy = Spy()
+    env = make_env(tmp_path, have=("qed", "agy"), spy=spy)
+    path = antigravity_file(env)
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"mcpServers": {"qedcode": {"command": "old", "args": []}}}))
+    answers = iter([True, False])
+    result = ac.connect("antigravity", lambda prompt: next(answers), env)
+    assert not result.ok and "keeps its existing entry" in result.message and spy.commands == []
+
+
+def test_antigravity_agy_failure_gives_the_snippet(tmp_path: Path) -> None:
+    env = make_env(tmp_path, have=("qed", "agy"), spy=Spy(ok=False, output="no config dir"))
+    result = ac.connect("antigravity", yes, env)
+    assert not result.ok and "no config dir" in result.message and '"mcpServers"' in result.message
+
+
+def test_antigravity_missing_is_explained(tmp_path: Path) -> None:
+    result = ac.connect("antigravity", never, make_env(tmp_path))
+    assert not result.ok and "Antigravity was not found" in result.message
+    assert "mcp_config.json" in result.message and "antigravity.google" in result.message
+
+
+# ------------------------------------------------------------------ VS Code (section 15.6)
+
+
+def test_vscode_uses_code_add_mcp_with_a_stdio_entry(tmp_path: Path) -> None:
+    spy = Spy()
+    env = make_env(tmp_path, have=("qed", "code"), spy=spy)
+    result = ac.connect("vscode", yes, env)
+    assert result.ok and result.changed and "Agent mode" in result.message
+    ((program, flag, payload),) = spy.commands
+    assert (program, flag) == ("code", "--add-mcp")
+    assert json.loads(payload) == {
+        "name": "qedcode",
+        "type": "stdio",
+        "command": QED,
+        "args": ["mcp"],
+    }
+    assert "(runs: code --add-mcp " in yes.prompts[0]  # type: ignore[attr-defined]
+
+
+def test_vscode_without_the_code_command_explains_and_gives_mcp_json(tmp_path: Path) -> None:
+    result = ac.connect("vscode", never, make_env(tmp_path))
+    assert not result.ok and "Install code command in PATH" in result.message
+    assert '"servers"' in result.message and "code.visualstudio.com" in result.message
+
+
+def test_new_snippets_are_valid_json() -> None:
+    assert json.loads(ac.snippet("antigravity", "qed")) == {
+        "mcpServers": {"qedcode": {"command": "qed", "args": ["mcp"]}}
+    }
+    assert json.loads(ac.snippet("vscode", "qed")) == {
+        "servers": {"qedcode": {"type": "stdio", "command": "qed", "args": ["mcp"]}}
+    }
 
 
 # ------------------------------------------------------------------ the command
@@ -341,7 +474,7 @@ def cli_env(tmp_path: Path, monkeypatch):
 def test_qed_connect_list(cli_env) -> None:
     result = CliRunner().invoke(app, ["connect", "--list"])
     assert result.exit_code == 0
-    for name in ("Claude Code", "OpenCode", "Cline", "Cursor"):
+    for name in ("Claude Code", "OpenCode", "Cline", "Cursor", "Antigravity", "VS Code"):
         assert name in result.output
     assert "runs a command" in result.output
 

@@ -1,8 +1,10 @@
-"""One-click agent connect (AGENTS.md section 15.4): register `qed mcp` with coding agents.
+"""One-click agent connect (AGENTS.md sections 15.4 and 15.6): register `qed mcp` with agents.
 
-Claude Code and OpenCode are connected through their own documented commands. Cline's CLI settings
-and Cursor's global MCP file are plain JSON files that are merged, never overwritten: a backup is
-made first, a file that is not plain JSON is left alone, and nothing is changed without a yes.
+Claude Code, OpenCode and VS Code are connected through their own documented commands. Cline's CLI
+settings and Cursor's global MCP file are plain JSON files that are merged, never overwritten: a
+backup is made first, a file that is not plain JSON is left alone, and nothing is changed without a
+yes. Antigravity uses its `agy mcp add` command when the CLI is on the PATH, and otherwise the same
+careful merge of its global `mcp_config.json` (the IDE and the CLI share that file).
 """
 
 from __future__ import annotations
@@ -18,14 +20,26 @@ from pathlib import Path
 from qedcode.verify.run import RunResult, run
 
 SERVER_NAME = "qedcode"
-AGENTS = ("claude", "opencode", "cline", "cursor")
-NAMES = {"claude": "Claude Code", "opencode": "OpenCode", "cline": "Cline", "cursor": "Cursor"}
+AGENTS = ("claude", "opencode", "cline", "cursor", "antigravity", "vscode")
+NAMES = {
+    "claude": "Claude Code",
+    "opencode": "OpenCode",
+    "cline": "Cline",
+    "cursor": "Cursor",
+    "antigravity": "Antigravity",
+    "vscode": "VS Code",
+}
 DOCS = {
     "claude": "https://docs.claude.com/en/docs/claude-code/mcp",
     "opencode": "https://opencode.ai/docs/mcp-servers",
     "cline": "https://docs.cline.bot/mcp/configuring-mcp-servers",
     "cursor": "https://cursor.com/docs (search for 'MCP')",
+    "antigravity": "https://antigravity.google/docs/mcp",
+    "vscode": "https://code.visualstudio.com/docs/agent-customization/mcp-servers",
 }
+# Agents connected only by running their own documented command, and the program that runs it.
+COMMAND_AGENTS = {"claude": "claude", "opencode": "opencode", "vscode": "code"}
+FILE_AGENTS = ("cline", "cursor", "antigravity")
 Confirm = Callable[[str], bool]
 
 
@@ -79,6 +93,19 @@ def cursor_settings_path(env: Environment) -> Path:
     return env.home / ".cursor" / "mcp.json"
 
 
+def antigravity_settings_path(env: Environment) -> Path:
+    """Antigravity's global MCP file, shared by its IDE and its `agy` CLI."""
+    return env.home / ".gemini" / "config" / "mcp_config.json"
+
+
+def antigravity_present(env: Environment) -> bool:
+    """`agy` on the PATH, or Antigravity's settings folders exist (plain Gemini CLI has neither)."""
+    gemini = env.home / ".gemini"
+    return bool(env.which("agy")) or any(
+        (gemini / name).is_dir() for name in ("config", "antigravity", "antigravity-cli")
+    )
+
+
 def json_entry(key: str, qed: str) -> dict:
     """The server entry written into a JSON settings file."""
     entry: dict = {"command": qed, "args": ["mcp"]}
@@ -92,21 +119,39 @@ def _file_for(key: str, env: Environment) -> Path | None:
         return cline_settings_path(env)
     if key == "cursor":
         return cursor_settings_path(env)
+    if key == "antigravity":
+        return antigravity_settings_path(env)
     return None
 
 
+def _file_agent_present(key: str, env: Environment) -> bool:
+    if key == "antigravity":
+        return antigravity_present(env)
+    path = _file_for(key, env)
+    assert path is not None
+    return path.parent.is_dir() or (key == "cline" and "CLINE_MCP_SETTINGS_PATH" in env.env)
+
+
+def vscode_entry(qed: str) -> dict:
+    """The server as VS Code's `code --add-mcp` expects it (a name plus a stdio server)."""
+    return {"name": SERVER_NAME, "type": "stdio", "command": qed, "args": ["mcp"]}
+
+
 def _command_for(key: str, qed: str) -> list[str]:
-    if key == "claude":
-        return ["claude", "mcp", "add", SERVER_NAME, "--", qed, "mcp"]
-    return ["opencode", "mcp", "add", SERVER_NAME, "--", qed, "mcp"]
+    if key == "vscode":
+        return ["code", "--add-mcp", json.dumps(vscode_entry(qed))]
+    program = "agy" if key == "antigravity" else COMMAND_AGENTS[key]
+    return [program, "mcp", "add", SERVER_NAME, "--", qed, "mcp"]
 
 
 def snippet(key: str, qed: str = "qed") -> str:
     """Text a person can paste when automatic connecting is not possible."""
     if key == "opencode":
         entry = {"mcp": {"servers": {SERVER_NAME: {"type": "local", "command": [qed, "mcp"]}}}}
-    elif key in ("cline", "cursor"):
+    elif key in FILE_AGENTS:
         entry = {"mcpServers": {SERVER_NAME: json_entry(key, qed)}}
+    elif key == "vscode":  # the shape of a workspace .vscode/mcp.json
+        entry = {"servers": {SERVER_NAME: {"type": "stdio", "command": qed, "args": ["mcp"]}}}
     else:
         return " ".join(_command_for("claude", qed))
     return json.dumps(entry)
@@ -155,14 +200,14 @@ def detect_agents(env: Environment | None = None) -> list[AgentStatus]:
     found: list[AgentStatus] = []
     for key in AGENTS:
         name = NAMES[key]
-        if key in ("claude", "opencode"):
-            binary = env.which(key)
+        if key in COMMAND_AGENTS:
+            binary = env.which(COMMAND_AGENTS[key])
             command = " ".join(_command_for(key, qed))
             found.append(AgentStatus(key, name, bool(binary), method="command", target=command))
             continue
         path = _file_for(key, env)
         assert path is not None
-        present = path.parent.is_dir() or (key == "cline" and "CLINE_MCP_SETTINGS_PATH" in env.env)
+        present = _file_agent_present(key, env)
         status = AgentStatus(key, name, present, method="file", target=str(path))
         data, _why = read_json(path)
         if data is not None:
@@ -207,9 +252,15 @@ def connect_file(key: str, confirm: Confirm, env: Environment) -> ConnectResult:
     if existing is not None and _same_entry(existing, wanted):
         return ConnectResult(key, True, f"{name} is already connected to QEDCode.")
     preview = json.dumps({SERVER_NAME: wanted})
+    use_agy = key == "antigravity" and bool(env.which("agy"))
+    how = (
+        f"This runs `{' '.join(_command_for(key, qed))}`, which "
+        f"{'creates' if not path.exists() else 'changes'} {path} and adds"
+        if use_agy
+        else f"This will {'create' if not path.exists() else 'change'} {path} and add"
+    )
     if not confirm(
-        f"Connect QEDCode to {name}? This will {'create' if not path.exists() else 'change'} "
-        f'{path} and add: "mcpServers" -> {preview}'
+        f'Connect QEDCode to {name}? {how}: "mcpServers" -> {preview}'
         + (" (a backup copy of the file is made first)" if path.exists() else "")
     ):
         return ConnectResult(key, False, f"Cancelled. {name} was not changed.")
@@ -219,6 +270,8 @@ def connect_file(key: str, confirm: Confirm, env: Environment) -> ConnectResult:
     ):
         return ConnectResult(key, False, f"Cancelled. {name} keeps its existing entry.")
     backup = _backup(path, env)
+    if use_agy:
+        return _run_agy(path, qed, env, backup)
     servers = data.get("mcpServers")
     if not isinstance(servers, dict):
         servers = {}
@@ -239,6 +292,36 @@ def connect_file(key: str, confirm: Confirm, env: Environment) -> ConnectResult:
     )
 
 
+def _run_agy(path: Path, qed: str, env: Environment, backup: str) -> ConnectResult:
+    """Antigravity's own command writes the entry (after the same preview, questions, backup)."""
+    command = _command_for("antigravity", qed)
+    done = env.run_command(command)
+    if done.ok:
+        where = f" (the old file is saved as {backup})" if backup else ""
+        return ConnectResult(
+            "antigravity",
+            True,
+            f"Connected. Antigravity now lists QEDCode in {path}{where}. In the IDE, open "
+            "MCP Servers in the agent panel and refresh if it is not shown yet.",
+            True,
+            backup,
+        )
+    reason = (done.error or done.output)[:160]
+    return ConnectResult(
+        "antigravity",
+        False,
+        f"That did not work ({reason}). Add this to {path} yourself:\n"
+        f"  {snippet('antigravity', qed)}",
+    )
+
+
+_CONNECTED_HINT = {
+    "claude": "In Claude Code, ask it to use the qedcode tool.",
+    "opencode": "In OpenCode, ask it to use the qedcode tool.",
+    "vscode": "In VS Code, open the chat in Agent mode: QEDCode's tools are in the tools list.",
+}
+
+
 def connect_command(key: str, confirm: Confirm, env: Environment) -> ConnectResult:
     name, qed = NAMES[key], qed_command(env)
     command = _command_for(key, qed)
@@ -246,9 +329,7 @@ def connect_command(key: str, confirm: Confirm, env: Environment) -> ConnectResu
         return ConnectResult(key, False, f"Cancelled. {name} was not changed.")
     done = env.run_command(command)
     if done.ok:
-        return ConnectResult(
-            key, True, f"Connected. In {name}, ask it to use the qedcode tool.", True
-        )
+        return ConnectResult(key, True, f"Connected. {_CONNECTED_HINT[key]}", True)
     reason = (done.error or done.output)[:160]
     if "already exists" in reason.lower():
         return ConnectResult(key, True, f"{name} is already connected to QEDCode.")
@@ -269,18 +350,31 @@ def connect(key: str, confirm: Confirm, env: Environment | None = None) -> Conne
             False,
             f"'{key}' is not an agent QEDCode knows. Choose one of: {', '.join(AGENTS)}.",
         )
-    if key in ("claude", "opencode"):
-        if not env.which(key):
+    if key in COMMAND_AGENTS:
+        if not env.which(COMMAND_AGENTS[key]):
+            hint = (
+                " In VS Code, run 'Shell Command: Install code command in PATH' first."
+                if key == "vscode"
+                else ""
+            )
             return ConnectResult(
                 key,
                 False,
-                f"{NAMES[key]} was not found on your PATH. Install it first, or add "
-                f"QEDCode by hand ({DOCS[key]}).",
+                f"{NAMES[key]} was not found on your PATH (no `{COMMAND_AGENTS[key]}` command)."
+                f"{hint} Or add QEDCode by hand ({DOCS[key]}):\n  {snippet(key, qed_command(env))}",
             )
         return connect_command(key, confirm, env)
     path = _file_for(key, env)
     assert path is not None
-    if not (path.parent.is_dir() or (key == "cline" and "CLINE_MCP_SETTINGS_PATH" in env.env)):
+    if not _file_agent_present(key, env):
+        if key == "antigravity":
+            return ConnectResult(
+                key,
+                False,
+                f"Antigravity was not found (no `agy` command and no {path.parent.parent} "
+                f"settings folders). Install it first, or add this to {path} ({DOCS[key]}):\n"
+                f"  {snippet(key, qed_command(env))}",
+            )
         return ConnectResult(
             key,
             False,

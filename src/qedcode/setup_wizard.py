@@ -41,13 +41,18 @@ MCP_DOCS = {
     "OpenCode": "https://opencode.ai/docs/mcp-servers",
     "Cline": "https://docs.cline.bot/mcp/mcp-overview",
     "Cursor": "https://cursor.com/docs (search for 'MCP')",
+    "Antigravity": "https://antigravity.google/docs/mcp",
+    "VS Code": "https://code.visualstudio.com/docs/agent-customization/mcp-servers",
 }
 # Ready-to-paste snippets in each tool's documented shape (checked 2026-11-20). These formats
 # change between releases, so the setup prints the docs link next to every snippet.
+# Antigravity and VS Code: checked 2026-11-21 (`agy mcp add --help`, VS Code MCP reference).
 MCP_SNIPPETS = {
     "OpenCode": '{"mcp": {"servers": {"qedcode": {"type": "local", "command": ["qed", "mcp"]}}}}',
     "Cline": '{"mcpServers": {"qedcode": {"command": "qed", "args": ["mcp"]}}}',
     "Cursor": '{"mcpServers": {"qedcode": {"command": "qed", "args": ["mcp"]}}}',
+    "Antigravity": '{"mcpServers": {"qedcode": {"command": "qed", "args": ["mcp"]}}}',
+    "VS Code": '{"servers": {"qedcode": {"type": "stdio", "command": "qed", "args": ["mcp"]}}}',
 }
 CLOUD_PROVIDERS = [
     ("openrouter", "OpenRouter (many models, one key)"),

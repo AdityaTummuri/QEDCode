@@ -187,7 +187,8 @@ the numbers will go here.)
 | Learns from your project | No | Varies | **Yes:** applied fixes become examples, stored only on your computer |
 | Works from your editor/agent | n/a | Is the agent | **Both:** terminal UI, CLI, and an MCP server that other agents call as a tool |
 
-QEDCode is also **complementary**: Claude Code, OpenCode, Cline and Cursor can call it through MCP
+QEDCode is also **complementary**: Claude Code, OpenCode, Cline, Cursor, Antigravity and VS Code can
+call it through MCP
 (`qed connect`), so a large agent gets a verified, graded fix with a receipt instead of unchecked text.
 
 ## What you get
@@ -359,7 +360,8 @@ test answer with tokens per second. It also lets you:
 - use a model you already run in **Ollama** or **LM Studio** instead of downloading one,
 - pick a **cloud** model (your API key goes into the system keychain, never into a file),
 - set up a **helper** model for hard tasks, and
-- connect QEDCode to your coding agents (Claude Code, OpenCode, Cline, Cursor).
+- connect QEDCode to your coding agents (Claude Code, OpenCode, Cline, Cursor, Antigravity,
+  VS Code).
 
 Run `qed doctor` at any time: it checks git, your project's Python or Node, the test runner, ruff,
 your GPU, the model engine, the model, the model server and free disk space, and tells you how to
@@ -417,7 +419,8 @@ qed check [--speed ...] [--base <ref>] [--json]    grade the changes you made yo
 qed verify <receipt.json>             re-run a proof receipt: VERIFIED or what no longer matches
 qed apply [task id] / qed undo        apply a finished result / take the last apply back out
 qed models [list|recommend|download <id>|use <id>|remove <id>]
-qed connect [agent] [--list] [--yes]  connect QEDCode to Claude Code, OpenCode, Cline, Cursor
+qed connect [agent] [--list] [--yes]  connect QEDCode to Claude Code, OpenCode, Cline, Cursor,
+                                      Antigravity, VS Code
 qed quiet [on|off|auto]               gentler, cooler model runs (slower)
 qed sandbox [status|setup|off]        run your tests in Docker with the network off
 qed memory [list|forget <#>|clear]    the fixes QEDCode remembers and shows the model as examples
@@ -433,8 +436,8 @@ harder, `u` undo, `r` receipt, `m` speed, `s` settings, `Esc` cancel, `?` help.
 
 ## Use with agents
 
-QEDCode is also an MCP server, so Claude Code, OpenCode, Cline, Cursor and other agents can call it
-as a tool. They get the fix, its grade and the proof receipt, and the model server is shared with the
+QEDCode is also an MCP server, so Claude Code, OpenCode, Cline, Cursor, Antigravity, VS Code and
+other agents can call it as a tool. They get the fix, its grade and the proof receipt, and the model server is shared with the
 terminal UI (only one `llama-server` runs).
 
 ```bash
@@ -442,10 +445,12 @@ qed connect                              # finds your agents, shows what changes
 claude mcp add qedcode -- qed mcp        # the same thing for Claude Code by hand
 ```
 
-`qed connect` (and the last step of `qed setup`) handles four agents: it runs `claude mcp add`
-for Claude Code, runs `opencode mcp add` for OpenCode, and merges a `qedcode` entry into Cline's CLI
-settings file and Cursor's `~/.cursor/mcp.json` (with a backup copy; a file that is not plain JSON
-is never touched, you get the snippet instead). `qed connect --list` shows what is connected.
+`qed connect` (and the last step of `qed setup`) handles six agents: it runs `claude mcp add`
+for Claude Code, `opencode mcp add` for OpenCode and `code --add-mcp` for VS Code, and merges a
+`qedcode` entry into Cline's CLI settings file, Cursor's `~/.cursor/mcp.json` and Antigravity's
+`~/.gemini/config/mcp_config.json` (through `agy mcp add` when the Antigravity CLI is installed).
+A backup copy is made first, and a file that is not plain JSON is never touched: you get the
+snippet instead. `qed connect --list` shows what is connected.
 
 For other agents add an MCP server that runs the command `qed` with the argument `mcp`. Their config
 formats change, so check each tool's docs:
@@ -455,6 +460,8 @@ formats change, so check each tool's docs:
 | OpenCode | https://opencode.ai/docs/mcp-servers | `{"mcp": {"servers": {"qedcode": {"type": "local", "command": ["qed", "mcp"]}}}}` |
 | Cline | https://docs.cline.bot/mcp/mcp-overview | `{"mcpServers": {"qedcode": {"command": "qed", "args": ["mcp"]}}}` |
 | Cursor | https://cursor.com/docs (search for "MCP") | `{"mcpServers": {"qedcode": {"command": "qed", "args": ["mcp"]}}}` |
+| Antigravity | https://antigravity.google/docs/mcp | `{"mcpServers": {"qedcode": {"command": "qed", "args": ["mcp"]}}}` in `~/.gemini/config/mcp_config.json` (or `<workspace>/.agents/mcp_config.json`) |
+| VS Code | https://code.visualstudio.com/docs/agent-customization/mcp-servers | `{"servers": {"qedcode": {"type": "stdio", "command": "qed", "args": ["mcp"]}}}` in `.vscode/mcp.json` |
 
 Then ask your agent, for example: *"Use the qedcode tool to fix the bug described in task.txt"* or
 *"I changed the code; check it with qedcode"*. The tools:
@@ -471,6 +478,27 @@ Solves take minutes. If `solve` returns `status: "running"`, the agent polls `st
 `MCP_TOOL_TIMEOUT` setting; check its docs). One job runs per project at a time (a second call gets
 `status: "busy"`), and agent runs never answer questions, never approve risky code and never use the
 helper model unless your config pre-approves it (`[helper] ask_before_use = false`).
+
+### In Antigravity or VS Code, with a cloud model
+
+You don't need a GPU to use QEDCode from an IDE. Your IDE's agent runs on its own cloud model, and
+QEDCode's tries can run on a cloud model too:
+
+```bash
+uv tool install git+https://github.com/AdityaTummuri/QEDCode
+qed setup                    # choose "cloud", pick a provider and model, paste the API key
+qed connect antigravity      # or: qed connect vscode
+```
+
+Restart the IDE's agent (in Antigravity: agent panel → **…** → MCP Servers → refresh; in VS Code:
+open the chat in Agent mode and check the tools list). Then ask: *"Fix the bug in task.txt and
+prove it with the qedcode tools"*. `check` and `verify` need no model at all; only `solve` uses the
+cloud model, and your code is sent to that provider (cloud mode says so in `qed setup`).
+
+Keep the key in the system keychain, where `qed setup` puts it. An IDE started from the Dock or
+the Start menu doesn't see the environment variables of your shell, and an API key should never
+go into an MCP config file. To teach the IDE's agent when and how to use QEDCode, add the
+[QEDCode Agent Skill](https://github.com/AdityaTummuri/QEDCode-AgentSkill).
 
 ## Safety
 

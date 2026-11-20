@@ -1191,3 +1191,28 @@ Rules: the `qed` command is written as an absolute path when it is found on the 
 
 Rules: Benchy is never required, never installed without a yes and never started by QEDCode on its own (no background runs, no reminders). `qed setup` ends with one line naming `qed benchy install`; it does not ask. All code is in `benchy_link.py` (a front-door module like `agents_connect.py`; the engine never imports it), with list arguments and no shell.
 
+
+### 15.6 Antigravity and VS Code (v1.1)
+
+**What it does.** `qed connect antigravity` and `qed connect vscode` register the `qed mcp` server with Google Antigravity (IDE and `agy` CLI) and with VS Code (Copilot agent mode), with the same rules as section 15.4: show exactly what changes, ask, never need the network. Both IDEs then use QEDCode as a tool. Inside those IDEs the user's agent runs on the IDE's own cloud model, while QEDCode's own model is whatever `qed setup` chose: local, mix, or **cloud** (no GPU needed).
+
+| Agent | How | Detected when |
+| --- | --- | --- |
+| Antigravity | the global `~/.gemini/config/mcp_config.json` (shared by the IDE and the CLI; `mcpServers` with `command` and `args`). When `agy` is on the PATH it runs the documented `agy mcp add qedcode -- <qed> mcp`; otherwise it merges the file with the section 15.4 file rules | `agy` is on the PATH, or `~/.gemini/config`, `~/.gemini/antigravity` or `~/.gemini/antigravity-cli` exists (a plain Gemini CLI `~/.gemini` does not count) |
+| VS Code | runs the documented `code --add-mcp '{"name":"qedcode","type":"stdio","command":"<qed>","args":["mcp"]}'` (writes the user profile) | `code` is on the PATH |
+
+Rules:
+
+- Antigravity gets the same preview, second question for a different existing `qedcode` entry, plain-JSON check and timestamped backup as Cline and Cursor, even when `agy` writes the file, so `agy`'s "add or update" never silently replaces an entry.
+- `qed connect --list` shows Antigravity as connected when its file has a matching entry. VS Code keeps its MCP list in the user profile, so like Claude Code it is always offered again (adding the same server again is harmless).
+- When an IDE is not found, the message gives the snippet: `mcpServers` for Antigravity, and the `.vscode/mcp.json` shape (`servers` with `type: "stdio"`) for VS Code, plus each tool's docs link.
+- Cloud mode inside an IDE: the API key comes from the OS keychain (`qed setup` saves it there). An IDE started from a dock or start menu does not see the shell's environment variables, so the docs point to the keychain, never to an `env` block in an MCP config (rule 8: keys never go in config files).
+- The skill package ([QEDCode Agent Skill](https://github.com/AdityaTummuri/QEDCode-AgentSkill)) is separate. It documents the skill folders each IDE reads; QEDCode never installs skills.
+
+| Module | Change |
+| --- | --- |
+| `agents_connect.py` | `antigravity` and `vscode` agents, `antigravity_settings_path`, `antigravity_present`, `vscode_entry`, snippets |
+| `setup_wizard.py` | docs links and snippets for both in the "Other agents" list |
+| `cli.py` | `qed connect` help lists the new agents |
+
+**v1.1 limits.** Workspace configs (`<workspace>/.agents/mcp_config.json`, `.vscode/mcp.json`) are not written. VS Code Insiders (`code-insiders`) and VS Code forks other than Antigravity are not detected. The VS Code path follows the VS Code docs of 2026-11-21 and has not been run against a real VS Code install by the build.

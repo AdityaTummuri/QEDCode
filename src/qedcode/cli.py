@@ -541,7 +541,10 @@ def quiet_command(
 def connect_command(
     agent: Annotated[
         str | None,
-        typer.Argument(help="claude, opencode, cline or cursor (default: every agent found)."),
+        typer.Argument(
+            help="claude, opencode, cline, cursor, antigravity or vscode "
+            "(default: every agent found)."
+        ),
     ] = None,
     list_only: Annotated[
         bool, typer.Option("--list", help="Show which agents are found and connected.")

@@ -5,6 +5,10 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
 ## [Unreleased]
 
 ### Added
+- `qed connect antigravity` and `qed connect vscode`: register QEDCode's MCP server with Google
+  Antigravity (through `agy mcp add`, or a careful merge of `~/.gemini/config/mcp_config.json`
+  with a backup) and with VS Code (through `code --add-mcp`). `qed setup` offers them too. The
+  README explains how to use QEDCode from these IDEs with a cloud model, so no GPU is needed.
 - `qed benchy [status|install|uninstall|run|report|selftest|suites|share]`: optional link to
   [QEDCode Benchy](https://github.com/AdityaTummuri/QEDCode-benchy), which compares QEDCode with
   the same model used on its own. Installing asks first; nothing runs unless you type the command.
