@@ -1,14 +1,15 @@
 """The `scope` and `risk` stages (AGENTS.md section 8): cheap checks on the diff, before any test.
 
 scope: protected paths, paths outside the repo, deleted files, test files created by a coder,
-       weakened tests (added skip/xfail, removed asserts) and too many changed lines.
+       weakened tests (added skip/xfail, removed asserts, asserts that can never fail) and too
+       many changed lines.
 risk:  a regex scan of ADDED Python lines for dangerous calls; finding one sets needs_approval.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
 from qedcode.config import ProjectConfig
@@ -19,17 +20,27 @@ from qedcode.project.paths import is_js_path, is_protected, is_test_file, valida
 SUMMARY_LIMIT = 300
 DETAILS_LIMIT = 4000
 PROTECTED_MARKER = "Protected files changed:"
+WEAKENED_MARKER = "Tests weakened:"
 
 
-def protected_from_checks(checks: Iterable[CheckResult]) -> list[str]:
-    """Protected files a scope check recorded as changed (the grade function reads this)."""
+def _marked(checks: Iterable[CheckResult], marker: str) -> list[str]:
     for check in checks:
         if check.stage != "scope":
             continue
         for line in check.details.split("\n"):
-            if line.startswith(PROTECTED_MARKER):
-                return [p.strip() for p in line[len(PROTECTED_MARKER) :].split(",") if p.strip()]
+            if line.startswith(marker):
+                return [p.strip() for p in line[len(marker) :].split(",") if p.strip()]
     return []
+
+
+def protected_from_checks(checks: Iterable[CheckResult]) -> list[str]:
+    """Protected files a scope check recorded as changed (the grade function reads this)."""
+    return _marked(checks, PROTECTED_MARKER)
+
+
+def weakened_from_checks(checks: Iterable[CheckResult]) -> list[str]:
+    """Test files a `qed check` scope stage found weakened (the grade function reads this)."""
+    return _marked(checks, WEAKENED_MARKER)
 
 
 # --------------------------------------------------------------------------- diff parsing
@@ -151,6 +162,11 @@ _SKIP = re.compile(
     r"|@unittest\.skip|unittest\.skipIf|unittest\.skipUnless|unittest\.expectedFailure|\bskipTest\("
 )
 _ASSERT = re.compile(r"^\s*assert\b")
+# An assert that can never fail: `assert True`, `assert 1`, `assert x or True`, `assert (True)`.
+_ALWAYS_TRUE = re.compile(
+    r"^\s*assert\s*\(?\s*(?:True|1)\s*\)?\s*(?:$|,|#|\bor\b)"
+    r"|^\s*assert\b.*\bor\s+True\s*\)?\s*(?:$|,|#)"
+)
 # JavaScript/TypeScript: skipped, todo or "only" tests, and removed assertions
 _JS_SKIP = re.compile(
     r"\b(?:it|test|describe|suite)\.(?:skip|todo|only)\b|\b(?:xit|xtest|xdescribe|fit|fdescribe)\s*\("
@@ -159,22 +175,37 @@ _JS_SKIP = re.compile(
 _JS_ASSERT = re.compile(
     r"^\s*(?:await\s+)?(?:expect\s*\(|assert\s*[.(]|t\.(?:assert|is|deepEqual)|should\.)"
 )
+_JS_ALWAYS_TRUE = re.compile(
+    r"^\s*(?:await\s+)?(?:"
+    r"expect\s*\(\s*(?:true|1)\s*\)\s*\.\s*(?:toBe\s*\(\s*(?:true|1)\s*\)|toBeTruthy\s*\(\s*\))"
+    r"|assert(?:\.ok)?\s*\(\s*(?:true|1)\s*[,)]"
+    r"|t\.(?:assert|true|truthy)\s*\(\s*(?:true|1)\s*[,)])"
+)
 
 
 def _is_test_path(path: str) -> bool:
     return is_test_file(path) or path.endswith("conftest.py")
 
 
-def _weakening(file: FileDiff) -> list[str]:
+def _weakening(file: FileDiff, *, always_true_asserts: bool = False) -> list[str]:
+    """Ways a diff weakens a test file. `always_true_asserts` also flags asserts that can never
+    fail (used for `qed check`; for generated candidates other stages already cover them)."""
     problems: list[str] = []
     if not _is_test_path(file.path):
         return problems
     js = is_js_path(file.path)
     skip, assertion = (_JS_SKIP, _JS_ASSERT) if js else (_SKIP, _ASSERT)
+    always_true = _JS_ALWAYS_TRUE if js else _ALWAYS_TRUE
     comment = ("//", "/*", "*") if js else ("#",)
     for number, text in file.added:
-        if skip.search(text) and not text.lstrip().startswith(comment):
+        if text.lstrip().startswith(comment):
+            continue
+        if skip.search(text):
             problems.append(f"{file.path}:{number} adds a skip or xfail ({text.strip()[:60]})")
+        elif always_true_asserts and always_true.search(text):
+            problems.append(
+                f"{file.path}:{number} adds an assert that can never fail ({text.strip()[:60]})"
+            )
     removed = sum(1 for t in file.removed if assertion.match(t))
     added = sum(1 for _, t in file.added if assertion.match(t))
     if file.status == "modified" and removed > added:
@@ -190,16 +221,22 @@ def scope_check(
     *,
     allowed_added: Iterable[str] = (),
     allow_protected: bool = False,
+    appended: Mapping[str, Iterable[str]] | None = None,
 ) -> CheckResult:
     """Stage `scope`: the path rules, applied to the diff.
 
-    `allowed_added` are files QEDCode itself added (the repro test). For role "user" (qed check)
-    nothing is rejected: the problems are only reported, because the changes are the user's own.
+    `allowed_added` are files QEDCode itself added (the repro test). `appended` are existing test
+    files that only gained new tests (see verify/test_additions.py); they are evidence, not a
+    protected change. For role "user" (qed check) nothing is rejected: the problems are only
+    reported, because the changes are the user's own, and weakened tests are marked so the grade
+    function can stop counting the tests as evidence.
     """
     files = parse_diff(diff)
     allowed = set(allowed_added)
+    only_added = set(appended or {})
     problems: list[str] = []
     protected_changes: list[str] = []
+    weakened: list[str] = []
     for f in files:
         bad_path = validate_path(f.path)
         if bad_path:
@@ -208,8 +245,8 @@ def scope_check(
         if f.path in allowed and f.status == "added":
             problems.extend(_weakening(f))
             continue
-        new_test = f.status == "added" and is_test_file(
-            f.path
+        new_test = (f.status == "added" and is_test_file(f.path)) or (
+            f.path in only_added
         )  # a new test is evidence, not tampering
         if is_protected(f.path, project.protected) and not new_test:
             protected_changes.append(f.path)
@@ -222,7 +259,10 @@ def scope_check(
             problems.append(f"{f.path} was deleted; files may not be deleted.")
         if f.status == "added" and is_test_file(f.path) and role != "test_writer":
             problems.append(f"{f.path} is a new test file; only the test writer may add tests.")
-        problems.extend(_weakening(f))
+        weak = _weakening(f, always_true_asserts=role == "user")
+        if weak and f.path not in weakened:
+            weakened.append(f.path)
+        problems.extend(weak)
     limit = max_changed_lines(speed)
     total = sum(f.changed_lines for f in files)
     if total > limit:
@@ -231,6 +271,8 @@ def scope_check(
             "Make a smaller change."
         )
     marker = [f"{PROTECTED_MARKER} {', '.join(protected_changes)}"] if protected_changes else []
+    if role == "user" and weakened:
+        marker.append(f"{WEAKENED_MARKER} {', '.join(weakened)}")
     details = "\n".join(marker + problems)[:DETAILS_LIMIT]
     if role == "user":
         summary = (

@@ -48,6 +48,11 @@ from qedcode.verify.pytest_runner import (
     file_level_failure,
 )
 from qedcode.verify.runners import run_tests
+from qedcode.verify.test_additions import (
+    appended_tests_in_worktree,
+    is_new_test_key,
+    key_in_file,
+)
 
 DETAILS_LIMIT = 4000
 
@@ -242,11 +247,23 @@ def changes_code(root: Path, base_commit: str, wt: Path, files: list[FileDiff]) 
     return False
 
 
-def _added_test_files(ctx: CascadeContext, files: list[FileDiff]) -> list[str]:
+def _added_test_files(
+    ctx: CascadeContext, files: list[FileDiff], appended: dict[str, set[str]] | None = None
+) -> list[str]:
+    """New test files, plus existing test files that only gained tests (`appended`)."""
     added = {f.path for f in files if f.status == "added" and is_test_file(f.path)}
+    added |= set(appended or {})
     if ctx.repro is not None:
         added.add(ctx.repro.path)
     return sorted(added)
+
+
+def _counts_as_new(key: str, appended: dict[str, set[str]]) -> bool:
+    """A test from an appended file proves something only if it is one of the added tests."""
+    for path, names in appended.items():
+        if key_in_file(key, path):
+            return is_new_test_key(key, names)
+    return True
 
 
 def _cand_dir(ctx: CascadeContext, cand: Candidate) -> Path:
@@ -297,8 +314,15 @@ def _run_tests(
     return out
 
 
-def _stage_fbpa(ctx: CascadeContext, cand: Candidate, wt: Path, files: list[FileDiff]) -> bool:
-    tests = _added_test_files(ctx, files)
+def _stage_fbpa(
+    ctx: CascadeContext,
+    cand: Candidate,
+    wt: Path,
+    files: list[FileDiff],
+    appended: dict[str, set[str]] | None = None,
+) -> bool:
+    appended = appended or {}
+    tests = _added_test_files(ctx, files, appended)
     if not tests:
         _skip(ctx, cand, "fbpa", "no new test")
         return True
@@ -316,7 +340,11 @@ def _stage_fbpa(ctx: CascadeContext, cand: Candidate, wt: Path, files: list[File
     before = set(_base_failures_for(ctx, wt, tests, _cand_dir(ctx, cand)))
     whole_file_failed = file_level_failure(before)
     proof = [
-        r for r in out.results if r.outcome == "passed" and (r.key in before or whole_file_failed)
+        r
+        for r in out.results
+        if r.outcome == "passed"
+        and (r.key in before or whole_file_failed)
+        and _counts_as_new(r.key, appended)
     ]
     if not proof:
         _emit(
@@ -364,6 +392,10 @@ def _run_stages(ctx: CascadeContext, cand: Candidate, wt: Path, run_full: bool) 
     else:
         _skip(ctx, cand, "parse", "no source files changed")
     cand.code_changed = changes_code(ctx.root, ctx.base_commit, wt, files)
+    # qed check only: tests appended to an existing test file are evidence, not tampering
+    appended = (
+        appended_tests_in_worktree(ctx.root, ctx.base_commit, wt, files) if role == "user" else {}
+    )
     _check_cancel(ctx)
     scope = scope_check(
         cand.diff,
@@ -372,6 +404,7 @@ def _run_stages(ctx: CascadeContext, cand: Candidate, wt: Path, run_full: bool) 
         ctx.task.speed,
         allowed_added=[ctx.repro.path] if ctx.repro else [],
         allow_protected=ctx.task.allow_test_edits,
+        appended=appended,
     )
     if not _record(ctx, cand, scope):
         return
@@ -395,10 +428,10 @@ def _run_stages(ctx: CascadeContext, cand: Candidate, wt: Path, run_full: bool) 
         _skip(ctx, cand, "tests", "the tests could not run before the change")
         return
     _check_cancel(ctx)
-    if not _stage_fbpa(ctx, cand, wt, files):
+    if not _stage_fbpa(ctx, cand, wt, files, appended):
         return
     _check_cancel(ctx)
-    added_tests = _added_test_files(ctx, files)
+    added_tests = _added_test_files(ctx, files, appended)
     changed = [f.path for f in kept]
     selection = select_targeted(
         changed,

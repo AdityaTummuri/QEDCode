@@ -4,7 +4,8 @@ A = a test failed before and passes now, the full suite shows no regressions, no
     changed and no risky pattern needed approval.
 B = relevant tests pass with no regressions, but no fail-before-pass-after test or no full run.
 C = static checks pass but no relevant test ran, or the change alters no code outside tests
-    (only comments or formatting), so passing tests say nothing about it.
+    (only comments or formatting), or (qed check) it weakens a test, so passing tests say
+    nothing about it.
 D = no check could run.
 None = rejected.
 """
@@ -12,7 +13,7 @@ None = rejected.
 from __future__ import annotations
 
 from qedcode.models.schemas import Baseline, Candidate, Grade, Stage
-from qedcode.verify.guard import protected_from_checks
+from qedcode.verify.guard import protected_from_checks, weakened_from_checks
 
 
 def passed(c: Candidate, stage: Stage) -> bool:
@@ -30,6 +31,11 @@ def c_has_protected_changes(c: Candidate) -> bool:
     return bool(protected_from_checks(c.checks))
 
 
+def c_has_weakened_tests(c: Candidate) -> bool:
+    """Did `qed check` find a weakened test (added skip, removed asserts, always-true assert)?"""
+    return bool(weakened_from_checks(c.checks))
+
+
 def grade(c: Candidate, base: Baseline) -> Grade | None:
     """The evidence grade of a candidate; None means it was rejected."""
     if c.failed_stage is not None:
@@ -42,6 +48,8 @@ def grade(c: Candidate, base: Baseline) -> Grade | None:
         return Grade.C  # checked, not tested
     if not c.code_changed:
         return Grade.C  # tests pass, but they would pass without the change too
+    if c_has_weakened_tests(c):
+        return Grade.C  # the tests were weakened, so their passing proves nothing
     g = Grade.A if passed(c, "fbpa") and c.full_suite_ran else Grade.B
     if g is Grade.A and (needed_risk_approval(c) or c_has_protected_changes(c)):
         g = Grade.B  # proof is weaker: cap at B

@@ -464,6 +464,8 @@ Every candidate runs the same stages in this order, cheapest first; the first fa
 
 **Protected paths (default, configurable per project):** `tests/**`, `test/**`, `**/test_*.py`, `**/*_test.py`, `**/conftest.py`, `pytest.ini`, `tox.ini`, `setup.cfg`, `pyproject.toml`, `noxfile.py`, `.github/**`. Config files are protected because they can switch tests off. The guard also rejects added `pytest.skip`, `pytest.mark.skip`, `xfail` and removed `assert` lines in any test file, so weakening a test is caught even when edits are allowed.
 
+**`qed check` (role `user`)** reports instead of rejecting, because the changes are the user's own. Two rules differ there. (1) A Python test file that only *gains* tests (compared by syntax tree: every old top-level statement unchanged and in order; new statements are only `test*` functions, `Test*` classes or imports that bind new names; no decorator but `pytest.mark.parametrize`) is evidence, not a protected change: its new tests run in `fbpa` (only they count as proof) and the receipt lists the file in `tests_added`, so `qed verify` re-runs them on the base. See `verify/test_additions.py`. (2) A weakened test (added skip/xfail, removed asserts, or an assert that can never fail such as `assert True or ...`) is recorded with a `Tests weakened:` marker in the scope details, and the grade function caps the result at C.
+
 **Risky patterns in added lines:** `os.system(`, `subprocess`, `shutil.rmtree(`, `os.remove(`, `os.unlink(`, `os.rmdir(`, `socket`, `requests.`, `urllib`, `httpx.`, `eval(`, `exec(`, `__import__(`, `open(` with an absolute path, `Path.home(`. In `check` mode these are warnings only, because the code is the user's own.
 
 **Targeted test selection, in order:**
@@ -493,13 +495,17 @@ def grade(c: Candidate, base: Baseline) -> Grade | None:
         return Grade.D                               # nothing could be checked
     if not tests_ran:
         return Grade.C                               # checked, not tested
+    if not c.code_changed:
+        return Grade.C                               # only comments/formatting changed outside tests
+    if c_has_weakened_tests(c):
+        return Grade.C                               # qed check: the tests were weakened
     g = Grade.A if passed(c, "fbpa") and c.full_suite_ran else Grade.B
     if g is Grade.A and (needed_risk_approval(c) or c_has_protected_changes(c)):
         g = Grade.B                                  # proof is weaker: cap at B
     return g
 ```
 
-In words: **A** = a test failed before and passes now, the full suite shows no regressions, nothing protected changed. **B** = relevant tests pass with no regressions, but no fail-before-pass-after test or no full-suite run. **C** = static checks pass but no relevant test ran. **D** = no check could run (for example only non-Python files changed and no tests exist).
+In words: **A** = a test failed before and passes now, the full suite shows no regressions, nothing protected changed. **B** = relevant tests pass with no regressions, but no fail-before-pass-after test or no full-suite run. **C** = static checks pass but no relevant test ran, or the change alters no code outside tests (only comments or formatting), or (`qed check`) a test was weakened, so passing tests are no evidence. **D** = no check could run (for example only non-Python files changed and no tests exist).
 
 **Receipts.** Write `.qed/receipts/<task id>.json` from the `Receipt` model (section 5). `commands` stores every command needed to re-check, with `{python}` as a placeholder for the interpreter and paths relative to the worktree root. `unverified` lists every gap in plain English, for example:
 
@@ -508,7 +514,7 @@ In words: **A** = a test failed before and passes now, the full suite shows no r
 - "Tests ran on this computer without network blocking (v1 limitation)."
 - "You approved a risky pattern: subprocess in app/run.py."
 
-The one-line summary shown in UIs follows this shape: `Grade A · repro test failed before, passes now · 48/48 tests pass · lint clean · no protected files changed`.
+The one-line summary shown in UIs follows this shape: `Grade A · repro test failed before, passes now · 48/48 tests pass · lint clean · no protected files changed`. When the tests could not run at all it says `tests could not run: <reason>` instead of a count, and a weakened test adds `tests weakened in <files>`.
 
 ## 9. Prompt templates
 

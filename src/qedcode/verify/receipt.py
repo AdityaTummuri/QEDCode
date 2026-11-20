@@ -13,9 +13,16 @@ from qedcode import __version__
 from qedcode.config import ProjectConfig
 from qedcode.models.schemas import Baseline, Candidate, CheckResult, Receipt, TaskSpec
 from qedcode.project.paths import is_test_file
-from qedcode.verify.guard import parse_diff, protected_from_checks, risk_findings
+from qedcode.verify.guard import (
+    parse_diff,
+    protected_from_checks,
+    risk_findings,
+    weakened_from_checks,
+)
+from qedcode.verify.test_additions import key_in_file
 
 RECEIPTS_DIR = Path(".qed") / "receipts"
+NOT_RUNNABLE_PREFIX = "pytest could not run before the change"
 NETWORK_NOTE = "Tests ran on this computer without network blocking (v1 limitation)."
 SEALED_NOTE = (
     "Tests ran in a sealed Docker container with the network off; the project's dependencies "
@@ -62,12 +69,20 @@ def summary_line(receipt: Receipt) -> str:
     if receipt.fbpa_tests:
         parts.append("repro test failed before, passes now")
     passed, total = test_counts(receipt.checks)
-    parts.append(f"{passed}/{total} tests pass" if total else "no tests ran")
+    if total:
+        parts.append(f"{passed}/{total} tests pass")
+    else:
+        blocked = next((g for g in receipt.unverified if g.startswith(NOT_RUNNABLE_PREFIX)), "")
+        reason = blocked[len(NOT_RUNNABLE_PREFIX) :].strip(" .()")
+        parts.append(f"tests could not run: {reason}" if reason else "no tests ran")
     lint_ok = any(c.stage == "lint" and c.passed for c in receipt.checks)
     parts.append("lint clean" if lint_ok else "lint not run")
     parts.append(
         "no protected files changed" if not receipt.protected_changes else "protected files changed"
     )
+    weakened = weakened_from_checks(receipt.checks)
+    if weakened:
+        parts.append(f"tests weakened in {', '.join(weakened)}")
     return " · ".join(parts)
 
 
@@ -82,9 +97,7 @@ def unverified_gaps(
     """Every gap in the proof, in plain English."""
     gaps: list[str] = []
     if not baseline.runnable:
-        gaps.append(
-            f"pytest could not run before the change ({baseline.reason or 'unknown reason'})."
-        )
+        gaps.append(f"{NOT_RUNNABLE_PREFIX} ({baseline.reason or 'unknown reason'}).")
     if not cand.full_suite_ran:
         why = " (fast speed)" if task.speed.value == "fast" else ""
         gaps.append(f"Full suite not run{why}.")
@@ -114,6 +127,12 @@ def unverified_gaps(
     protected = protected_from_checks(cand.checks)
     if protected:
         gaps.append(f"Protected files were changed: {', '.join(protected)}.")
+    weakened = weakened_from_checks(cand.checks)
+    if weakened:
+        gaps.append(
+            f"Tests were weakened in {', '.join(weakened)} (a skip, removed asserts or an assert "
+            "that can never fail), so passing tests are no evidence."
+        )
     if model_info.get("helper_used"):
         gaps.append(
             f"Parts of your code were sent to the helper model ({model_info.get('helper', '')})."
@@ -124,6 +143,18 @@ def unverified_gaps(
         )
     gaps.append(SEALED_NOTE if sandboxed else NETWORK_NOTE)
     return gaps
+
+
+def _tests_added(diff: str, fbpa_tests: list[str]) -> list[str]:
+    """Test files `qed verify` adds to the base: new test files, and existing test files that
+    gained a fail-before-pass-after test (tests appended in `qed check`)."""
+    added = set()
+    for f in parse_diff(diff):
+        if not is_test_file(f.path) or f.status == "deleted":
+            continue
+        if f.status == "added" or any(key_in_file(k, f.path) for k in fbpa_tests):
+            added.add(f.path)
+    return sorted(added)
 
 
 def build_receipt(
@@ -155,9 +186,7 @@ def build_receipt(
         base_ref=base_ref,
         patch=cand.diff,
         patch_sha256=hashlib.sha256(cand.diff.encode("utf-8", "surrogateescape")).hexdigest(),
-        tests_added=sorted(
-            f.path for f in parse_diff(cand.diff) if f.status == "added" and is_test_file(f.path)
-        ),
+        tests_added=_tests_added(cand.diff, fbpa_tests),
         fbpa_tests=fbpa_tests,
         known_failures=sorted(k for k, v in baseline.results.items() if v in ("failed", "error")),
         checks=cand.checks,

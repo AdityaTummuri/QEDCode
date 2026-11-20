@@ -358,3 +358,18 @@ async def test_qed_mcp_speaks_mcp_over_stdio_and_prints_nothing_else(tmp_path: P
         assert {t.name for t in listing.tools} == {"solve", "check", "verify", "status"}
         out = structured(await client.call_tool("status", {"job_id": "nope"}))
         assert out["status"] == "error" and "no job called" in out["message"]
+
+
+async def test_check_returns_the_notes(tmp_path: Path) -> None:
+    """Notes say which Python was used and why tests could not run; agents need them too."""
+    repo = zoo_git_repo(tmp_path)
+    patch = (BUGZOO_DIR / ZOO / "solution.patch").read_bytes()
+    subprocess.run(["git", "apply", "-"], cwd=repo, input=patch, check=True)
+    out = await service_for(FakeModel({})).check(project_dir=str(repo))
+    assert isinstance(out["notes"], list)
+
+
+def test_the_instructions_name_both_languages() -> None:
+    from qedcode.mcp_server import INSTRUCTIONS
+
+    assert "Python or JavaScript/TypeScript" in INSTRUCTIONS and "notes" in INSTRUCTIONS

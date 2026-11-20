@@ -39,11 +39,12 @@ POLL_SECONDS = 0.25
 PROGRESS_LINES_SHOWN = 12
 KEEP_FINISHED_JOBS = 50  # finished jobs kept for `status`; older ones are forgotten
 INSTRUCTIONS = (
-    "QEDCode fixes bugs and builds small features in the current Python project with several "
-    "tries, tests on every try, and one proven result with a grade (A proven, B tested, C checked, "
-    "D unchecked) and a proof receipt. Solves take minutes: if `solve` returns status 'running', "
-    "poll `status` with its job_id. Use `check` to grade changes you wrote yourself, and "
-    "`verify` to re-run a receipt."
+    "QEDCode fixes bugs and builds small features in a Python or JavaScript/TypeScript project "
+    "with several tries, tests on every try, and one proven result with a grade (A proven, "
+    "B tested, C checked, D unchecked) and a proof receipt. Solves take minutes: if `solve` "
+    "returns status 'running', poll `status` with its job_id. Use `check` to grade changes you "
+    "wrote yourself (no model needed), and `verify` to re-run a receipt. Pass `project_dir` (the "
+    "project's absolute path) and read `notes`: they say when the tests could not run."
 )
 
 
@@ -282,6 +283,7 @@ class QedMcpService:
                 "failing_tests": outcome.failing_tests,
                 "receipt_path": outcome.receipt_path,
                 "message": outcome.message,
+                "notes": outcome.notes,
             }
 
         try:
@@ -341,7 +343,7 @@ def build_server(service: QedMcpService | None = None) -> MCPServer:
         wait_seconds: int = DEFAULT_WAIT_SECONDS,
         project_dir: str = "",
     ) -> dict:
-        """Fix a bug or build a small feature in a Python project, with tests on every try.
+        """Fix a bug or build a small feature in a Python or JS/TS project, tested on every try.
 
         Returns the best proven change with a grade (A proven, B tested, C checked, D unchecked),
         a plain-English explanation, the diff and a proof receipt path. Nothing in the user's
@@ -357,7 +359,8 @@ def build_server(service: QedMcpService | None = None) -> MCPServer:
         """Grade the uncommitted changes in the project (for example code you just wrote).
 
         Runs the project's tests and checks, with no model involved, and returns a grade, a
-        one-line summary, any failing tests and a proof receipt path.
+        one-line summary, any failing tests, notes (for example when the tests could not run)
+        and a proof receipt path.
         """
         return await service.check(speed, base, project_dir, ctx)
 

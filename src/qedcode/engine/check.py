@@ -162,6 +162,10 @@ def _check_locked(
     )
     if not base_run.baseline.runnable:
         cb.on_event(Event(kind="warning", message=base_run.baseline.reason))
+        notes.append(
+            f"Your tests could not run, so the grade is at most C: {base_run.baseline.reason} "
+            "Run `qed doctor` to see how to fix it."
+        )
     ctx = CascadeContext(
         root=root,
         base_commit=base_sha,

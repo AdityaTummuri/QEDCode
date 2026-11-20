@@ -346,3 +346,77 @@ def test_a_base_that_looks_like_an_option_is_refused(tmp_path: Path) -> None:
     project = zoo_repo(tmp_path)
     outcome = api.check(project, base="--output=/tmp/x")
     assert outcome.status == "error" and "is not a commit" in outcome.message
+
+
+# ------------------------------------------------------------------ tests in existing files
+
+
+HIDDEN_AS_APPENDED = """
+
+def test_full_pages_have_the_page_size():
+    items = [1, 2, 3, 4, 5]
+    assert paginate(items, 1, 2) == [1, 2]
+    assert paginate(items, 2, 2) == [3, 4]
+"""
+
+
+def test_a_regression_test_appended_to_an_existing_test_file_can_reach_grade_a(
+    tmp_path: Path,
+) -> None:
+    project = zoo_repo(tmp_path)
+    apply_solution(project)
+    tests = project / "tests" / "test_pages.py"
+    tests.write_text(tests.read_text() + HIDDEN_AS_APPENDED)
+    outcome = api.check(project)
+    assert outcome.grade is Grade.A, outcome.message
+    assert outcome.summary.endswith("no protected files changed")
+    fbpa = next(c for c in outcome.candidate.checks if c.stage == "fbpa")
+    assert [t.key.rpartition("::")[2] for t in fbpa.tests] == [
+        "test_full_pages_have_the_page_size"
+    ]  # only the added test is proof, not the old ones in the same file
+    assert verify_receipt(Path(outcome.receipt_path), project).verified
+
+
+def test_an_appended_test_without_the_fix_is_still_rejected(tmp_path: Path) -> None:
+    project = zoo_repo(tmp_path)
+    tests = project / "tests" / "test_pages.py"
+    tests.write_text(tests.read_text() + HIDDEN_AS_APPENDED)
+    outcome = api.check(project)
+    assert outcome.status == "rejected" and "fbpa" in outcome.message
+
+
+def test_weakening_an_existing_test_is_grade_c_and_says_so(tmp_path: Path) -> None:
+    project = zoo_repo(tmp_path)
+    tests = project / "tests" / "test_pages.py"
+    tests.write_text(
+        tests.read_text().replace("    assert paginate", "    assert True or paginate")
+    )
+    outcome = api.check(project)
+    assert outcome.status == "graded" and outcome.grade is Grade.C, outcome.message
+    assert "protected files changed" in outcome.summary
+    assert "tests weakened in tests/test_pages.py" in outcome.summary
+
+
+def test_editing_an_existing_assert_is_still_capped_at_b(tmp_path: Path) -> None:
+    project = zoo_repo(tmp_path)
+    apply_solution(project)
+    tests = project / "tests" / "test_pages.py"
+    tests.write_text(tests.read_text().replace("page_count(4, 2) == 2", "page_count(4, 2) == 2.0"))
+    outcome = api.check(project)
+    assert outcome.grade is Grade.B and "protected files changed" in outcome.summary
+    assert "tests weakened" not in outcome.summary
+
+
+def test_when_the_tests_cannot_run_the_summary_and_notes_say_why(tmp_path: Path) -> None:
+    import venv
+
+    bare = tmp_path / "bare-env"
+    venv.create(bare, with_pip=False)  # a Python without pytest
+    python = bare / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    project = zoo_repo(tmp_path)
+    save_project(project, ProjectConfig(python=str(python), confirmed=True))
+    apply_solution(project)
+    outcome = api.check(project)
+    assert outcome.grade is Grade.C, outcome.message
+    assert "tests could not run" in outcome.summary and "no tests ran" not in outcome.summary
+    assert any("could not run" in note and "qed doctor" in note for note in outcome.notes)

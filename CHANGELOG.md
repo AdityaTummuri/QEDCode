@@ -37,6 +37,19 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
 - `qed check --base` (and the MCP `check` tool) refuses a base that looks like an option.
 
 ### Fixed
+- `qed check` no longer treats a regression test appended to an existing Python test file as
+  tampering. When the file only gains tests (compared by syntax tree), the new tests run as the
+  fail-before/pass-after proof, so the change can reach grade A; the receipt lists the file so
+  `qed verify` re-runs them. Only the added tests count as proof.
+- `qed check` caps a change that weakens a test at grade C (it was B): an added skip or xfail,
+  removed asserts, or a new assert that can never fail (`assert True or ...`, `assert 1`,
+  `expect(true).toBe(true)`). The summary adds `tests weakened in <files>` and the receipt
+  explains the gap.
+- When the tests cannot run at all (for example pytest is missing from the chosen Python), the
+  summary says `tests could not run: <reason>` instead of `no tests ran`, and `qed check` adds a
+  note pointing to `qed doctor`.
+- MCP: `check` now returns `notes` (which Python was used, why tests could not run), and the
+  server instructions and `solve` description no longer say the engine works only with Python.
 - The project lock is no longer taken over while its owner is still writing it (two jobs could
   start at once), and a lock whose process id was reused by a newer process no longer keeps a
   project busy for ever.

@@ -166,7 +166,7 @@ flowchart TD
 | --- | --- | --- |
 | **A** Proven | A test failed before, passes now, the full suite shows no regressions, nothing protected changed | Safe to apply |
 | **B** Tested | The tests pass, but nothing proved the exact problem | Apply, then take a quick look |
-| **C** Checked | The code parses (and lints for Python), but no test covers the change | Read the change before applying |
+| **C** Checked | The code parses (and lints for Python), but no test covers the change, or (`qed check`) a test was weakened | Read the change before applying |
 | **D** Not checked | No check could run, and it says why | Treat it as a suggestion |
 
 ## How it compares
@@ -462,7 +462,7 @@ Then ask your agent, for example: *"Use the qedcode tool to fix the bug describe
 | Tool | Arguments | Returns |
 | --- | --- | --- |
 | `solve` | `task`, `speed="normal"`, `apply=false`, `wait_seconds=600`, `project_dir` | `status` (done, running, no_fix, needs_input, busy), `job_id`, `grade`, `summary`, `explanation`, `diff`, `receipt_path`, `question` |
-| `check` | `speed="normal"`, `base="HEAD"`, `project_dir` | `grade`, `summary`, `failing_tests`, `receipt_path` |
+| `check` | `speed="normal"`, `base="HEAD"`, `project_dir` | `grade`, `summary`, `failing_tests`, `receipt_path`, `notes` |
 | `verify` | `receipt_path` | `verified`, `mismatches` |
 | `status` | `job_id` | progress lines so far, or the final result |
 
@@ -488,6 +488,11 @@ helper model unless your config pre-approves it (`[helper] ask_before_use = fals
 - Existing tests and test configuration are protected: a candidate that edits, deletes, skips or
   weakens them is rejected. A candidate that adds risky code (`subprocess`, network, `eval`, ...)
   needs your approval and can then reach grade B at most.
+- `qed check` grades your own changes, so it reports instead of rejecting. Editing an existing
+  test caps the grade at B; weakening one (adding a skip, removing asserts, or an assert that can
+  never fail such as `assert True or ...`) caps it at C and the summary says `tests weakened`.
+  Adding new test functions to an existing Python test file is not a protected change: those
+  tests can prove the fix and reach grade A.
 - Every download is announced with its size and asked first; API keys live only in the system
   keychain or environment variables; project commands run with secret-looking variables removed.
 - By default tests run on your computer, without network blocking or a container, and every
@@ -508,7 +513,7 @@ helper model unless your config pre-approves it (`[helper] ask_before_use = fals
 | --- | --- |
 | `qed: command not found` | Open a new terminal; run `uv tool update-shell` and open another |
 | Anything else odd | `qed doctor` checks everything and prints a fix for each problem |
-| "pytest is not installed" | `qed` offers to install it into your project's Python (it asks first) |
+| "pytest is not installed", or a summary that says `tests could not run` | `qed` offers to install pytest into your project's Python (it asks first). For agents and the MCP server, keep the project's environment in `.venv/` or `venv/` inside the project: they do not inherit your shell's virtualenv |
 | Node tests report the runner is missing | Run `npm install` (or `pnpm`/`yarn install`) in the project yourself: QEDCode never installs Node packages |
 | The model is slow | Use `qed solve --speed fast`, a smaller model (`qed models use <id>`), or check `qed doctor` for CPU-only mode |
 | Out of VRAM | `qed models recommend` picks a smaller model or context; lower `ctx` under `[local]` in the config. A running model server restarts by itself when `ctx` or `kv_cache` changes |
