@@ -351,8 +351,11 @@ class Roles:
         temperature: float,
         *,
         label: str = "",
+        examples: str = "",
     ) -> CoderResult:
-        """Ask for the smallest change that completes the task (EDIT blocks)."""
+        """Ask for the smallest change that completes the task (EDIT blocks).
+
+        `examples` is the text of similar earlier fixes in this project (local model only)."""
         max_tokens = (
             CODER_MAX_TOKENS_SURE if spec.speed is Speed.SURE else ROLE_SETTINGS["coder"][1]
         )
@@ -365,6 +368,7 @@ class Roles:
             request=spec.request,
             acceptance=_bullets(spec.acceptance),
             repro_block=repro_block,
+            examples_block=f"\n{examples.rstrip()}\n" if examples else "",
             files_block=FILES_SLOT,
             protocol_cheatsheet=cheatsheet,
         )

@@ -44,6 +44,7 @@ from qedcode.project.context import (
     repro_test_path,
 )
 from qedcode.project.detect import find_test_files
+from qedcode.project.memory import Memory, example_budget, render_examples
 from qedcode.runtime.client import ModelClient, ModelError
 from qedcode.vcs import worktree
 from qedcode.vcs.git import GitError, git
@@ -80,6 +81,8 @@ class _Run:
     allow_test_edits: bool
     settings: SpeedSettings
     resume: SolveResult | None
+    learn: bool = False
+    examples: str = ""
     spec: TaskSpec = field(init=False)
     notes: list[str] = field(default_factory=list)
     pool: list[Candidate] = field(default_factory=list)
@@ -185,6 +188,19 @@ class _Run:
         )
         for note in self.ctx.notes:
             self.emit("log", note)
+        self.load_examples()
+
+    def load_examples(self) -> None:
+        """Similar earlier fixes of this project, for the local model only (AGENTS.md 15.1)."""
+        if not self.learn or self.mode is Mode.CLOUD:
+            return
+        budget = example_budget(self.client.context_tokens)
+        if budget <= 0:
+            return
+        lessons = Memory(self.root).similar(self.request)
+        self.examples = render_examples(lessons, budget)
+        if self.examples:
+            self.emit("log", f"Using {len(lessons)} earlier fix(es) from this project as examples.")
 
     def run_baseline(self) -> None:
         self.check_cancel()
@@ -283,7 +299,12 @@ class _Run:
                 break
             self.emit("stage", f"Try {number}: asking the model (temperature {temperature})...")
             reply = self.roles.coder(
-                self.spec, self.ctx.files, repro_text, temperature, label=f"c{number}"
+                self.spec,
+                self.ctx.files,
+                repro_text,
+                temperature,
+                label=f"c{number}",
+                examples=self.examples,
             )
             cand = Candidate(
                 id=f"c{number}",
@@ -519,6 +540,7 @@ def solve(
     allow_test_edits: bool = False,
     settings: SpeedSettings | None = None,
     resume: SolveResult | None = None,
+    learn: bool = False,
 ) -> SolveResult:
     """Run one task end to end and return a graded, explained result (or the reason there is none).
 
@@ -542,6 +564,7 @@ def solve(
         allow_test_edits=allow_test_edits,
         settings=settings or settings_for(speed),
         resume=resume,
+        learn=learn,
     )
     run.spec = task
     try:

@@ -27,6 +27,12 @@ QED is the Latin *quod erat demonstrandum*, "which was to be demonstrated": ever
 | **C** Checked | The code parses and lints, but no test covers the change | Read the change before applying |
 | **D** Not checked | No check could run, and it says why | Treat it as a suggestion |
 
+**It learns your project.** When you apply a fix with grade A or B, QEDCode remembers it in
+`.qed/memory.db` (on your computer only). The next similar task shows the local model up to two of
+those fixes as examples. Turn it off with `learn = false` under `[engine]` in the config, look at
+what is remembered with `qed memory`, and forget with `qed memory forget <#>` or `qed memory clear`.
+Cloud and helper models never get these examples.
+
 Speed dial: **fast** (1 try, quick checks, grade B at best), **normal** (up to 3 tries, writes a test
 first for bugs and features, runs all tests) and **sure** (up to 6 tries, always writes a test first,
 aims for grade A). It stops as soon as a try reaches the target, so easy tasks stay quick.
@@ -58,6 +64,7 @@ qed check [--speed ...] [--base <ref>] [--json]    grade the changes you made yo
 qed verify <receipt.json>             re-run a proof receipt: VERIFIED or what no longer matches
 qed apply [task id] / qed undo        apply a finished result / take the last apply back out
 qed models [list|recommend|download <id>|use <id>|remove <id>]
+qed memory [list|forget <#>|clear]    the fixes QEDCode remembers and shows the model as examples
 qed doctor [--update-engine]          check git, Python, pytest, ruff, GPU, engine, model, disk
                                       and say how to fix each problem
 qed uninstall [--all] [--yes]         remove .qed/ here (--all: also ~/.qedcode and saved keys)

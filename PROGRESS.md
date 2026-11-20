@@ -1,7 +1,7 @@
 # QEDCode progress
 
 ## Current step
-Post-v1 step 1: Learns your project (AGENTS.md section first)
+Post-v1 step 2: Sealed test box (AGENTS.md 15.2 first)
 
 ## Done
 - Setup, 2026-11-20: AGENTS.md (from the AI Build Brief), CLAUDE.md, PROGRESS.md, .gitignore, docs/ committed.
@@ -37,6 +37,7 @@ Post-v1 step 1: Learns your project (AGENTS.md section first)
 - M8.1, 2026-11-20: full 'qed doctor' (git, project, project Python, pytest in it, ruff, hardware, engine build, model file/Ollama/LM Studio/cloud key, model server health, free disk space, leftover worktrees, logs) with a plain-English fix for every warning/failure, exit 1 on problems, '--update-engine' (asks first); every raised user-facing error now says what happened, why and what to do next, enforced by tests/unit/test_error_messages.py; logging set up at CLI start (rotating qedcode.log 5 MB x 3, llama-server.log rotated at spawn), old .qed/runs pruned to the newest 20.
 - M8.2, 2026-11-20: 'qed uninstall [--all] [--yes]' (engine/uninstall.py): lists what it will remove with sizes and asks once; project mode removes .qed/, QEDCode's git refs and worktrees and the .qed/ line it added to .git/info/exclude (your files and .gitignore untouched); --all also removes ~/.qedcode and the API keys it saved in the keychain; any QEDCode-owned model server is stopped first.
 - M8.4, 2026-11-20: release prep. Version 0.1.0 (pyproject, __version__, CHANGELOG.md), package metadata, README install via uv tool / pipx, demo placeholder, qed doctor/uninstall documented, .github/workflows/release.yml (PyPI trusted publishing on v* tags, checks tag = version and runs tests first; no tag pushed), tests/unit/test_packaging.py. The built wheel was installed in a clean venv and ran. M8.3 (real hardware pass) is human only, listed below. v1 is complete: full gate 883 passed, 1 skipped.
+- Post-v1 #1 Learns your project (v1.1), 2026-11-20: AGENTS.md 15.1; project/memory.py (SQLite FTS5 in .qed/memory.db, bm25 over request+files+diff, newest 200 kept, damaged database ignored); apply_result remembers A/B fixes (only after apply; learn flag follows the config given to solve); the coder prompt gets up to 2 similar earlier fixes (15% of context, max 1200 tokens, none under 6000 ctx, never for cloud mode or the helper); 'qed memory [list|forget|clear]'; [engine] learn. 19 new tests.
 
 ## Known issues
 - LICENSE in the repo is GPL-3.0 (created with the repo); the plan's step 8.4 suggests MIT or Apache-2.0. Left as GPL-3.0 for the human to decide.

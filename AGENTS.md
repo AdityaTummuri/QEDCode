@@ -884,6 +884,7 @@ mode = "local"             # local | mix | cloud
 speed = "normal"           # fast | normal | sure
 keep_alive_minutes = 10
 unload_on_exit = true
+learn = true             # remember applied A/B fixes, show similar ones to the local model
 
 [local]
 backend = "llamacpp"       # llamacpp | ollama | openai_compat
@@ -1041,3 +1042,36 @@ QEDCode runs code that a model wrote on the user's computer, so safety is part o
 - No new dependency outside the allowed stack.
 - `PROGRESS.md` updated: what was done, what is next, known issues.
 - The change is one focused commit with a message like `M3.4 ast applier: replace_symbol and insert_after_symbol`.
+
+## 15. After v1: future features
+
+Each feature below is built in the order of the build plan's "After v1" table. A feature gets its section here before any code. Every feature keeps the rules of section 2: engine purity, no model-run commands, `FakeModel` tests, ask before every download.
+
+### 15.1 Learns your project (v1.1)
+
+**What it does.** When the user applies a proven fix (grade A or B), QEDCode remembers it. On the next task in the same project it finds the most similar earlier fixes and shows them to the local model as examples ("this is how this project solved a similar thing"). Everything stays on the user's computer.
+
+**Where it lives.** `.qed/memory.db`, a SQLite file with an FTS5 table. `.qed/` is already excluded from git and removed by `qed uninstall`.
+
+**Modules touched.**
+
+| Module | Change |
+| --- | --- |
+| `project/memory.py` (new) | `Memory` class: `record(receipt)`, `similar(request, limit)`, `list()`, `forget(id)`, `clear()`; `render_examples(lessons, max_tokens)` |
+| `engine/api.py` | `apply_result` records the lesson after a successful apply; `memory_list`, `memory_forget`, `memory_clear` |
+| `engine/solve.py` | fetches examples once per run (local model only) and passes them to the coder |
+| `engine/roles.py`, `engine/prompts/coder.txt` | the coder prompt gets an `{examples_block}` slot, empty when there are no examples |
+| `config.py` | `[engine] learn = true` switches the feature off |
+| `cli.py` | `qed memory [list\|forget <id>\|clear]` |
+
+**Rules.**
+
+- A lesson is saved only from `apply_result`, after the user's files were changed and only for grade A or B. Candidates the user never applied are never remembered.
+- A lesson stores: task id, request, kind, grade, changed file paths, the diff (cut at 4000 characters) and the time. No file contents, no model replies, no keys.
+- `similar()` ranks with FTS5 `bm25` over request, file paths and diff; the query is built from the request's keywords (letters and digits only, so FTS syntax cannot be injected). Lessons whose changed files no longer exist in the project are skipped. At most 2 lessons are used.
+- The examples block is cut to at most 15% of the model's context and at most 1200 tokens; with a context under 6000 tokens no examples are used. It is labelled as data: "Earlier fixes in this project, for style only".
+- Examples go only to the local model. They are never sent to the helper or a cloud model (cloud mode and the helper get none).
+- The newest 200 lessons are kept; older ones are deleted.
+- A broken or unreadable `memory.db` is never fatal: it is ignored, a warning is logged, and `qed memory clear` recreates it.
+
+**v1.1 limits.** Keyword matching only (no embeddings); one memory per project; lessons are not shared between projects or people.

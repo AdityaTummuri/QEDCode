@@ -2,6 +2,13 @@
 
 All notable changes to QEDCode. The format follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+- **Learns your project** (v1.1): applied A/B fixes are remembered in `.qed/memory.db` (SQLite FTS5)
+  and similar ones are shown to the local model as examples. `qed memory [list|forget|clear]`,
+  `[engine] learn`.
+
 ## [0.1.0] - 2026-11-20
 
 First release: Python projects tested with pytest.

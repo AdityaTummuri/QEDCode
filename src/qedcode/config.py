@@ -52,6 +52,7 @@ class EngineConfig(_Section):
     speed: Speed = Speed.NORMAL
     keep_alive_minutes: int = 10
     unload_on_exit: bool = True
+    learn: bool = True  # remember applied A/B fixes and show similar ones to the local model
 
 
 class LocalConfig(_Section):

@@ -14,7 +14,7 @@ PYPROJECT = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
 def test_the_version_is_the_same_everywhere() -> None:
     assert PYPROJECT["project"]["version"] == __version__ == "0.1.0"
     changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    assert f"## [{__version__}]" in changelog
+    assert f"## [{__version__}]" in changelog and "## [Unreleased]" in changelog
 
 
 def test_the_console_script_and_license_are_declared() -> None:
@@ -64,6 +64,7 @@ def test_readme_documents_install_and_every_command() -> None:
         "qed verify",
         "qed apply",
         "qed undo",
+        "qed memory",
         "qed doctor",
         "qed uninstall",
         "qed mcp",

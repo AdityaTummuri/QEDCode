@@ -19,6 +19,7 @@ from qedcode.engine.lock import lock_holder
 from qedcode.engine.solve import read_last_result
 from qedcode.engine.solve import solve as _solve
 from qedcode.models.schemas import Callbacks, Grade, Mode, SolveResult, Speed, TaskSpec
+from qedcode.project.memory import Lesson, Memory
 from qedcode.runtime.client import ModelClient, ModelError, make_client
 from qedcode.vcs.git import GitError, has_commits, is_git_repo, repo_root
 from qedcode.vcs.patch import PatchRefused, apply_to_user, undo_last
@@ -130,10 +131,11 @@ def solve(
         allow_risky=allow_risky,
         allow_test_edits=allow_test_edits,
         resume=resume,
+        learn=cfg.engine.learn,
     )
     if apply and result.status == "done" and result.best is not None:
         if result.best.grade in (Grade.A, Grade.B):
-            outcome = apply_result(folder, result.task.id)
+            outcome = apply_result(folder, result.task.id, learn=cfg.engine.learn)
             result.message = f"{result.message}. {outcome.message}".strip()
         else:
             grade = result.best.grade.value if result.best.grade else "?"
@@ -145,9 +147,15 @@ def solve(
 
 
 def apply_result(
-    root: Path | str | None = None, task_id: str | None = None, *, allow_low_grade: bool = False
+    root: Path | str | None = None,
+    task_id: str | None = None,
+    *,
+    allow_low_grade: bool = False,
+    learn: bool | None = None,
 ) -> ApplyOutcome:
-    """Apply a finished result to the user's files (the only way files are ever changed)."""
+    """Apply a finished result to the user's files (the only way files are ever changed).
+
+    `learn` says whether to remember an A/B fix for next time (default: the saved setting)."""
     folder = resolve_root(root)
     last = read_last_result(folder) or {}
     wanted = task_id or str(last.get("task_id", ""))
@@ -181,12 +189,16 @@ def apply_result(
         return ApplyOutcome(status="refused", task_id=wanted, files=exc.files, message=str(exc))
     except GitError as exc:
         return ApplyOutcome(status="error", task_id=wanted, message=str(exc))
+    remembered = False
+    if load_global().engine.learn if learn is None else learn:
+        remembered = Memory(folder).record(receipt)
+    note = " QEDCode will remember this fix." if remembered else ""
     return ApplyOutcome(
         status="applied",
         task_id=wanted,
         grade=receipt.grade,
         files=done.files,
-        message=f"Applied to {', '.join(done.files)}. Undo any time with `qed undo`.",
+        message=f"Applied to {', '.join(done.files)}. Undo any time with `qed undo`.{note}",
     )
 
 
@@ -213,3 +225,18 @@ def status(root: Path | str | None = None) -> dict:
         "job": holder,
         "last": read_last_result(folder),
     }
+
+
+def memory_list(root: Path | str | None = None) -> list[Lesson]:
+    """The fixes QEDCode remembers for this project (newest first)."""
+    return Memory(resolve_root(root)).lessons()
+
+
+def memory_forget(lesson_id: int, root: Path | str | None = None) -> bool:
+    """Forget one remembered fix. False when there is no such number."""
+    return Memory(resolve_root(root)).forget(lesson_id)
+
+
+def memory_clear(root: Path | str | None = None) -> int:
+    """Forget everything for this project; returns how many fixes were forgotten."""
+    return Memory(resolve_root(root)).clear()

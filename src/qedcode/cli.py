@@ -313,6 +313,71 @@ def mcp_command() -> None:
     run_stdio()
 
 
+memory_app = typer.Typer(
+    help="What QEDCode remembers about this project (fixes you applied).",
+    invoke_without_command=True,
+    no_args_is_help=False,
+)
+app.add_typer(memory_app, name="memory")
+
+
+@memory_app.callback()
+def memory_default(ctx: typer.Context) -> None:
+    if ctx.invoked_subcommand is None:
+        memory_list_command()
+
+
+@memory_app.command("list")
+def memory_list_command() -> None:
+    """Show the fixes QEDCode remembers and uses as examples."""
+    console = Console()
+    lessons = api.memory_list()
+    if not lessons:
+        console.print(
+            "Nothing is remembered yet. After you apply a fix with grade A or B, QEDCode "
+            "remembers it and shows it to the model as an example next time.",
+            markup=False,
+        )
+        return
+    table = Table(title="Remembered fixes", title_justify="left")
+    for column in ("#", "grade", "task", "files"):
+        table.add_column(column)
+    for lesson in lessons:
+        table.add_row(
+            str(lesson.id), lesson.grade, lesson.request[:60], ", ".join(lesson.files)[:60]
+        )
+    console.print(table)
+    console.print("Forget one with `qed memory forget <#>`, all with `qed memory clear`.")
+
+
+@memory_app.command("forget")
+def memory_forget_command(
+    number: Annotated[int, typer.Argument(help="The # from the list.")],
+) -> None:
+    """Forget one remembered fix."""
+    if not api.memory_forget(number):
+        typer.echo(
+            f"There is no remembered fix number {number}. Run `qed memory` to see them.", err=True
+        )
+        raise typer.Exit(1)
+    Console().print(f"Forgot fix {number}.", markup=False)
+
+
+@memory_app.command("clear")
+def memory_clear_command(
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask first.")] = False,
+) -> None:
+    """Forget everything remembered in this project."""
+    count = len(api.memory_list())
+    if count == 0:
+        Console().print("Nothing is remembered.", markup=False)
+        return
+    if not yes and not typer.confirm(f"Forget all {count} remembered fix(es)?", default=False):
+        raise typer.Exit(1)
+    api.memory_clear()
+    Console().print(f"Forgot {count} fix(es).", markup=False)
+
+
 @app.command("uninstall")
 def uninstall_command(
     everything: Annotated[
