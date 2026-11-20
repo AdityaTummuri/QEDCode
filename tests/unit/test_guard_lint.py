@@ -353,7 +353,7 @@ def test_parse_check(tmp_path: Path) -> None:
     bad = parse_check(tmp_path, ["ok.py", "bad.py"])
     assert not bad.passed and bad.stage == "parse"
     assert "bad.py, line 1" in bad.summary and "bad.py, line 1" in bad.details
-    assert "No Python files changed" in parse_check(tmp_path, ["notes.md"]).summary
+    assert "No source files changed" in parse_check(tmp_path, ["notes.md"]).summary
     assert parse_check(tmp_path, ["deleted.py"]).passed  # a deleted file has nothing to parse
 
 

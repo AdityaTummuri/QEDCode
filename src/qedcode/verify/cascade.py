@@ -28,7 +28,7 @@ from qedcode.models.schemas import (
 )
 from qedcode.project.context import select_targeted
 from qedcode.project.detect import expand_test_command
-from qedcode.project.paths import is_test_file
+from qedcode.project.paths import is_js_path, is_test_file
 from qedcode.vcs import worktree
 from qedcode.vcs.snapshot import keep_candidate
 from qedcode.verify import grade as grading
@@ -331,12 +331,13 @@ def _run_stages(ctx: CascadeContext, cand: Candidate, wt: Path, run_full: bool) 
     files = parse_diff(cand.diff)
     kept = [f for f in files if f.status != "deleted"]
     py_files = [f.path for f in kept if f.path.endswith(".py")]
+    source_files = [f.path for f in kept if f.path.endswith(".py") or is_js_path(f.path)]
     _check_cancel(ctx)
-    if py_files:
-        if not _record(ctx, cand, parse_check(wt, py_files)):
+    if source_files:
+        if not _record(ctx, cand, parse_check(wt, source_files)):
             return
     else:
-        _skip(ctx, cand, "parse", "no Python files changed")
+        _skip(ctx, cand, "parse", "no source files changed")
     _check_cancel(ctx)
     scope = scope_check(
         cand.diff,
@@ -356,9 +357,16 @@ def _run_stages(ctx: CascadeContext, cand: Candidate, wt: Path, run_full: bool) 
         if not _record(ctx, cand, lint_check(wt, ctx.root, ctx.base_commit, py_files)):
             return
     else:
-        _skip(ctx, cand, "lint", "no Python files changed")
+        _skip(
+            ctx,
+            cand,
+            "lint",
+            "no Python files changed"
+            if ctx.project.language == "python"
+            else "no linter runs for JavaScript or TypeScript yet",
+        )
     if not ctx.baseline.runnable:
-        _skip(ctx, cand, "tests", "pytest could not run before the change")
+        _skip(ctx, cand, "tests", "the tests could not run before the change")
         return
     _check_cancel(ctx)
     if not _stage_fbpa(ctx, cand, wt, files):
@@ -367,7 +375,11 @@ def _run_stages(ctx: CascadeContext, cand: Candidate, wt: Path, run_full: bool) 
     added_tests = _added_test_files(ctx, files)
     changed = [f.path for f in kept]
     selection = select_targeted(
-        changed, wt, repro_files=added_tests, baseline_full_seconds=ctx.baseline_full_seconds
+        changed,
+        wt,
+        repro_files=added_tests,
+        baseline_full_seconds=ctx.baseline_full_seconds,
+        language=ctx.project.language,
     )
     if selection == []:
         _skip(ctx, cand, "targeted", "no related tests were found")

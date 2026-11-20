@@ -185,6 +185,7 @@ class _Run:
             max_files=self.settings.max_files,
             context_tokens=self.client.context_tokens,
             on_event=self.cb.on_event,
+            language=self.project.language,  # type: ignore[union-attr]
         )
         for note in self.ctx.notes:
             self.emit("log", note)
@@ -226,7 +227,10 @@ class _Run:
     def make_repro(self) -> None:
         if not (test_writer_on(self.speed, self.spec.kind) and self.base_run.baseline.runnable):
             return
-        path = repro_test_path(self.request, find_test_files(self.root), self.root)
+        language = self.project.language  # type: ignore[union-attr]
+        path = repro_test_path(
+            self.request, find_test_files(self.root, language), self.root, language
+        )
         for attempt in (1, 2):
             self.check_cancel()
             self.emit("stage", "Writing a test that shows the problem...")

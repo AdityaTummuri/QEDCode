@@ -12,6 +12,8 @@ from pathlib import Path
 
 FORBIDDEN_TOP = (".git", ".qed")
 TEST_PATTERNS = ["tests/**", "test/**", "**/test_*.py", "**/*_test.py"]
+JS_SUFFIXES = (".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts")
+JS_TEST_PATTERNS = ["tests/**", "test/**", "**/__tests__/**", "**/*.test.*", "**/*.spec.*"]
 
 
 @lru_cache(maxsize=256)
@@ -52,9 +54,16 @@ def is_protected(path: str, patterns: list[str]) -> bool:
     return matches_any(path, patterns)
 
 
+def is_js_path(path: str) -> bool:
+    """True for a JavaScript or TypeScript source file name."""
+    return path.lower().endswith(JS_SUFFIXES)
+
+
 def is_test_file(path: str) -> bool:
-    """True for a Python test file by the usual names and folders."""
-    return path.endswith(".py") and matches_any(path, TEST_PATTERNS)
+    """True for a Python, JavaScript or TypeScript test file by the usual names and folders."""
+    if path.endswith(".py"):
+        return matches_any(path, TEST_PATTERNS)
+    return is_js_path(path) and matches_any(path, JS_TEST_PATTERNS)
 
 
 def normalize_path(raw: str) -> str:

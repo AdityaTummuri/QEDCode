@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from qedcode.config import ProjectConfig
 from qedcode.engine.budget import max_changed_lines
 from qedcode.models.schemas import CheckResult, Speed
-from qedcode.project.paths import is_protected, is_test_file, validate_path
+from qedcode.project.paths import is_js_path, is_protected, is_test_file, validate_path
 
 SUMMARY_LIMIT = 300
 DETAILS_LIMIT = 4000
@@ -118,6 +118,14 @@ _SKIP = re.compile(
     r"|@unittest\.skip|unittest\.skipIf|unittest\.skipUnless|unittest\.expectedFailure|\bskipTest\("
 )
 _ASSERT = re.compile(r"^\s*assert\b")
+# JavaScript/TypeScript: skipped, todo or "only" tests, and removed assertions
+_JS_SKIP = re.compile(
+    r"\b(?:it|test|describe|suite)\.(?:skip|todo|only)\b|\b(?:xit|xtest|xdescribe|fit|fdescribe)\s*\("
+    r"|\bt\.(?:skip|todo)\(|\bskip\s*:\s*true\b"
+)
+_JS_ASSERT = re.compile(
+    r"^\s*(?:await\s+)?(?:expect\s*\(|assert\s*[.(]|t\.(?:assert|is|deepEqual)|should\.)"
+)
 
 
 def _is_test_path(path: str) -> bool:
@@ -128,11 +136,14 @@ def _weakening(file: FileDiff) -> list[str]:
     problems: list[str] = []
     if not _is_test_path(file.path):
         return problems
+    js = is_js_path(file.path)
+    skip, assertion = (_JS_SKIP, _JS_ASSERT) if js else (_SKIP, _ASSERT)
+    comment = ("//", "/*", "*") if js else ("#",)
     for number, text in file.added:
-        if _SKIP.search(text) and not text.lstrip().startswith("#"):
+        if skip.search(text) and not text.lstrip().startswith(comment):
             problems.append(f"{file.path}:{number} adds a skip or xfail ({text.strip()[:60]})")
-    removed = sum(1 for t in file.removed if _ASSERT.match(t))
-    added = sum(1 for _, t in file.added if _ASSERT.match(t))
+    removed = sum(1 for t in file.removed if assertion.match(t))
+    added = sum(1 for _, t in file.added if assertion.match(t))
     if file.status == "modified" and removed > added:
         problems.append(f"{file.path} removes {removed - added} assert line(s) (tests weakened)")
     return problems
@@ -240,6 +251,25 @@ RISKY_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
 ]
 
 
+JS_RISKY_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    ("child_process", re.compile(r"\bchild_process\b")),
+    ("execSync/spawnSync", re.compile(r"\b(?:execSync|spawnSync|execFileSync|execFile)\(")),
+    ("eval(", re.compile(r"(?<![\w.])eval\(")),
+    ("new Function(", re.compile(r"\bnew\s+Function\(")),
+    (
+        "fs delete",
+        re.compile(r"\bfs(?:\.promises)?\.(?:rm|rmSync|unlink|unlinkSync|rmdir|rmdirSync)\("),
+    ),
+    ("fetch(", re.compile(r"(?<![\w.])fetch\(")),
+    ("XMLHttpRequest", re.compile(r"\bXMLHttpRequest\b")),
+    ("axios", re.compile(r"\baxios\b")),
+    ("WebSocket", re.compile(r"\bWebSocket\b")),
+    ("network module", re.compile(r"[\"'](?:node:)?(?:https?|net|dgram|tls|http2)[\"']")),
+    ("process.exit(", re.compile(r"\bprocess\.(?:exit|kill|chdir)\(")),
+    ("os.homedir(", re.compile(r"\bos\.homedir\(")),
+]
+
+
 @dataclass(frozen=True)
 class RiskFinding:
     pattern: str
@@ -252,15 +282,18 @@ class RiskFinding:
 
 
 def risk_findings(diff: str) -> list[RiskFinding]:
-    """Every risky pattern in the ADDED lines of Python files in `diff`."""
+    """Every risky pattern in the ADDED lines of Python, JavaScript and TypeScript files."""
     found: list[RiskFinding] = []
     for f in parse_diff(diff):
-        if not f.path.endswith(".py"):
+        js = is_js_path(f.path)
+        if not (f.path.endswith(".py") or js):
             continue
+        patterns = JS_RISKY_PATTERNS if js else RISKY_PATTERNS
+        comment = ("//", "/*", "*") if js else ("#",)
         for number, text in f.added:
-            if text.lstrip().startswith("#"):
+            if text.lstrip().startswith(comment):
                 continue
-            for name, pattern in RISKY_PATTERNS:
+            for name, pattern in patterns:
                 if pattern.search(text):
                     found.append(RiskFinding(name, f.path, number, text.strip()))
     return found

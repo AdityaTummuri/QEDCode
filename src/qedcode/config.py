@@ -30,6 +30,24 @@ DEFAULT_PROTECTED = [
     "noxfile.py",
     ".github/**",
 ]
+JS_PROTECTED = [
+    "tests/**",
+    "test/**",
+    "**/__tests__/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "package.json",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "bun.lockb",
+    "tsconfig*.json",
+    "jest.config.*",
+    "vitest.config.*",
+    "vitest.workspace.*",
+    "vite.config.*",
+    ".github/**",
+]
 
 PROJECT_CONFIG_NAME = "project.toml"
 
@@ -85,7 +103,9 @@ class GlobalConfig(_Section):
 
 
 class ProjectConfig(_Section):
-    language: str = "python"
+    language: Literal["python", "javascript"] = "python"  # "javascript" includes TypeScript
+    test_runner: Literal["pytest", "node", "vitest", "jest"] = "pytest"
+    package_manager: str = ""  # npm, pnpm, yarn or bun (JavaScript projects; informational)
     python: str = ""  # the interpreter that runs this project's tests
     test_command: list[str] = Field(default_factory=lambda: ["{python}", "-m", "pytest"])
     test_timeout_seconds: int = 300

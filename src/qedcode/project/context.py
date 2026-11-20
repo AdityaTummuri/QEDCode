@@ -17,13 +17,17 @@ from pathlib import Path
 
 from qedcode.models.schemas import Event, TaskSpec
 from qedcode.project.detect import find_test_files
-from qedcode.project.paths import is_test_file, normalize_path, validate_path
-from qedcode.project.repo_map import MAX_FILE_BYTES, SKIP_DIRS, list_python_files, repo_map
+from qedcode.project.detect_js import resolve_js_import
+from qedcode.project.paths import is_js_path, is_test_file, normalize_path, validate_path
+from qedcode.project.repo_map import MAX_FILE_BYTES, SKIP_DIRS, list_source_files, repo_map
 from qedcode.project.search import extract_keywords, format_hits, search
 from qedcode.project.tokens import CHARS_PER_TOKEN, estimate_tokens, prompt_budget
 
 FULL_SUITE_FAST_SECONDS = 60.0
 _SOURCE_ROOTS = ("src", "lib", "python")
+JS_IMPORT = re.compile(
+    r"""(?:from\s+|import\s*\(\s*|import\s+|require\s*\(\s*)["'](\.{1,2}/[^"']*|\.{1,2})["']"""
+)
 
 
 def module_names(rel_path: str, repo: Path) -> list[str]:
@@ -76,9 +80,42 @@ def imports_module(text: str, dotted_names: list[str]) -> bool:
     return False
 
 
-def related_tests(changed_paths: list[str], repo: Path | str) -> list[str]:
+def related_js_tests(changed_paths: list[str], repo: Path) -> list[str]:
+    """JS/TS test files related to the changed files by name (foo.test.ts) or by relative import."""
+    tests = find_test_files(repo, "javascript")
+    sources = [p for p in changed_paths if is_js_path(p) and not is_test_file(p)]
+    chosen = {p for p in changed_paths if is_test_file(p) and p in tests}
+    if not sources:
+        return sorted(chosen)
+    stems = {Path(p).stem for p in sources if Path(p).stem != "index"}
+    for test in tests:
+        name = Path(test).name
+        base = (
+            name.split(".test.")[0].split(".spec.")[0]
+            if (".test." in name or ".spec." in name)
+            else ""
+        )
+        if base and base in stems:
+            chosen.add(test)
+    for test in tests:
+        if test in chosen:
+            continue
+        try:
+            text = (repo / test).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        if any(resolve_js_import(test, spec, set(sources)) for spec in JS_IMPORT.findall(text)):
+            chosen.add(test)
+    return sorted(chosen)
+
+
+def related_tests(
+    changed_paths: list[str], repo: Path | str, language: str = "python"
+) -> list[str]:
     """Test files (repo-relative, sorted) related to the changed files by name or by import."""
     repo = Path(repo)
+    if language == "javascript":
+        return related_js_tests(changed_paths, repo)
     tests = find_test_files(repo)
     if not tests:
         return []
@@ -112,6 +149,7 @@ def select_targeted(
     *,
     repro_files: list[str] | None = None,
     baseline_full_seconds: float | None = None,
+    language: str = "python",
 ) -> list[str] | None:
     """The tests to run for a candidate: repro first, then related files.
 
@@ -119,7 +157,7 @@ def select_targeted(
     quick (<= 60 s). Returns [] when nothing matched and the suite is slow or unknown.
     """
     repro = list(repro_files or [])
-    related = [t for t in related_tests(changed_paths, repo) if t not in repro]
+    related = [t for t in related_tests(changed_paths, repo, language) if t not in repro]
     selection = [*repro, *related]
     if not related and not repro:
         if baseline_full_seconds is not None and baseline_full_seconds <= FULL_SUITE_FAST_SECONDS:
@@ -229,8 +267,12 @@ def task_keywords(text: str) -> set[str]:
     return {w for w in re.findall(r"[A-Za-z_][A-Za-z0-9_]{2,}", text)}
 
 
-def repro_test_path(request: str, existing_tests: list[str], repo: Path | str) -> str:
-    """Where the repro test goes: tests/test_qed_<slug>.py, or next to the existing tests."""
+def repro_test_path(
+    request: str, existing_tests: list[str], repo: Path | str, language: str = "python"
+) -> str:
+    """Where the repro test goes: tests/test_qed_<slug>.py, or next to the existing tests.
+
+    JavaScript and TypeScript projects get `qed_<slug>.test.js` (`.test.ts` for TypeScript)."""
     words = re.findall(r"[a-z0-9]+", request.lower())[:5]
     slug = "_".join(words) or "task"
     folder = "tests"
@@ -238,13 +280,30 @@ def repro_test_path(request: str, existing_tests: list[str], repo: Path | str) -
         parents = [str(Path(t).parent.as_posix()) for t in existing_tests]
         folder = max(set(parents), key=parents.count)
         folder = "" if folder == "." else folder
-    base = f"test_qed_{slug}"
     repo = Path(repo)
+    if language == "javascript":
+        ext = js_test_extension(existing_tests, repo)
+        base = f"qed_{slug}"
+        for suffix in ("", "_2", "_3", "_4"):
+            rel = f"{folder}/{base}{suffix}.test.{ext}" if folder else f"{base}{suffix}.test.{ext}"
+            if not (repo / rel).exists():
+                return rel
+        return f"{folder}/{base}_x.test.{ext}" if folder else f"{base}_x.test.{ext}"
+    base = f"test_qed_{slug}"
     for suffix in ("", "_2", "_3", "_4"):
         rel = f"{folder}/{base}{suffix}.py" if folder else f"{base}{suffix}.py"
         if not (repo / rel).exists():
             return rel
     return f"{folder}/{base}_x.py" if folder else f"{base}_x.py"
+
+
+def js_test_extension(existing_tests: list[str], repo: Path) -> str:
+    """'ts' for a TypeScript project, else the extension most existing tests use ('js')."""
+    suffixes = [Path(t).suffix.lstrip(".") for t in existing_tests if is_js_path(t)]
+    if suffixes:
+        common = max(set(suffixes), key=suffixes.count)
+        return {"tsx": "ts", "jsx": "js", "cjs": "cjs", "mjs": "mjs"}.get(common, common)
+    return "ts" if (repo / "tsconfig.json").is_file() else "js"
 
 
 # --------------------------------------------------------------------------- building the context
@@ -314,6 +373,7 @@ def build_context(
     max_files: int,
     context_tokens: int,
     on_event: Callable[[Event], None] | None = None,
+    language: str = "python",
 ) -> ContextBundle:
     """Find the files for a task: search, repo map, the locator, validation and fallbacks.
 
@@ -323,14 +383,14 @@ def build_context(
     """
     root = Path(root)
     notes: list[str] = []
-    py_files = list_python_files(root)
+    py_files = list_source_files(root, language)
     keywords = extract_keywords(spec.request, spec.acceptance)
     found = search(root, keywords, files=py_files)
     hits_text = format_hits(found, 20)
     budget = prompt_budget(context_tokens, LOCATOR_MAX_TOKENS)
     fixed = estimate_tokens(spec.request + "\n".join(spec.acceptance)) + 400
     map_budget = max(200, budget - fixed - estimate_tokens(hits_text))
-    map_text = repo_map(root, map_budget, py_files)
+    map_text = repo_map(root, map_budget, py_files, language)
     located = validate_located(root, locate(map_text, hits_text))
     top_sources = found.top_source_files(1)
     top = top_sources[0] if top_sources else None
@@ -354,8 +414,8 @@ def build_context(
         located = validate_located(root, source[:max_files])
         notes.append("No file stood out, so the first source files are shown.")
     located = located[:max_files]
-    related = related_tests(located, root)
-    tests = find_test_files(root)
+    related = related_tests(located, root, language)
+    tests = find_test_files(root, language)
     example_path = related[0] if related else (tests[0] if tests else None)
     example = None
     if example_path:

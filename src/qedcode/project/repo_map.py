@@ -10,7 +10,8 @@ import ast
 import os
 from pathlib import Path
 
-from qedcode.project.paths import is_test_file
+from qedcode.edits import js_symbols
+from qedcode.project.paths import is_js_path, is_test_file
 from qedcode.project.tokens import estimate_tokens
 from qedcode.vcs.git import git
 
@@ -35,21 +36,53 @@ MAX_FILE_BYTES = 400_000
 MAX_METHODS = 8
 
 
-def list_python_files(root: Path | str) -> list[str]:
-    """Repo-relative paths of the project's .py files (git's view when available), sorted."""
+def list_source_files(root: Path | str, language: str = "python") -> list[str]:
+    """Repo-relative paths of the project's source files (git's view when available), sorted.
+
+    `language` is "python" (.py files) or "javascript" (JavaScript and TypeScript files)."""
     root = Path(root)
+
+    def wanted(path: str) -> bool:
+        if language == "javascript":
+            return is_js_path(path) and not path.endswith((".d.ts", ".min.js"))
+        return path.endswith(".py")
+
     listed = git(root, "ls-files", "-co", "--exclude-standard", "-z", exact=True)
     if listed.ok and listed.stdout:
-        paths = [p for p in listed.stdout.split("\0") if p.endswith(".py")]
+        paths = [p for p in listed.stdout.split("\0") if wanted(p)]
         paths = [p for p in paths if not (set(p.split("/")[:-1]) & SKIP_DIRS)]
         return sorted(p for p in paths if (root / p).is_file())
     found: list[str] = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS and not d.startswith("."))
         found.extend(
-            (Path(dirpath) / n).relative_to(root).as_posix() for n in filenames if n.endswith(".py")
+            (Path(dirpath) / n).relative_to(root).as_posix() for n in filenames if wanted(n)
         )
     return sorted(found)
+
+
+def list_python_files(root: Path | str) -> list[str]:
+    """Repo-relative paths of the project's .py files (git's view when available), sorted."""
+    return list_source_files(root, "python")
+
+
+def top_level_symbols_js(source: str, lang: str, max_symbols: int = 12) -> list[str]:
+    """Top-level names of a JS/TS file (a class lists a few of its methods)."""
+    names = js_symbols.list_symbols(source, lang)
+    out: list[str] = []
+    for name in names:
+        if "." not in name:
+            members = [n.split(".", 1)[1] for n in names if n.startswith(name + ".")][:MAX_METHODS]
+            out.append(f"{name}[{', '.join(members)}]" if members else name)
+    return out[:max_symbols]
+
+
+def symbols_for(rel: str, source: str, max_symbols: int = 12) -> list[str]:
+    """The map entry of one file, by its language."""
+    lang = js_symbols.language_for(rel)
+    if lang:
+        return top_level_symbols_js(source, lang, max_symbols)
+    return top_level_symbols(source, max_symbols)
 
 
 def top_level_symbols(source: str, max_symbols: int = 12) -> list[str]:
@@ -94,11 +127,16 @@ def render_map(entries: list[tuple[str, list[str]]], max_symbols: int, dropped: 
     return "\n".join(lines)
 
 
-def repo_map(root: Path | str, budget_tokens: int, files: list[str] | None = None) -> str:
+def repo_map(
+    root: Path | str,
+    budget_tokens: int,
+    files: list[str] | None = None,
+    language: str = "python",
+) -> str:
     """The map of the project, fitted to `budget_tokens` (estimated at 3.5 characters each)."""
     root = Path(root)
-    paths = files if files is not None else list_python_files(root)
-    entries = [(p, top_level_symbols(_read(root, p), 30)) for p in paths]
+    paths = files if files is not None else list_source_files(root, language)
+    entries = [(p, symbols_for(p, _read(root, p), 30)) for p in paths]
     for limit in (12, 6, 3, 0):
         text = render_map(entries, limit)
         if estimate_tokens(text) <= budget_tokens:

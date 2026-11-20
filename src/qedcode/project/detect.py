@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import ast
 import os
+import re
 import shutil
 import sys
 from collections.abc import Callable, Mapping
@@ -18,6 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from qedcode.config import ProjectConfig, load_project, project_config_path, save_project
+from qedcode.project.detect_js import choose_language, detect_js, find_js_test_files, js_config
 from qedcode.vcs.git import git_out, has_commits, is_git_repo
 from qedcode.verify.run import RunResult, run
 
@@ -69,6 +71,20 @@ class ProjectDetection:
     test_count: int = 0
     config: ProjectConfig = field(default_factory=ProjectConfig)
     notes: list[str] = field(default_factory=list)
+    language: str = "python"  # "javascript" includes TypeScript
+    runner: str = "pytest"
+    runner_ok: bool = True
+    runner_version: str = ""
+    node_version: str = ""
+
+    def describe(self) -> str:
+        """What was found, as the first-run screen shows it (JavaScript/TypeScript projects)."""
+        runner = f"{self.runner} {self.runner_version}".strip()
+        return (
+            f"  Node.js: {self.node_version or 'not found'}\n"
+            f"  Tests: {runner}{'' if self.runner_ok else ' (not available)'}; "
+            f"{self.test_count} tests in {len(self.test_files)} files\n"
+        )
 
 
 @dataclass
@@ -151,8 +167,12 @@ def probe_python(python: str, root: Path, probe: ProbeFn = _default_probe) -> tu
 # --------------------------------------------------------------------------- tests
 
 
-def find_test_files(root: Path) -> list[str]:
-    """Repo-relative paths of test_*.py and *_test.py files (not in venvs or build folders)."""
+def find_test_files(root: Path, language: str = "python") -> list[str]:
+    """Repo-relative paths of the project's test files (not in venvs or build folders).
+
+    Python: test_*.py and *_test.py. JavaScript/TypeScript: *.test.*, *.spec.*, __tests__/."""
+    if language == "javascript":
+        return find_js_test_files(root)
     found: list[str] = []
     scanned = 0
     for dirpath, dirnames, filenames in os.walk(root):
@@ -164,6 +184,21 @@ def find_test_files(root: Path) -> list[str]:
             if name.endswith(".py") and (name.startswith("test_") or name.endswith("_test.py")):
                 found.append((Path(dirpath) / name).relative_to(root).as_posix())
     return sorted(found)
+
+
+JS_TEST_CALL = re.compile(r"^\s*(?:it|test)(?:\.(?:only|skip|todo))?\s*\(", re.MULTILINE)
+
+
+def count_js_tests(root: Path, files: list[str]) -> int:
+    """Estimate the number of JS/TS tests by counting `it(` and `test(` calls (nothing is run)."""
+    total = 0
+    for rel in files:
+        try:
+            text = (root / rel).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        total += len(JS_TEST_CALL.findall(text))
+    return total
 
 
 def count_tests(root: Path, files: list[str]) -> int:
@@ -200,8 +235,26 @@ def detect_project(
     which: Callable[[str], str | None] = shutil.which,
     probe: ProbeFn = _default_probe,
 ) -> ProjectDetection:
-    """Detect the interpreter, pytest and test files for `root` and build a ProjectConfig."""
+    """Detect the interpreter, pytest and test files for `root` and build a ProjectConfig.
+
+    A `package.json` project without a Python project beside it is detected as JavaScript."""
     root = Path(root)
+    if choose_language(root, find_test_files) == "javascript":
+        js = detect_js(root, which=which)
+        return ProjectDetection(
+            root=root,
+            python="",
+            python_source="",
+            test_files=js.test_files,
+            test_count=count_js_tests(root, js.test_files),
+            config=js_config(js),
+            notes=js.notes,
+            language="javascript",
+            runner=js.runner,
+            runner_ok=js.runner_ok,
+            runner_version=js.runner_version,
+            node_version=js.node_version,
+        )
     python, source, notes = find_python(root, env=env, system=system, which=which)
     py_version, pytest_version = probe_python(python, root, probe)
     if not py_version:
@@ -313,8 +366,10 @@ def first_run(root: Path | str, *, force_detect: bool = False, **detect_kwargs) 
         problems.append("This folder is not a git repository. QEDCode needs git to work safely.")
     elif not commits:
         problems.append("This repository has no commits yet; QEDCode will make a first commit.")
-    if detection and not detection.pytest_ok:
+    if detection and detection.language == "python" and not detection.pytest_ok:
         problems.append("pytest is not available in the chosen Python.")
+    if detection and detection.language == "javascript" and not detection.runner_ok:
+        problems.append("The JavaScript test runner is not available (see the notes).")
     return FirstRun(
         root=root,
         is_git_repo=repo,

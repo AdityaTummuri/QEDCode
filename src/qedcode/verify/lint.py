@@ -15,6 +15,7 @@ import tempfile
 from collections import Counter
 from pathlib import Path
 
+from qedcode.edits import js_symbols
 from qedcode.models.schemas import CheckResult
 from qedcode.vcs.git import git
 from qedcode.verify.run import run
@@ -25,14 +26,23 @@ DETAILS_LIMIT = 4000
 
 
 def parse_check(worktree: Path | str, changed_files: list[str]) -> CheckResult:
-    """Stage `parse`: every changed .py file must be valid Python syntax."""
+    """Stage `parse`: every changed .py file must be valid Python, every JS/TS file valid too."""
     worktree = Path(worktree)
     problems: list[str] = []
     checked = 0
     for rel in changed_files:
+        path = worktree / rel
+        lang = js_symbols.language_for(rel)
+        if lang is not None:
+            if not path.is_file():
+                continue
+            checked += 1
+            error = js_symbols.syntax_error(path.read_bytes(), lang)
+            if error:
+                problems.append(f"{rel}, {error}")
+            continue
         if not rel.endswith(".py"):
             continue
-        path = worktree / rel
         if not path.is_file():
             continue
         checked += 1
@@ -49,7 +59,7 @@ def parse_check(worktree: Path | str, changed_files: list[str]) -> CheckResult:
             summary=f"Syntax error in {problems[0]}"[:SUMMARY_LIMIT],
             details="Syntax errors:\n" + "\n".join(problems)[:DETAILS_LIMIT],
         )
-    summary = f"{checked} changed Python file(s) parse." if checked else "No Python files changed."
+    summary = f"{checked} changed file(s) parse." if checked else "No source files changed."
     return CheckResult(stage="parse", passed=True, summary=summary)
 
 

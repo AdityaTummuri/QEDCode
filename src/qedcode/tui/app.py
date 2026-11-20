@@ -277,17 +277,25 @@ class QedApp(App[None]):
     async def _ensure_project_config(self) -> None:
         first = await asyncio.to_thread(first_run, self.root)
         detection = first.detection
+        runner = first.config.test_runner
         if first.already_confirmed or detection is None:
-            self.tests_label = f"pytest ({self._count_label(first)})"
+            self.tests_label = f"{runner} ({self._count_label(first)})"
             return
-        self.tests_label = f"pytest ({detection.test_count})"
+        self.tests_label = f"{detection.runner} ({detection.test_count})"
+        if detection.language == "javascript":
+            found = detection.describe()
+        else:
+            version = detection.python_version or "could not run"
+            found = (
+                f"  Python: {detection.python}"
+                f" ({version}, from {detection.python_source})\n"
+                f"  Tests: pytest {detection.pytest_version or 'not installed'}; "
+                f"{detection.test_count} tests in {len(detection.test_files)} files\n"
+            )
         text = (
             "QEDCode found these settings for this project:\n"
-            f"  Python: {detection.python}"
-            f" ({detection.python_version or 'could not run'}, from {detection.python_source})\n"
-            f"  Tests: pytest {detection.pytest_version or 'not installed'}; "
-            f"{detection.test_count} tests in {len(detection.test_files)} files\n"
-            f"  Never edited: {', '.join(first.config.protected[:6])} ...\n"
+            + found
+            + f"  Never edited: {', '.join(first.config.protected[:6])} ...\n"
         )
         if detection.notes:
             text += "\nNotes:\n" + "\n".join(f"  - {n}" for n in detection.notes)
@@ -295,7 +303,7 @@ class QedApp(App[None]):
         if await self.push_screen_wait(ConfirmScreen(text, yes="Use them", no="Not now")):
             confirm_project(first)
             self.write_log("Saved the project settings to .qed/project.toml.")
-            if not detection.pytest_ok:
+            if detection.language == "python" and not detection.pytest_ok:
                 await self._offer_pytest(detection.python)
             if not first.qed_in_gitignore and await self.push_screen_wait(
                 ConfirmScreen("Add .qed/ to your .gitignore?", yes="Add it", no="No thanks")

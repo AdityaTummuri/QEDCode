@@ -151,7 +151,7 @@ def _check_locked(
         base_sha,
         project,
         full=settings.baseline_full,
-        related=related_tests(changed, root),
+        related=related_tests(changed, root, project.language),
         run_dir=run_dir,
         name=f"{task.id}-base",
         cancelled=cb.cancelled,
