@@ -4,11 +4,24 @@ build-backend = "hatchling.build"
 
 [project]
 name = "qedcode"
-version = "0.0.1"
+version = "0.1.0"
 description = "A local-first coding engine that makes small LLMs reliable: several tries, deterministic checks, one proven fix."
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "GPL-3.0-or-later" }
+license = { file = "LICENSE" }
+authors = [{ name = "AdityaTummuri" }]
+keywords = ["llm", "coding-agent", "local-llm", "pytest", "mcp", "verification"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Testing",
+]
+
 dependencies = [
     "typer>=0.12",
     "rich>=13.7",
@@ -27,6 +40,11 @@ dependencies = [
 
 [project.scripts]
 qed = "qedcode.cli:app"
+
+[project.urls]
+Homepage = "https://github.com/AdityaTummuri/QEDCode"
+Source = "https://github.com/AdityaTummuri/QEDCode"
+Issues = "https://github.com/AdityaTummuri/QEDCode/issues"
 
 [project.optional-dependencies]
 nvidia = [

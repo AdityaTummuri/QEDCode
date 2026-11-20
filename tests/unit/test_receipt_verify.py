@@ -71,7 +71,7 @@ def test_build_receipt_fields(proven) -> None:
     )
     assert receipt.known_failures == [] and receipt.protected_changes == []
     assert [c.stage for c in receipt.checks] == [c.stage for c in cand.checks]
-    assert receipt.created_at.endswith("Z") and receipt.qed_version == "0.0.1"
+    assert receipt.created_at.endswith("Z") and receipt.qed_version == "0.1.0"
     assert receipt.model_info == {"backend": "fake", "model": "fake:scripted"}
 
 

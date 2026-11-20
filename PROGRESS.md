@@ -1,7 +1,7 @@
 # QEDCode progress
 
 ## Current step
-M8.3 (by hand) then M8.4
+Post-v1 step 1: Learns your project (AGENTS.md section first)
 
 ## Done
 - Setup, 2026-11-20: AGENTS.md (from the AI Build Brief), CLAUDE.md, PROGRESS.md, .gitignore, docs/ committed.
@@ -36,6 +36,7 @@ M8.3 (by hand) then M8.4
 - M7.2, 2026-11-20: 'qed setup' offers 'claude mcp add qedcode -- qed mcp' when the claude command exists and prints ready-to-paste snippets in each tool's current documented shape (OpenCode mcp.servers, Cline/Cursor mcpServers) with docs links; README rewritten with a 'Use with agents' section (tools table, timeouts, busy/non-interactive rules). Milestone M7 complete.
 - M8.1, 2026-11-20: full 'qed doctor' (git, project, project Python, pytest in it, ruff, hardware, engine build, model file/Ollama/LM Studio/cloud key, model server health, free disk space, leftover worktrees, logs) with a plain-English fix for every warning/failure, exit 1 on problems, '--update-engine' (asks first); every raised user-facing error now says what happened, why and what to do next, enforced by tests/unit/test_error_messages.py; logging set up at CLI start (rotating qedcode.log 5 MB x 3, llama-server.log rotated at spawn), old .qed/runs pruned to the newest 20.
 - M8.2, 2026-11-20: 'qed uninstall [--all] [--yes]' (engine/uninstall.py): lists what it will remove with sizes and asks once; project mode removes .qed/, QEDCode's git refs and worktrees and the .qed/ line it added to .git/info/exclude (your files and .gitignore untouched); --all also removes ~/.qedcode and the API keys it saved in the keychain; any QEDCode-owned model server is stopped first.
+- M8.4, 2026-11-20: release prep. Version 0.1.0 (pyproject, __version__, CHANGELOG.md), package metadata, README install via uv tool / pipx, demo placeholder, qed doctor/uninstall documented, .github/workflows/release.yml (PyPI trusted publishing on v* tags, checks tag = version and runs tests first; no tag pushed), tests/unit/test_packaging.py. The built wheel was installed in a clean venv and ran. M8.3 (real hardware pass) is human only, listed below. v1 is complete: full gate 883 passed, 1 skipped.
 
 ## Known issues
 - LICENSE in the repo is GPL-3.0 (created with the repo); the plan's step 8.4 suggests MIT or Apache-2.0. Left as GPL-3.0 for the human to decide.
@@ -63,6 +64,9 @@ M8.3 (by hand) then M8.4
 - Git on Windows (step 3.1): the vcs tests have only been run on macOS here. Check the CI run on Windows, especially CRLF files with core.autocrlf=true and long paths.
 - TUI by hand (step 6.4 'Done when'): in a bug zoo copy run 'qed', type the task, watch the tries, press a and see the files change, press u and see them return; Esc during a task leaves no folders in .qed/worktrees/; after q nvidia-smi shows the model gone from VRAM; it looks right in Windows Terminal, macOS Terminal and a Linux terminal. Only the headless Textual pilot was used here.
 - MCP with real agents (step 7.2 'Done when'): in Claude Code inside a bug zoo copy ask 'Use the qedcode tool to fix the bug described in task.txt' (it should call solve and report grade + receipt path); ask it to change something and then 'check it with qedcode'; with the TUI and an agent both using QEDCode only one llama-server process runs (ps / Task Manager). OpenCode's config shape was read from its docs on 2026-11-20 and may have changed.
+
+- Step 8.3 real hardware pass (human only): on the RTX 5060 Ti PC (Windows) and the 4 GB / 6 GB laptop run: `uv tool install` of the built wheel, `qed setup`, `qed doctor` (every row should be ok, or its fix should work), one bug zoo task at normal speed, `qed uninstall`, `qed uninstall --all`. Record the machine, the model and the times here. Also try Linux and an AMD or Intel GPU. The wheel itself was smoke-tested in a clean venv on macOS (qed --version, models list, prompts and MCP tools load).
+- Release (step 8.4): the PyPI side needs a one-time trusted-publisher entry (project `qedcode`, workflow `release.yml`, environment `pypi`) and the repository URLs in pyproject.toml checked. The workflow only runs on a `v*` tag; no tag was pushed. Replace the demo placeholder in README.md with a real recording.
 
 ## Real-model results
 - NOT RUN (unattended, no model downloads): step 5.4 real-model check. When ready run 'uv run python bugzoo/run_zoo.py --speed normal' and then '--speed fast', and write the A/B/no-fix counts, the time per task and any 'wrong A/B' here. Every wrong grade A is a bug to fix before M6 ships.

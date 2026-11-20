@@ -1,0 +1,48 @@
+name: Release
+
+# Pushing a tag like v0.1.0 builds the package and publishes it to PyPI with trusted publishing
+# (no API token is stored). One-time setup on PyPI: add a "pending publisher" for the project
+# `qedcode` with this repository, the workflow name `release.yml` and the environment `pypi`.
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: The tag must match the package version
+        run: |
+          version=$(uv run --no-project python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match version $version in pyproject.toml"; exit 1
+          fi
+      - name: Run the tests before publishing
+        run: |
+          uv sync
+          git config --global user.email "ci@example.com"
+          git config --global user.name "CI"
+          uv run ruff check .
+          uv run pytest -m "not gpu"
+      - name: Build
+        run: uv build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

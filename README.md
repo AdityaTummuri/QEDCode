@@ -8,6 +8,8 @@ apply.**
 
 QED is the Latin *quod erat demonstrandum*, "which was to be demonstrated": every fix ends with proof.
 
+<!-- DEMO: replace this line with a short screen recording (docs/demo.gif) of `qed solve` reaching grade A. -->
+
 ## How it works
 
 1. It takes a snapshot of your project (including uncommitted files) and works in copies of it.
@@ -32,11 +34,13 @@ aims for grade A). It stops as soon as a try reaches the target, so easy tasks s
 ## Install and first run
 
 ```bash
-uv sync                      # from a clone of this repository
-uv run qed setup             # detects your GPU, picks a model, asks before every download
+uv tool install qedcode      # or: pipx install qedcode   (once the first release is on PyPI)
+qed setup                    # detects your GPU, picks a model, asks before every download
 cd your-python-project
-uv run qed                   # opens the terminal UI
+qed                          # opens the terminal UI
 ```
+
+From a clone of this repository instead: `uv sync`, then prefix the commands with `uv run`.
 
 `qed setup` finds your hardware (NVIDIA, AMD, Intel, Apple Silicon or CPU only), recommends a model
 and context size that fit your VRAM, shows everything it wants to download with sizes and asks once,
@@ -54,7 +58,9 @@ qed check [--speed ...] [--base <ref>] [--json]    grade the changes you made yo
 qed verify <receipt.json>             re-run a proof receipt: VERIFIED or what no longer matches
 qed apply [task id] / qed undo        apply a finished result / take the last apply back out
 qed models [list|recommend|download <id>|use <id>|remove <id>]
-qed doctor                            what QEDCode found on this computer
+qed doctor [--update-engine]          check git, Python, pytest, ruff, GPU, engine, model, disk
+                                      and say how to fix each problem
+qed uninstall [--all] [--yes]         remove .qed/ here (--all: also ~/.qedcode and saved keys)
 qed mcp                               the MCP server over stdio (see below)
 ```
 
