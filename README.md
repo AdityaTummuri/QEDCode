@@ -1,6 +1,8 @@
 # QEDCode
 
 QEDCode is a local-first coding engine that makes small language models (4–6 GB of VRAM) reliable.
+It works on **Python** projects (pytest) and **JavaScript/TypeScript** projects (Node's built-in
+`node --test`, Vitest or Jest).
 Instead of trusting a model's first answer, it asks for several candidate changes, tests each one in
 a safe git worktree, and returns only the best verified change with an evidence grade (A–D) and a
 proof receipt that anyone can re-run with `qed verify`. **Your files are never touched until you
@@ -53,6 +55,19 @@ and context size that fit your VRAM, shows everything it wants to download with 
 then loads the model and prints a test answer with tokens per second. You can also use a model you
 already run in Ollama or LM Studio, or a cloud model (your API key goes into your system keychain,
 never into a file).
+
+## Languages
+
+| | Python | JavaScript / TypeScript |
+| --- | --- | --- |
+| Detected from | `pyproject.toml`, `pytest.ini`, tests | `package.json` with no Python project beside it |
+| Tests run with | pytest in your project's Python | `node --test`, Vitest or Jest (from your `node_modules`; QEDCode never installs Node packages) |
+| Edits | symbols located with `ast` | symbols located with tree-sitter (`.js .jsx .mjs .cjs .ts .tsx .mts .cts`) |
+| Checks | parse, ruff, tests | parse, tests (no linter yet) |
+| Sealed test box (Docker) | yes | not yet |
+
+For TypeScript with the built-in runner you need Node 22.18 or newer; Vitest and Jest work on any
+supported Node (20+).
 
 ## Commands
 
@@ -115,7 +130,7 @@ helper model unless your config pre-approves it (`[helper] ask_before_use = fals
 - Work happens in git worktrees under `.qed/worktrees/`; your working tree is written only by
   `qed apply` / `qed undo`, which refuse if a touched file changed since the snapshot.
 - The model never runs commands. Only fixed commands built by QEDCode run: git, your project's
-  Python with pytest, ruff and the llama.cpp server.
+  Python with pytest, ruff, Node with your test runner, and the llama.cpp server.
 - Existing tests and test configuration are protected: a candidate that edits, deletes, skips or
   weakens them is rejected. A candidate that adds risky code (`subprocess`, network, `eval`, ...)
   needs your approval and can then reach grade B at most.

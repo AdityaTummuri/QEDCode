@@ -132,7 +132,11 @@ class _Run:
         self.project = self.project or project_config_for(self.root, self.notes)
         self.run_dir = self.root / ".qed" / "runs" / self.spec.id
         self.roles = Roles(
-            self.client, self.run_dir, on_event=self.cb.on_event, cancelled=self.cb.cancelled
+            self.client,
+            self.run_dir,
+            on_event=self.cb.on_event,
+            cancelled=self.cb.cancelled,
+            project=self.project,
         )
         self.understand()
         self.find_files()
@@ -369,7 +373,11 @@ class _Run:
             return
         self.emit("stage", f"Asking the helper model ({helper.name})...")
         helper_roles = Roles(
-            helper, self.run_dir, on_event=self.cb.on_event, cancelled=self.cb.cancelled
+            helper,
+            self.run_dir,
+            on_event=self.cb.on_event,
+            cancelled=self.cb.cancelled,
+            project=self.project,
         )
         compact = self.ctx.compact()
         reply = helper_roles.coder(

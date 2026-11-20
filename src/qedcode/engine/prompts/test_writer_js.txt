@@ -1,0 +1,21 @@
+TASK: {request}
+ACCEPTANCE:
+{acceptance}
+
+RELEVANT CODE:
+{code_context}
+
+HOW EXISTING TESTS LOOK ({example_test_path}):
+{example_test_snippet}
+
+Write ONE new {test_kind} file with 1 to 3 small tests.
+The tests must FAIL on the current code because of the problem in the task, and PASS once the task is done.
+Rules: import the code the same way the existing tests do; test only behaviour named in the task;
+{test_rules}
+
+Reply in exactly this format:
+EDIT create_file path={test_path}
+```{fence}
+<the whole test file>
+```
+FAILS NOW BECAUSE: <one line>

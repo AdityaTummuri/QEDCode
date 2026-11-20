@@ -15,7 +15,8 @@ from typing import Literal
 
 from qedcode.config import GlobalConfig, ProjectConfig, load_project, logs_dir, qedcode_home
 from qedcode.hardware.detect import HardwareInfo, current_hardware
-from qedcode.project.detect import find_python, probe_python
+from qedcode.project.detect import find_python, find_test_files, probe_python
+from qedcode.project.detect_js import choose_language, detect_js
 from qedcode.runtime import installer
 from qedcode.vcs import worktree
 from qedcode.vcs.git import has_commits, is_git_repo
@@ -112,6 +113,47 @@ def check_python(
                 "pytest",
                 f"pytest is not installed in {python}",
                 f"Install it there: `{python} -m pip install pytest` (or `uv pip install --python {python} pytest`); `qed` also offers to do it.",
+            )
+        )
+    return out
+
+
+def project_language(root: Path) -> str:
+    """'python' or 'javascript': the confirmed project setting, else what detection finds."""
+    saved = load_project(root)
+    if saved.confirmed:
+        return saved.language
+    return choose_language(root, find_test_files)
+
+
+def check_javascript(root: Path) -> list[Check]:
+    """Node.js and the test runner of a JavaScript/TypeScript project (two checks)."""
+    found = detect_js(root)
+    out: list[Check] = []
+    if not found.node_version:
+        out.append(
+            _bad(
+                "node",
+                "Node.js was not found or could not be run",
+                "Install Node.js 20 or newer (https://nodejs.org) and make sure `node` works "
+                "in a terminal.",
+            )
+        )
+    else:
+        out.append(_ok("node", f"Node.js {found.node_version} ({found.node_path})"))
+    runner = found.runner
+    if found.runner_ok:
+        label = f"{runner} {found.runner_version}".strip() if runner != "node" else "node:test"
+        out.append(_ok("test runner", f"{label} ({found.package_manager or 'npm'})"))
+    elif runner == "node":
+        out.append(_bad("test runner", "node:test needs a working Node.js", "Fix Node.js first."))
+    else:
+        manager = found.package_manager or "npm"
+        out.append(
+            _bad(
+                "test runner",
+                f"{runner} is in package.json but not installed in node_modules",
+                f"Run `{manager} install` in the project (QEDCode never installs Node packages).",
             )
         )
     return out
@@ -405,7 +447,11 @@ def run_doctor(
     steps: list[Callable[[], Check | list[Check]]] = [
         check_git,
         lambda: check_project(folder),
-        lambda: check_python(folder),
+        lambda: (
+            check_javascript(folder)
+            if project_language(folder) == "javascript"
+            else check_python(folder)
+        ),
         check_ruff,
         lambda: check_hardware(hardware),
         lambda: check_engine(config, hardware),

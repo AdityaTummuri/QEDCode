@@ -89,6 +89,12 @@ def setup(
     folder = Path(root)
     say = on_progress or (lambda _text: None)
     project = load_project(folder)
+    if project.language != "python":
+        return SetupResult(
+            False,
+            "The sealed test box supports Python projects only for now, so tests of this "
+            "JavaScript/TypeScript project keep running on this computer.",
+        )
     image = project.sandbox_image or default_image(folder)
     box = DockerSandbox(
         image=image, memory=project.sandbox_memory, cpus=project.sandbox_cpus, docker=docker

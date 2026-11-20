@@ -1,0 +1,33 @@
+EDIT FORMATS (use the simplest one that works):
+1) Replace a whole function, method, class or const (method: symbol=ClassName.method):
+EDIT replace_symbol path=src/mod.js symbol=funcName
+```javascript
+function funcName(...) {
+  ...the full new definition...
+}
+```
+(If the old definition had `export`, it is kept for you.)
+2) Add a new function or class after an existing one:
+EDIT insert_after_symbol path=src/mod.js symbol=existingName
+```javascript
+function newHelper(...) {
+  ...
+}
+```
+3) Add import lines (ES modules only):
+EDIT add_import path=src/mod.js
+```javascript
+import { readFile } from "node:fs/promises";
+```
+4) Change a few exact lines (SEARCH must match the current code exactly, once):
+EDIT search_replace path=src/mod.js
+<<<<<<< SEARCH
+old lines
+=======
+new lines
+>>>>>>> REPLACE
+5) Create a new file:
+EDIT create_file path=src/newMod.js
+```javascript
+...the whole file...
+```

@@ -908,7 +908,9 @@ model = ""                 # LiteLLM model string
 **Per project: `<repo>/.qed/project.toml`** (written after the user confirms the detected values)
 
 ```toml
-language = "python"
+language = "python"               # python | javascript (javascript includes TypeScript)
+test_runner = "pytest"            # pytest | node | vitest | jest
+package_manager = ""              # npm | pnpm | yarn | bun (JavaScript projects, informational)
 python = ".venv/bin/python"       # the interpreter that runs this project's tests
 test_command = ["{python}", "-m", "pytest"]
 test_timeout_seconds = 300

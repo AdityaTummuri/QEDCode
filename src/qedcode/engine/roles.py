@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from importlib import resources
 from pathlib import Path
 
+from qedcode.config import ProjectConfig
 from qedcode.edits.protocol import parse_reply, problem_text, reply_ok
 from qedcode.models.schemas import (
     Candidate,
@@ -25,7 +26,7 @@ from qedcode.models.schemas import (
     TaskSpec,
 )
 from qedcode.project.context import ContextFile, files_block, fit_files, task_keywords
-from qedcode.project.paths import normalize_path, validate_path
+from qedcode.project.paths import is_js_path, normalize_path, validate_path
 from qedcode.project.tokens import estimate_tokens, prompt_budget
 from qedcode.runtime.client import ModelClient
 from qedcode.verify.cascade import Cancelled
@@ -133,6 +134,9 @@ def parse_locator(text: str, max_files: int) -> tuple[list[str], str]:
     return found[:max_files], ""
 
 
+_JS_TEST = re.compile(r"(?m)^\s*(?:test|it)(?:\.\w+)?\s*\(")
+
+
 def parse_test_writer(text: str, test_path: str) -> tuple[TestWriterResult | None, str]:
     """The reply must create one test file; its path is replaced by the one QEDCode chose."""
     reply = parse_reply(text)
@@ -141,13 +145,64 @@ def parse_test_writer(text: str, test_path: str) -> tuple[TestWriterResult | Non
         problem = problem_text(reply) or "there is no EDIT create_file block"
         return None, problem
     code = edits[0].code
-    if not re.search(r"(?m)^\s*(?:async\s+)?def\s+test_\w*\(", code):
+    if is_js_path(test_path):
+        if not _JS_TEST.search(code):
+            return None, "the test file must contain at least one test(...) or it(...) call"
+    elif not re.search(r"(?m)^\s*(?:async\s+)?def\s+test_\w*\(", code):
         return None, "the test file must define at least one function named test_..."
     reason = reply.extra.get("FAILS NOW BECAUSE", "")
     return TestWriterResult(test_path, code, reason), ""
 
 
 # --------------------------------------------------------------------------- the runner
+
+
+@dataclass(frozen=True)
+class Stack:
+    """The words of the prompts that depend on the project's language and test runner."""
+
+    project: str = "Python, tests run with pytest."
+    test_kind: str = "pytest"
+    test_rules: str = (
+        "no network, no subprocess, no files written outside pytest's tmp_path; "
+        "every test has at least one assert."
+    )
+    fence: str = "python"
+    cheatsheet: str = "protocol_cheatsheet"
+    intake_template: str = "intake"  # the Python templates stay word for word as in the brief
+    test_writer_template: str = "test_writer"
+
+
+PYTHON_STACK = Stack()
+_JS_RUNNERS = {
+    "node": ("the built-in node:test runner", "node:test",
+             "Use `import test from 'node:test'` and `import assert from 'node:assert/strict'`."),
+    "vitest": ("Vitest", "Vitest",
+               "Use `import { describe, it, expect } from 'vitest'`."),
+    "jest": ("Jest", "Jest",
+             "Use Jest's global `describe`, `it` and `expect` (do not import them)."),
+}  # fmt: skip
+
+
+def stack_for(project: ProjectConfig | None, test_path: str = "") -> Stack:
+    """The prompt wording for a project (Python unless it is a JavaScript/TypeScript project)."""
+    if project is None or project.language != "javascript":
+        return PYTHON_STACK
+    label, kind, usage = _JS_RUNNERS.get(project.test_runner, _JS_RUNNERS["node"])
+    typescript = test_path.endswith((".ts", ".tsx", ".mts", ".cts"))
+    return Stack(
+        project=f"JavaScript/TypeScript (Node.js), tests run with {label}.",
+        test_kind=f"{kind} test",
+        test_rules=(
+            f"{usage} Import relative files with their extension as the existing tests do; "
+            "no network, no child processes, no files written outside the system temp folder; "
+            "every test has at least one assertion."
+        ),
+        fence="typescript" if typescript else "javascript",
+        cheatsheet="protocol_cheatsheet_js",
+        intake_template="intake_js",
+        test_writer_template="test_writer_js",
+    )
 
 
 class Roles:
@@ -161,7 +216,9 @@ class Roles:
         on_event: Callable[[Event], None] | None = None,
         cancelled: Callable[[], bool] | None = None,
         on_token: Callable[[str, str], None] | None = None,
+        project: ProjectConfig | None = None,
     ) -> None:
+        self.project = project
         self.client = client
         self.run_dir = Path(run_dir) if run_dir else None
         self._on_event = on_event
@@ -253,7 +310,11 @@ class Roles:
         temperature, max_tokens = ROLE_SETTINGS["intake"]
         parsed, problem, _ = self._ask(
             "intake",
-            format_prompt("intake", request=request),
+            format_prompt(
+                stack_for(self.project).intake_template,
+                request=request,
+                project=stack_for(self.project).project,
+            ),
             temperature=temperature or 0.1,
             max_tokens=max_tokens,
             parse=parse_intake,
@@ -302,21 +363,25 @@ class Roles:
         *,
         label: str = "",
     ) -> TestWriterResult | None:
-        """Write ONE new pytest file that should fail now; None when no usable file came back."""
+        """Write ONE new test file that should fail now; None when no usable file came back."""
         temperature, max_tokens = ROLE_SETTINGS["test_writer"]
         snippet = NO_TESTS
         example_path = "no example"
         if example_test is not None:
             example_path = example_test.path
             snippet = "\n".join(example_test.content.splitlines()[:MAX_TEST_SNIPPET_LINES])
+        stack = stack_for(self.project, test_path)
         fixed = format_prompt(
-            "test_writer",
+            stack.test_writer_template,
             request=spec.request,
             acceptance=_bullets(spec.acceptance),
             code_context=CODE_SLOT,
             example_test_path=example_path,
             example_test_snippet=snippet,
             test_path=test_path,
+            test_kind=stack.test_kind,
+            test_rules=stack.test_rules,
+            fence=stack.fence,
         )
         room = self._budget(max_tokens) - estimate_tokens(fixed)
         fitted = fit_files(code_files, max(room, 256), task_keywords(spec.request))
@@ -362,7 +427,7 @@ class Roles:
         repro_block = (
             f"\nThis test must pass after your change:\n{repro.rstrip()}\n" if repro else ""
         )
-        cheatsheet = load_prompt("protocol_cheatsheet").rstrip("\n")
+        cheatsheet = load_prompt(stack_for(self.project).cheatsheet).rstrip("\n")
         fixed = format_prompt(
             "coder",
             request=spec.request,
@@ -388,7 +453,7 @@ class Roles:
     ) -> CoderResult:
         """Fix a near-miss: sees its diff, what went wrong and the current code of changed files."""
         temperature, max_tokens = ROLE_SETTINGS["repairer"]
-        cheatsheet = load_prompt("protocol_cheatsheet").rstrip("\n")
+        cheatsheet = load_prompt(stack_for(self.project).cheatsheet).rstrip("\n")
         fixed = format_prompt(
             "repairer",
             request=spec.request,

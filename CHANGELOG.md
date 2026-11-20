@@ -12,6 +12,12 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
   and runs every project test in a container with `--network none`, read-only root, dropped
   capabilities and memory/pid limits. Timeouts and cancels remove the container. Receipts record
   `sandbox`; `qed doctor` checks it.
+- **JavaScript and TypeScript** (v1.1): projects with a `package.json` work like Python projects.
+  Tests run with `node --test` (QEDCode's own reporter), Vitest or Jest from `node_modules`;
+  symbol edits (`replace_symbol`, `insert_after_symbol`, `add_import`) use tree-sitter; the guards
+  know `it.skip`, `.only`, removed `expect(...)` lines and risky Node APIs; `qed doctor` checks
+  Node and the runner. New dependencies: `tree-sitter`, `tree-sitter-javascript`,
+  `tree-sitter-typescript`. No linter stage for JS/TS and no sealed test box for it yet.
 
 ## [0.1.0] - 2026-11-20
 

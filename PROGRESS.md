@@ -1,7 +1,7 @@
 # QEDCode progress
 
 ## Current step
-Post-v1 #3 JS/TS step 4: prompts (test_writer style), end-to-end on a JS project, docs
+Post-v1 #4: Quiet mode and one-click agent connect (AGENTS.md 15.4 first)
 
 ## Done
 - Setup, 2026-11-20: AGENTS.md (from the AI Build Brief), CLAUDE.md, PROGRESS.md, .gitignore, docs/ committed.
@@ -42,6 +42,7 @@ Post-v1 #3 JS/TS step 4: prompts (test_writer style), end-to-end on a JS project
 - Post-v1 #3 JS/TS step 1, 2026-11-20: AGENTS.md 15.3 (design, new deps tree-sitter + js/ts grammars); edits/js_symbols.py (syntax check, symbols, replace_symbol keeping 'export', insert_after_symbol, add_import) wired into the applier by file extension; 38 tests.
 - Post-v1 #3 JS/TS step 2, 2026-11-20: language plumbing: ProjectConfig language/test_runner/package_manager and JS protected defaults, is_test_file for JS, project/detect_js.py (package.json, runner, package manager, Node version, test files, language choice), detect_project and the first-run text for JS, JS-aware repo map / related tests / repro test path / build_context, JS tamper and risky-pattern guards, tree-sitter parse stage, lint skipped with a reason; 59 tests.
 - Post-v1 #3 JS/TS step 3, 2026-11-20: test runners: verify/node_reporter.mjs (QEDCode's own reporter for node --test: file, ancestors, whole-file load failures with the real stderr), verify/js_runner.py (node, vitest, jest from node_modules/.bin, never npx; node_modules symlinked only while tests run; same PytestOutcome; collection errors), verify/runners.py dispatcher used by baseline, cascade and qed verify (receipts record placeholder commands, JS receipts re-run by their runner); sealed test box is Python-only. Parsing tested on real vitest/jest/node reports (fixtures), real node --test runs in the tests; live smoke test against real vitest 3 and jest 29. 27 tests.
+- Post-v1 #3 JavaScript and TypeScript (v1.1) complete, 2026-11-20. Step 4: language-aware prompts (separate intake_js / test_writer_js / protocol_cheatsheet_js templates; the Python templates stay word for word), JS fence tags accepted, JS test files accepted from the test writer, doctor checks node and the test runner, sealed test box refused for JS, README languages table. 12 end-to-end tests on a real git repo with real node --test (grade A, apply/undo, verify, tamper and risky-code rejection, fast speed, qed check). Full gate: 1070 passed, 1 skipped.
 
 ## Known issues
 - LICENSE in the repo is GPL-3.0 (created with the repo); the plan's step 8.4 suggests MIT or Apache-2.0. Left as GPL-3.0 for the human to decide.
@@ -74,6 +75,8 @@ Post-v1 #3 JS/TS step 4: prompts (test_writer style), end-to-end on a JS project
 - Release (step 8.4): the PyPI side needs a one-time trusted-publisher entry (project `qedcode`, workflow `release.yml`, environment `pypi`) and the repository URLs in pyproject.toml checked. The workflow only runs on a `v*` tag; no tag was pushed. Replace the demo placeholder in README.md with a real recording.
 
 - Sealed test box (post-v1 #2): only tested with a fake `docker` script (tests/fixtures/fake_docker.py); Docker is not installed on the build machine. With real Docker run `qed sandbox setup` in a bug zoo copy, then `qed solve` and check: the image builds, `docker ps` shows no leftover qed-* container after a Esc cancel or a timeout, tests that open a socket fail, files in the worktree are not root-owned on Linux (`--user`), and that Docker Desktop on Windows/macOS can mount `.qed/worktrees` and the temp report folder. Confirm the base image size note (about 150 MB) and that `--read-only` + `--tmpfs /tmp` does not break common test suites.
+
+- JavaScript/TypeScript (post-v1 #3): tested with real `node --test` (Node 22.23) and a live smoke run of the runner against real Vitest 3 and Jest 29 installs (reports saved as fixtures in tests/fixtures/js). Not covered: Windows (`node_modules/.bin/*.cmd` shims, creating the `node_modules` symlink needs Developer Mode or admin rights; if it fails the runner is reported as missing), npm/pnpm workspaces with nested `node_modules`, TypeScript on Node 22.6-22.17 (needs `--experimental-strip-types`; detection only warns), projects whose tests need a build step first, and real-model quality on JS/TS tasks (the engine was only driven with a scripted FakeModel). Try `qed` in a small Vitest project and a Jest project and a TypeScript node:test project.
 
 ## Real-model results
 - NOT RUN (unattended, no model downloads): step 5.4 real-model check. When ready run 'uv run python bugzoo/run_zoo.py --speed normal' and then '--speed fast', and write the A/B/no-fix counts, the time per task and any 'wrong A/B' here. Every wrong grade A is a bug to fix before M6 ships.

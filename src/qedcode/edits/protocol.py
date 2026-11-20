@@ -25,7 +25,20 @@ _FENCE_CLOSE = re.compile(r"^\s*(`{3,}|~{3,})\s*$")
 _SEARCH = re.compile(r"^\s*<{5,9}\s*SEARCH\s*$", re.IGNORECASE)
 _DIVIDER = re.compile(r"^\s*={5,9}\s*$")
 _REPLACE = re.compile(r"^\s*>{5,9}\s*REPLACE\s*$", re.IGNORECASE)
-_COMMON_TAGS = {"", "python", "py", "python3"}
+_COMMON_TAGS = {
+    "",
+    "python",
+    "py",
+    "python3",
+    "javascript",
+    "js",
+    "typescript",
+    "ts",
+    "jsx",
+    "tsx",
+    "mjs",
+    "cjs",
+}
 
 
 def reply_ok(reply: ParsedReply) -> bool:
