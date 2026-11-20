@@ -244,8 +244,8 @@ async def test_declining_the_helper_ends_with_no_fix(tmp_path: Path, monkeypatch
 
 async def test_slash_check_grades_your_own_changes(tmp_path: Path) -> None:
     app, _, repo = make_app(tmp_path)
-    patch = (BUGZOO_DIR / ZOO / "solution.patch").read_text(encoding="utf-8")
-    subprocess.run(["git", "apply", "-"], cwd=repo, input=patch, text=True, check=True)
+    patch = (BUGZOO_DIR / ZOO / "solution.patch").read_bytes()
+    subprocess.run(["git", "apply", "-"], cwd=repo, input=patch, check=True)
     async with app.run_test(size=(120, 40)) as pilot:
         await ready(app)
         await submit(pilot, "/check")

@@ -39,15 +39,12 @@ def zoo_repo(tmp_path: Path, name: str = ZOO, confirmed: bool = True) -> Path:
 
 
 def apply_solution(project: Path, name: str = ZOO) -> None:
-    patch = (BUGZOO_DIR / name / "solution.patch").read_text(encoding="utf-8")
-    proc = run_git(project, "apply", "--whitespace=nowarn", "-", check=False) if False else None
     import subprocess
 
-    done = subprocess.run(
-        ["git", "apply", "-"], cwd=project, input=patch, text=True, capture_output=True
-    )
-    assert done.returncode == 0, done.stderr
-    assert proc is None
+    # bytes, not text: on Windows text mode would turn the patch's LF line endings into CRLF
+    patch = (BUGZOO_DIR / name / "solution.patch").read_bytes()
+    done = subprocess.run(["git", "apply", "-"], cwd=project, input=patch, capture_output=True)
+    assert done.returncode == 0, done.stderr.decode("utf-8", "replace")
 
 
 def copy_hidden_test(project: Path, name: str = ZOO) -> None:

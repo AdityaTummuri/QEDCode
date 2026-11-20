@@ -188,8 +188,8 @@ async def test_a_client_without_progress_support_does_not_break_the_call(tmp_pat
 
 async def test_check_grades_changes_you_made(tmp_path: Path) -> None:
     repo = zoo_git_repo(tmp_path)
-    patch = (BUGZOO_DIR / ZOO / "solution.patch").read_text(encoding="utf-8")
-    subprocess.run(["git", "apply", "-"], cwd=repo, input=patch, text=True, check=True)
+    patch = (BUGZOO_DIR / ZOO / "solution.patch").read_bytes()
+    subprocess.run(["git", "apply", "-"], cwd=repo, input=patch, check=True)
     service = service_for(FakeModel({}))
     out = await service.check(project_dir=str(repo))
     assert out["status"] == "graded" and out["grade"] == "B" and out["failing_tests"] == []
