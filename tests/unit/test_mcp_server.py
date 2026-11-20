@@ -269,6 +269,34 @@ def test_the_runner_reports_a_crashing_job_as_an_error(tmp_path: Path) -> None:
     assert again.done.wait(5)
 
 
+def test_a_crashing_job_is_logged_with_its_traceback(tmp_path: Path, caplog) -> None:
+    runner = JobRunner()
+
+    def boom(job):
+        raise ValueError("kaboom")
+
+    with caplog.at_level("ERROR", logger="qedcode.mcp"):
+        job = runner.start("solve", tmp_path, boom)
+        assert job.done.wait(5)
+    assert "qedcode.log" in job.result["message"]
+    assert any(r.exc_info and "kaboom" in str(r.exc_info[1]) for r in caplog.records)
+
+
+def test_finished_jobs_do_not_pile_up_forever(tmp_path: Path, monkeypatch) -> None:
+    import qedcode.mcp_server as mcp_server
+
+    monkeypatch.setattr(mcp_server, "KEEP_FINISHED_JOBS", 3)
+    runner = JobRunner()
+    ids = []
+    for _ in range(6):
+        job = runner.start("check", tmp_path, lambda j: {"status": "graded"})
+        assert job.done.wait(5)
+        ids.append(job.id)
+    kept = [i for i in ids if runner.get(i) is not None]
+    assert ids[-1] in kept and len(kept) <= 4  # the newest finished ones (plus the latest)
+    assert runner.get(ids[0]) is None
+
+
 # ------------------------------------------------------------------ through the real protocol
 
 

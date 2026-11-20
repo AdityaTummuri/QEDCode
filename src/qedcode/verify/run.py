@@ -12,7 +12,7 @@ import re
 import subprocess
 import sys
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -49,11 +49,13 @@ class RunResult:
 
 
 def scrubbed_env(
-    base: Mapping[str, str] | None = None, extra: Mapping[str, str] | None = None
+    base: Mapping[str, str] | None = None,
+    extra: Mapping[str, str] | None = None,
+    drop: Collection[str] = (),
 ) -> dict[str, str]:
-    """Copy the environment without secrets, then add `extra` (which is never scrubbed)."""
+    """Copy the environment without secrets or `drop` names, then add `extra` (never scrubbed)."""
     source = os.environ if base is None else base
-    env = {k: v for k, v in source.items() if not SECRET_NAME.search(k)}
+    env = {k: v for k, v in source.items() if not SECRET_NAME.search(k) and k not in drop}
     if extra:
         env.update(extra)
     return env
@@ -122,16 +124,21 @@ def run(
     stdin_text: str | None = None,
     cancelled: Callable[[], bool] | None = None,
     exact: bool = False,
+    drop_env: Collection[str] = (),
 ) -> RunResult:
     """Run one command (list args, no shell) and always return a RunResult; never raises.
 
-    `env` entries are added after scrubbing. A timeout or a True from `cancelled()` kills the whole
+    `env` entries are added after scrubbing; `drop_env` names are removed from the inherited
+    environment even when `scrub` is off. A timeout or a True from `cancelled()` kills the whole
     process tree. Output is read as bytes (line endings are never translated); `exact=True` keeps
     undecodable bytes so a diff can be fed back to `git apply` unchanged.
     """
     argv = [os.fspath(a) for a in args]
     cwd_path = Path(cwd) if cwd is not None else None
-    run_env = scrubbed_env(extra=env) if scrub else {**os.environ, **(env or {})}
+    if scrub:
+        run_env = scrubbed_env(extra=env, drop=drop_env)
+    else:
+        run_env = {k: v for k, v in os.environ.items() if k not in drop_env} | dict(env or {})
     result = RunResult(args=argv)
     started = time.monotonic()
     try:

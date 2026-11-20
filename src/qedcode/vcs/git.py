@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
@@ -9,8 +10,34 @@ from qedcode.verify.run import RunResult, run
 
 # QEDCode's own commits (snapshots, candidates) never depend on, or change, the user's git identity.
 IDENTITY = ["-c", "user.name=QEDCode", "-c", "user.email=qedcode@localhost"]
-SAFE_CONFIG = ["-c", "commit.gpgsign=false", "-c", "core.quotepath=off", "-c", "gc.auto=0"]
+# Hooks are switched off: QEDCode's own commits and checkouts must never run hook scripts, and a
+# candidate could otherwise add one (for example under a hooksPath folder inside the repo).
+SAFE_CONFIG = [
+    "-c",
+    "commit.gpgsign=false",
+    "-c",
+    "core.quotepath=off",
+    "-c",
+    "gc.auto=0",
+    "-c",
+    f"core.hooksPath={os.devnull}",
+]
 GIT_ENV = {"GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0", "LC_ALL": "C"}
+# Inherited variables that point git at another repository, index or object store. Git sets them
+# for hooks, so `qed check` run from a pre-commit hook would otherwise write to the user's index.
+# An explicit `env` entry (the snapshot's temporary index) still wins.
+GIT_LOCATION_VARS = (
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_NAMESPACE",
+    "GIT_PREFIX",
+    "GIT_CEILING_DIRECTORIES",
+    "GIT_DISCOVERY_ACROSS_FILESYSTEM",
+)
 DEFAULT_TIMEOUT_S = 120.0
 
 
@@ -36,6 +63,7 @@ def git(
         env={**GIT_ENV, **(env or {})},
         stdin_text=stdin_text,
         exact=exact,
+        drop_env=GIT_LOCATION_VARS,
     )
 
 

@@ -313,3 +313,49 @@ def test_engine_api_verify_resolves_the_repo_root(proven, monkeypatch) -> None:
 
 def test_check_result_import_is_used() -> None:
     assert CheckResult(stage="apply", passed=True).stage == "apply"
+
+
+# ------------------------------------------------------------------ untrusted receipts
+
+
+def _with_command(data: dict, command: list[str]) -> None:
+    data["commands"][0] = command  # the first check that ran a command
+
+
+def test_a_receipt_cannot_run_a_command_of_its_own(proven, tmp_path: Path) -> None:
+    case, _, _, path = proven
+    marker = tmp_path / "ran.txt"
+    evil = [PY, "-c", f"open({str(marker)!r}, 'w').write('x')", "-q"]
+    bad = tampered(path, tmp_path, lambda d: _with_command(d, evil))
+    result = verify_receipt(bad, case.project)
+    assert not result.verified
+    assert "not safe to run here" in result.mismatches[0]
+    assert "test command" in result.mismatches[0]
+    assert not marker.exists()
+
+
+@pytest.mark.parametrize(
+    "item",
+    ["--basetemp=/tmp/x", "-p", "../outside/test_x.py", "/abs/test_x.py", ".git/hooks/x.py"],
+)
+def test_a_receipt_cannot_smuggle_options_into_the_test_selection(
+    proven, tmp_path: Path, item: str
+) -> None:
+    case, _, receipt, path = proven
+    original = receipt.commands[0]
+    assert "--junitxml" in original
+
+    def add(data: dict) -> None:
+        _with_command(data, [*original, item])
+
+    result = verify_receipt(tampered(path, tmp_path, add), case.project)
+    assert not result.verified
+    assert "not safe to run here" in result.mismatches[0]
+
+
+def test_the_projects_own_test_command_is_allowed(proven) -> None:
+    from qedcode.verify.verify import unsafe_command
+
+    case, _, receipt, _ = proven
+    for command in receipt.commands:
+        assert unsafe_command(command, case.ctx.project) is None

@@ -225,7 +225,12 @@ def _added_test_files(ctx: CascadeContext, files: list[FileDiff]) -> list[str]:
     return sorted(added)
 
 
-def _base_failures_for(ctx: CascadeContext, wt: Path, tests: list[str]) -> list[str]:
+def _cand_dir(ctx: CascadeContext, cand: Candidate) -> Path:
+    """Each candidate's test logs and reports live apart, so a later try never overwrites them."""
+    return ctx.run_dir / cand.id
+
+
+def _base_failures_for(ctx: CascadeContext, wt: Path, tests: list[str], run_dir: Path) -> list[str]:
     """Which of these (new) test files' tests fail on the base? Runs them in a base worktree."""
     if ctx.repro is not None and tests == [ctx.repro.path]:
         return ctx.repro.base_failures
@@ -242,7 +247,7 @@ def _base_failures_for(ctx: CascadeContext, wt: Path, tests: list[str]) -> list[
             tests,
             ctx.project.test_timeout_seconds,
             stage="fbpa",
-            run_dir=ctx.run_dir,
+            run_dir=run_dir / "base",
             cancelled=ctx.cancelled,
         )
     finally:
@@ -251,7 +256,7 @@ def _base_failures_for(ctx: CascadeContext, wt: Path, tests: list[str]) -> list[
 
 
 def _run_tests(
-    ctx: CascadeContext, wt: Path, selection: list[str] | None, stage: str
+    ctx: CascadeContext, wt: Path, selection: list[str] | None, stage: str, run_dir: Path
 ) -> PytestOutcome:
     out = run_tests(
         wt,
@@ -260,7 +265,7 @@ def _run_tests(
         selection,
         ctx.project.test_timeout_seconds,
         stage="full" if stage == "full" else ("fbpa" if stage == "fbpa" else "targeted"),
-        run_dir=ctx.run_dir,
+        run_dir=run_dir,
         cancelled=ctx.cancelled,
     )
     if out.status == "cancelled":
@@ -273,7 +278,7 @@ def _stage_fbpa(ctx: CascadeContext, cand: Candidate, wt: Path, files: list[File
     if not tests:
         _skip(ctx, cand, "fbpa", "no new test")
         return True
-    out = _run_tests(ctx, wt, tests, "fbpa")
+    out = _run_tests(ctx, wt, tests, "fbpa", _cand_dir(ctx, cand))
     if out.status == "no_tests":
         check = out.check.model_copy(deep=True)
         check.passed = False
@@ -284,7 +289,7 @@ def _stage_fbpa(ctx: CascadeContext, cand: Candidate, wt: Path, files: list[File
         check.stage = "fbpa"
         check.summary = f"The new test does not pass with the change. {check.summary}"[:300]
         return _record(ctx, cand, check)
-    before = set(_base_failures_for(ctx, wt, tests))
+    before = set(_base_failures_for(ctx, wt, tests, _cand_dir(ctx, cand)))
     whole_file_failed = file_level_failure(before)
     proof = [
         r for r in out.results if r.outcome == "passed" and (r.key in before or whole_file_failed)
@@ -306,7 +311,7 @@ def _stage_fbpa(ctx: CascadeContext, cand: Candidate, wt: Path, files: list[File
 def _stage_tests(
     ctx: CascadeContext, cand: Candidate, wt: Path, stage: str, selection: list[str] | None
 ) -> bool:
-    out = _run_tests(ctx, wt, selection, stage)
+    out = _run_tests(ctx, wt, selection, stage, _cand_dir(ctx, cand))
     if out.status == "no_tests":
         _skip(ctx, cand, stage, "no tests were collected")
         return True
@@ -377,6 +382,11 @@ def _run_stages(ctx: CascadeContext, cand: Candidate, wt: Path, run_full: bool) 
         baseline_full_seconds=ctx.baseline_full_seconds,
         language=ctx.project.language,
     )
+    if selection is None:
+        # Nothing related was found and the suite is quick, so the whole suite runs: record it as
+        # the full stage (it is one) instead of running the same tests twice.
+        _stage_tests(ctx, cand, wt, "full", None)
+        return
     if selection == []:
         _skip(ctx, cand, "targeted", "no related tests were found")
     elif not _stage_tests(ctx, cand, wt, "targeted", selection):

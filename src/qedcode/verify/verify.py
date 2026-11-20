@@ -16,6 +16,7 @@ from pathlib import Path
 from qedcode.config import ProjectConfig, load_project
 from qedcode.models.schemas import CheckResult, Receipt
 from qedcode.project.detect_js import detect_js, js_config
+from qedcode.project.paths import validate_path
 from qedcode.vcs import worktree
 from qedcode.vcs.git import git
 from qedcode.verify.js_runner import is_js_command, selection_from
@@ -63,6 +64,37 @@ def _prefix_from(command: list[str], python: str) -> list[str]:
     return [python if part == PYTHON else part for part in command[:end]]
 
 
+def _templated_prefix(command: list[str], cfg: ProjectConfig) -> list[str]:
+    """The command before the standard flags, with this project's interpreter as {python}."""
+    end = command.index("-q") if "-q" in command else len(command)
+    own = {cfg.python, sys.executable} - {""}
+    return [PYTHON if part in own else part for part in command[:end]]
+
+
+def unsafe_command(command: list[str], cfg: ProjectConfig) -> str | None:
+    """Why a recorded command must not run here, or None when it is safe to re-run.
+
+    A receipt is a file anyone can hand over, so it is data, never a command list: only this
+    project's own test command (or the default `{python} -m pytest`) may run, and the test
+    selection may name only files or test ids inside the project, never options.
+    """
+    selection = selection_from(command) if is_js_command(command) else _selection_from(command)
+    if not is_js_command(command):
+        prefix = _templated_prefix(command, cfg)
+        allowed = (list(cfg.test_command), [PYTHON, "-m", "pytest"])
+        if prefix not in allowed:
+            return (
+                f"it asks to run `{' '.join(prefix) or '(nothing)'}`, which is not this project's "
+                "test command (see test_command in .qed/project.toml)"
+            )
+    for item in selection:
+        path = item.split("::", 1)[0]
+        problem = validate_path(path) if path else "an empty test name"
+        if problem:
+            return f"its test selection has '{item[:80]}', which is not a test in this project"
+    return None
+
+
 def _apply(root: Path, wt: Path, patch: str, only: list[str] | None = None) -> str:
     args = ["apply", "--binary", "--whitespace=nowarn"]
     for path in only or []:
@@ -106,6 +138,13 @@ def verify_receipt(
     cfg = project or load_project(root)
     if any(is_js_command(c) for c in receipt.commands) and cfg.language != "javascript":
         cfg = js_config(detect_js(root))  # a JavaScript receipt in a folder not set up yet
+    refused = [why for c in receipt.commands if (why := unsafe_command(c, cfg))]
+    if refused:
+        mismatch(
+            f"Nothing was re-run, because this receipt is not safe to run here: {refused[0]}. "
+            "Only re-run receipts that QEDCode wrote in this project."
+        )
+        return result
     timeout = cfg.test_timeout_seconds
     sandbox = sandbox_for(cfg, root)
     if receipt.sandbox == "docker" and sandbox is None:

@@ -62,6 +62,39 @@ def _split_paths(rest: str) -> str:
     return candidate if both == f"{candidate} b/{candidate}" else both.split(" b/")[0]
 
 
+_C_ESCAPES = {"a": 7, "b": 8, "t": 9, "n": 10, "v": 11, "f": 12, "r": 13, '"': 34, "\\": 92}
+
+
+def _read_quoted(text: str) -> str:
+    """Decode the C-style quoted name git prints for unusual paths (`"a/x\\"y"` -> `a/x"y`)."""
+    out = bytearray()
+    i = 1  # skip the opening quote
+    while i < len(text) and text[i] != '"':
+        ch = text[i]
+        if ch == "\\" and i + 1 < len(text):
+            nxt = text[i + 1]
+            if nxt in "01234567" and i + 3 < len(text):
+                out.append(int(text[i + 1 : i + 4], 8) & 0xFF)
+                i += 4
+                continue
+            out.append(_C_ESCAPES.get(nxt, ord(nxt) if ord(nxt) < 128 else 63))
+            i += 2
+            continue
+        out.extend(ch.encode("utf-8", "surrogateescape"))
+        i += 1
+    return out.decode("utf-8", "replace")
+
+
+def _header_path(rest: str) -> str:
+    """The file path in the part of a `diff --git` line after `diff --git `, quoted or not."""
+    if rest.startswith('"'):
+        name = _read_quoted(rest)
+        return name[len("a/") :] if name.startswith("a/") else name
+    if ' "b/' in rest:
+        return rest[len("a/") : rest.index(' "b/')]
+    return _split_paths(rest)
+
+
 def parse_diff(diff: str) -> list[FileDiff]:
     """Parse the output of `git diff --binary --no-renames` into per-file added/removed lines."""
     files: list[FileDiff] = []
@@ -70,8 +103,8 @@ def parse_diff(diff: str) -> list[FileDiff]:
     in_hunk = False
     for raw in diff.split("\n"):
         line = raw.rstrip("\r")
-        if line.startswith("diff --git a/"):
-            path = _split_paths(line[len("diff --git ") :])
+        if line.startswith(("diff --git a/", 'diff --git "')):
+            path = _header_path(line[len("diff --git ") :])
             current = FileDiff(path=path)
             files.append(current)
             in_hunk = False

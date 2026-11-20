@@ -11,6 +11,8 @@ from functools import lru_cache
 from pathlib import Path
 
 FORBIDDEN_TOP = (".git", ".qed")
+# Characters git quotes in diff headers (so guards could misread the path) or that no tool expects.
+_UNSAFE_CHARS = re.compile(r'[\x00-\x1f\x7f"]')
 TEST_PATTERNS = ["tests/**", "test/**", "**/test_*.py", "**/*_test.py"]
 JS_SUFFIXES = (".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts")
 JS_TEST_PATTERNS = ["tests/**", "test/**", "**/__tests__/**", "**/*.test.*", "**/*.spec.*"]
@@ -81,6 +83,8 @@ def validate_path(raw: str, root: Path | None = None) -> str | None:
         return "the path is empty"
     if "\\" in path:
         return "use forward slashes in paths (for example app/auth.py)"
+    if _UNSAFE_CHARS.search(path):
+        return "the path contains quotes or control characters; use a plain file name"
     if path.startswith("/") or re.match(r"^[A-Za-z]:", path):
         return "the path must be relative to the project, not absolute"
     parts = normalize_path(path).split("/")
@@ -88,6 +92,8 @@ def validate_path(raw: str, root: Path | None = None) -> str | None:
         return "the path must stay inside the project (no ..)"
     if "" in parts[:-1] or parts == [""]:
         return "the path has an empty folder name"
+    if any(part.startswith("-") for part in parts):
+        return "file and folder names may not start with '-' (they would read as options)"
     if parts[0].lower() in FORBIDDEN_TOP:
         return f"files inside {parts[0]}/ cannot be edited"
     if root is not None:

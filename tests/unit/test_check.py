@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
+import time
 from pathlib import Path
 
 import pytest
@@ -314,3 +316,36 @@ def test_cli_check_json_output_has_no_progress_lines_on_stdout(tmp_path: Path, m
     monkeypatch.chdir(project)
     result = CliRunner().invoke(app, ["check", "--json"])
     json.loads(result.stdout)  # the whole stdout is one JSON document
+
+
+def test_a_lock_file_that_is_still_being_written_counts_as_busy(tmp_path: Path) -> None:
+    """Between creating the lock and writing it, another job must not think it is stale."""
+    path = tmp_path / ".qed" / "lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("")  # just created by another process, not filled in yet
+    assert lock_holder(tmp_path) is not None
+    with pytest.raises(ProjectBusy, match="starting"):
+        with project_lock(tmp_path):
+            pass
+    old = time.time() - 60
+    os.utime(path, (old, old))  # an empty lock left behind long ago is stale
+    with project_lock(tmp_path, "new"):
+        assert lock_holder(tmp_path)["task"] == "new"
+
+
+def test_a_lock_whose_pid_was_reused_by_a_newer_process_is_stale(tmp_path: Path) -> None:
+    path = tmp_path / ".qed" / "lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    # this very process is alive, but it started long after the lock says it was taken
+    path.write_text(json.dumps({"pid": os.getpid(), "since": 1000.0, "task": "old"}))
+    assert lock_holder(tmp_path) is None
+    path.write_text(json.dumps(["not", "a", "dict"]))
+    old = time.time() - 60
+    os.utime(path, (old, old))
+    assert lock_holder(tmp_path) is None  # an old lock that is not ours is stale, never a crash
+
+
+def test_a_base_that_looks_like_an_option_is_refused(tmp_path: Path) -> None:
+    project = zoo_repo(tmp_path)
+    outcome = api.check(project, base="--output=/tmp/x")
+    assert outcome.status == "error" and "is not a commit" in outcome.message

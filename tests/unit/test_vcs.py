@@ -378,3 +378,43 @@ def test_last_apply_file_is_valid_json_with_hashes(tmp_path: Path) -> None:
     assert data["files"] == ["app/util.py"]
     assert data["before"]["app/util.py"] != data["after"]["app/util.py"]
     assert data["patch"] == patch
+
+
+# ------------------------------------------------------------------ hardening
+
+
+def test_qedcode_commits_never_run_git_hooks(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path / "r", BASE)
+    marker = tmp_path / "hook-ran"
+    hooks = repo / ".git" / "hooks"
+    hooks.mkdir(parents=True, exist_ok=True)
+    for name in ("post-checkout", "post-commit", "pre-commit"):
+        hook = hooks / name
+        hook.write_text(f"#!/bin/sh\necho ran > '{marker}'\n", encoding="utf-8")
+        hook.chmod(0o755)
+    base = snapshot(repo, "t-h1")
+    wt = worktree.create(repo, base, "t-h1-c1")
+    write_files(wt, {"app/more.py": "M = 1\n"})
+    worktree.commit_all(wt, "candidate")
+    worktree.remove(repo, wt)
+    assert not marker.exists()
+
+
+def test_inherited_git_location_variables_are_ignored(tmp_path: Path, monkeypatch) -> None:
+    """`qed check` from a pre-commit hook: git exports GIT_INDEX_FILE and GIT_DIR to the hook."""
+    repo = make_repo(tmp_path / "r", BASE)
+    other = make_repo(tmp_path / "other", {"x.txt": "x\n"})
+    index_before = (repo / ".git" / "index").read_bytes()
+    monkeypatch.setenv("GIT_DIR", str(other / ".git"))
+    monkeypatch.setenv("GIT_INDEX_FILE", str(repo / ".git" / "index"))
+    write_files(repo, {"app/util.py": "X = 9\n"})
+    base = snapshot(repo, "t-h2")
+    wt = worktree.create(repo, base, "t-h2-c1")
+    write_files(wt, {"app/more.py": "M = 1\n"})
+    commit = worktree.commit_all(wt, "candidate")
+    assert "app/more.py" in worktree.diff(repo, base, commit)
+    worktree.remove(repo, wt)
+    monkeypatch.delenv("GIT_DIR")
+    monkeypatch.delenv("GIT_INDEX_FILE")
+    assert (repo / ".git" / "index").read_bytes() == index_before
+    assert "qed" not in run_git(other, "for-each-ref")

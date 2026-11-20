@@ -22,19 +22,48 @@ def lock_path(root: Path | str) -> Path:
     return Path(root) / ".qed" / LOCK_NAME
 
 
+FRESH_SECONDS = 5.0  # a lock file this young may still be being written by its owner
+
+
 def _holder(path: Path) -> dict | None:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
+    return data if isinstance(data, dict) else None
+
+
+def _alive(info: dict) -> bool:
+    """Is the process that wrote the lock still running (and not a new one with a reused pid)?"""
+    try:
+        pid = int(info.get("pid", 0))
+        since = float(info.get("since", 0.0))
+    except (TypeError, ValueError):
+        return False
+    if pid <= 0:
+        return False
+    try:
+        started = psutil.Process(pid).create_time()
+    except psutil.Error:
+        return False
+    return not since or started <= since + 1.0
+
+
+def _just_created(path: Path) -> bool:
+    try:
+        return time.time() - path.stat().st_mtime < FRESH_SECONDS
+    except OSError:
+        return False
 
 
 def lock_holder(root: Path | str) -> dict | None:
     """Who holds the project lock (pid, since, task), or None when it is free or stale."""
-    info = _holder(lock_path(root))
-    if info and psutil.pid_exists(int(info.get("pid", 0))):
-        return info
-    return None
+    path = lock_path(root)
+    info = _holder(path)
+    if info is None:
+        # Created but not written yet: its owner is between open() and write(). Busy, not stale.
+        return {"pid": 0, "since": 0.0, "task": ""} if _just_created(path) else None
+    return info if _alive(info) else None
 
 
 @contextmanager
@@ -50,7 +79,7 @@ def project_lock(root: Path | str, task: str = "") -> Iterator[None]:
             if holder is None:
                 path.unlink(missing_ok=True)  # the owner died: take the lock over
                 continue
-            who = f"process {holder.get('pid')}"
+            who = f"process {holder['pid']}" if holder.get("pid") else "a task that is starting"
             if holder.get("task"):
                 who += f", task {holder['task']}"
             raise ProjectBusy(

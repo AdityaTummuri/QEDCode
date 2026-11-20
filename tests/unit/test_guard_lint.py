@@ -474,3 +474,42 @@ def test_target_grade_rules_and_helpers() -> None:
         Speed.SURE,
         Speed.SURE,
     ]
+
+
+# ------------------------------------------------------------------ odd file names
+
+
+def test_quoted_paths_in_a_real_diff_are_still_guarded(tmp_path: Path) -> None:
+    """git quotes names with quotes, tabs or backslashes; the guards must still see the file."""
+    from qedcode.verify.guard import parse_diff, risk_findings
+    from tests.conftest import make_repo, write_files
+
+    repo = make_repo(tmp_path / "r", {"app/ok.py": "X = 1\n"})
+    base = snapshot(repo, "t-q1")
+    wt = worktree.create(repo, base, "t-q1-c1")
+    write_files(wt, {'app/we"ird.py': "import subprocess\n", "app/ok.py": "X = 2\n"})
+    commit = worktree.commit_all(wt, "odd name")
+    diff = worktree.diff(repo, base, commit)
+    worktree.remove(repo, wt)
+    assert '"a/app/we\\"ird.py"' in diff  # git really quotes it
+    paths = {f.path: f for f in parse_diff(diff)}
+    assert set(paths) == {'app/we"ird.py', "app/ok.py"}
+    assert paths['app/we"ird.py'].status == "added"
+    assert paths["app/ok.py"].added == [(1, "X = 2")]  # lines are not mixed between files
+    assert [f.path for f in risk_findings(diff)] == ['app/we"ird.py']
+
+
+@pytest.mark.parametrize(
+    "path", ['app/a"b.py', "app/tab\there.py", "-p.py", "app/--rootdir.py", "app/x\x00.py"]
+)
+def test_model_paths_with_quotes_control_chars_or_leading_dashes_are_refused(path: str) -> None:
+    from qedcode.project.paths import validate_path
+
+    assert validate_path(path) is not None
+
+
+def test_ordinary_paths_still_pass_validation() -> None:
+    from qedcode.project.paths import validate_path
+
+    for path in ("app/my file.py", "src/pkg/mod-x.py", "a/b/c_d.py", "pkg/ünï.py"):
+        assert validate_path(path) is None, path

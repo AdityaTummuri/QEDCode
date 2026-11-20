@@ -338,6 +338,32 @@ def test_no_related_tests_and_a_slow_baseline_means_no_targeted_stage(tmp_path: 
     assert cand.grade is Grade.C  # static checks passed, nothing tested
 
 
+def test_no_related_tests_and_a_quick_suite_runs_it_once_as_the_full_stage(
+    tmp_path: Path,
+) -> None:
+    """The fallback "run everything" IS the full suite: record it as such and never run it twice."""
+    case = zoo_case(tmp_path, repro=False)
+    case.ctx.baseline_full_seconds = 1.0
+    orphan = "EDIT create_file path=src/shop/orphan.py\n```python\nO = 1\n```\n"
+    cand = evaluate_candidate(case.ctx, case.candidate(orphan), run_full=True)
+    stages = [c.stage for c in cand.checks]
+    assert stages.count("full") == 1 and "targeted" not in stages
+    assert cand.full_suite_ran and cand.tests_passed > 0
+    assert cand.grade is Grade.B  # tested, no fail-before-pass-after proof
+
+
+def test_each_candidate_keeps_its_own_test_log(tmp_path: Path) -> None:
+    case = zoo_case(tmp_path)
+    first = evaluate_candidate(case.ctx, case.candidate())
+    second = case.candidate()
+    second.id = "c2"
+    evaluate_candidate(case.ctx, second)
+    logs = {c.log_path for c in [*first.checks, *second.checks] if c.log_path}
+    assert any("/c1/" in p.replace("\\", "/") for p in logs)
+    assert any("/c2/" in p.replace("\\", "/") for p in logs)
+    assert all(Path(p).is_file() for p in logs)
+
+
 # ------------------------------------------------------------------ cancellation and speed
 
 

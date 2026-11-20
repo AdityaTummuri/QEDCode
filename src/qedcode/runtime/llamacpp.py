@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from qedcode.runtime.server_manager import ServerInfo, ServerManager, ServerSpec
 
 # Qwen-style chat templates can think out loud; QEDCode wants only the formatted reply.
 _NO_THINKING = {"chat_template_kwargs": {"enable_thinking": False}, "cache_prompt": True}
+TOUCH_EVERY_S = 15.0  # how often a streaming answer records that the server is in use
 
 
 class LlamaCppClient(OpenAICompatClient):
@@ -66,14 +68,28 @@ class LlamaCppClient(OpenAICompatClient):
         if self.info is None or not self.manager.is_healthy(self.info):
             self.ensure_started()
         self.manager.touch()
-        return super().chat(
-            messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            stop=stop,
-            on_token=on_token,
-            tag=tag,
-        )
+        last_touch = time.monotonic()
+
+        def on_piece(piece: str) -> None:
+            # A long answer (slow CPU, quiet mode) must not look idle to another client's watcher.
+            nonlocal last_touch
+            if time.monotonic() - last_touch >= TOUCH_EVERY_S:
+                self.manager.touch()
+                last_touch = time.monotonic()
+            if on_token is not None:
+                on_token(piece)
+
+        try:
+            return super().chat(
+                messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                stop=stop,
+                on_token=on_piece,
+                tag=tag,
+            )
+        finally:
+            self.manager.touch()
 
     def health(self) -> bool:
         return self.manager.is_healthy()

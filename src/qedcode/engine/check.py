@@ -105,8 +105,12 @@ def check(
             message="This repository has no commits yet, so there is nothing to compare with. "
             "Make a first commit, then run `qed check` again.",
         )
-    ref = git(folder, "rev-parse", "--verify", "--quiet", f"{base}^{{commit}}")
-    if not ref.ok:
+    ref = (
+        None
+        if base.startswith("-")
+        else git(folder, "rev-parse", "--verify", "--quiet", f"{base}^{{commit}}")
+    )
+    if ref is None or not ref.ok:
         return CheckOutcome(
             status="error",
             base=base,

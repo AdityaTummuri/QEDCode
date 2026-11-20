@@ -368,3 +368,28 @@ def test_resolve_model_path(tmp_path: Path, monkeypatch) -> None:
     assert "qed models download qwen3.5-4b-q4km" in str(err2.value)
     with pytest.raises(ModelError):
         resolve_model_path("not-in-catalog")
+
+
+def test_a_new_context_size_restarts_the_server(manager, make_spec) -> None:
+    """A server started with a smaller context must not be reused: long prompts would fail."""
+    first = manager.ensure(make_spec(ctx=4096))
+    second = manager.ensure(make_spec(ctx=8192))
+    assert second.pid != first.pid and second.ctx == 8192
+    deadline = time.monotonic() + 5
+    while psutil.pid_exists(first.pid) and time.monotonic() < deadline:
+        time.sleep(0.1)
+    assert len(fake_children()) == 1
+
+
+def test_a_long_answer_keeps_the_server_marked_as_in_use(manager, make_spec, monkeypatch) -> None:
+    """Another client's idle watcher must not stop the server while an answer is streaming."""
+    import qedcode.runtime.llamacpp as llamacpp
+
+    client = LlamaCppClient(make_spec(), manager)
+    client.chat([{"role": "user", "content": "warm up"}], temperature=0, max_tokens=5)
+    touches: list[float] = []
+    real_touch = manager.touch
+    monkeypatch.setattr(manager, "touch", lambda: (touches.append(1), real_touch())[1])
+    monkeypatch.setattr(llamacpp, "TOUCH_EVERY_S", 0.0)
+    client.chat([{"role": "user", "content": "a b c d e"}], temperature=0, max_tokens=50)
+    assert len(touches) >= 3  # before, during the stream and after

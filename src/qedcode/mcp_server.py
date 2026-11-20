@@ -13,6 +13,7 @@ stdout belongs to the protocol: nothing in this process may print to it.
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 import time
 import uuid
@@ -31,9 +32,12 @@ from qedcode.models.schemas import Event, SolveResult, Speed
 from qedcode.runtime.client import ModelClient
 from qedcode.runtime.quiet import effective_keep_alive
 
+log = logging.getLogger("qedcode.mcp")
+
 DEFAULT_WAIT_SECONDS = 600
 POLL_SECONDS = 0.25
 PROGRESS_LINES_SHOWN = 12
+KEEP_FINISHED_JOBS = 50  # finished jobs kept for `status`; older ones are forgotten
 INSTRUCTIONS = (
     "QEDCode fixes bugs and builds small features in the current Python project with several "
     "tries, tests on every try, and one proven result with a grade (A proven, B tested, C checked, "
@@ -59,6 +63,7 @@ class Job:
     kind: str
     root: Path
     started: float = field(default_factory=time.monotonic)
+    finished: float = 0.0
     events: list[str] = field(default_factory=list)
     result: dict | None = None
     done: threading.Event = field(default_factory=threading.Event)
@@ -90,10 +95,12 @@ class JobRunner:
                 )
             holder = lock_holder(root)
             if holder is not None:
+                who = f"process {holder['pid']}" if holder.get("pid") else "it is just starting"
                 raise Busy(
-                    "Another QEDCode task is running in this project (process "
-                    f"{holder.get('pid')}), for example in the terminal. Wait for it to finish."
+                    f"Another QEDCode task is running in this project ({who}), for example in "
+                    "the terminal. Wait for it to finish."
                 )
+            self._forget_old()
             job = Job(id=uuid.uuid4().hex[:10], kind=kind, root=root)
             self._jobs[job.id] = job
             self._active[key] = job.id
@@ -102,11 +109,14 @@ class JobRunner:
             try:
                 job.result = target(job)
             except Exception as exc:  # noqa: BLE001 - a job must always finish with a result
+                log.exception("MCP %s job %s crashed", kind, job.id)
                 job.result = {
                     "status": "error",
-                    "message": f"Something went wrong inside QEDCode ({type(exc).__name__}).",
+                    "message": f"Something went wrong inside QEDCode ({type(exc).__name__}). "
+                    "The details are in ~/.qedcode/logs/qedcode.log; run `qed doctor`.",
                 }
             finally:
+                job.finished = time.monotonic()
                 job.done.set()
                 with self._lock:
                     if self._active.get(key) == job.id:
@@ -115,11 +125,21 @@ class JobRunner:
         threading.Thread(target=run, name=f"qed-job-{job.id}", daemon=True).start()
         return job
 
+    def _forget_old(self) -> None:
+        """Keep only the newest finished jobs, so a long-running server does not grow forever."""
+        finished = sorted(
+            (j for j in self._jobs.values() if j.done.is_set()), key=lambda j: j.finished
+        )
+        for job in finished[: max(len(finished) - KEEP_FINISHED_JOBS, 0)]:
+            del self._jobs[job.id]
+
     def get(self, job_id: str) -> Job | None:
         return self._jobs.get(job_id)
 
     def cancel_all(self) -> None:
-        for job in self._jobs.values():
+        with self._lock:
+            jobs = list(self._jobs.values())
+        for job in jobs:
             job.cancel.set()
 
 

@@ -202,6 +202,16 @@ def _process_matches(pid: int, create_time: float) -> bool:
         return False
 
 
+def _serves(live: ServerInfo, spec: ServerSpec) -> bool:
+    """Can the running server be reused for `spec`? Same model file, context and KV cache type
+    (a smaller context would make long prompts fail). Quiet-mode flags are kept until a restart."""
+    return (
+        Path(live.model_path) == Path(spec.model_path)
+        and live.ctx == spec.ctx
+        and live.kv_cache == spec.kv_cache
+    )
+
+
 def _atomic_write(path: Path, text: str) -> None:
     """Write a file in one step. The temp name is unique per thread, so threads never collide."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -342,11 +352,15 @@ class ServerManager:
         say = on_status or (lambda _msg: None)
         with FileLock(self.lock_path):
             live = self.info()
-            if live is not None and Path(live.model_path) == Path(spec.model_path):
+            if live is not None and _serves(live, spec):
                 info = live
             else:
                 if live is not None:
-                    say("Switching models: stopping the old model server...")
+                    say(
+                        "Switching models: stopping the old model server..."
+                        if Path(live.model_path) != Path(spec.model_path)
+                        else "The context size changed: restarting the model server..."
+                    )
                     self._stop_locked(live)
                 info = self._start_locked(spec, say)
         self.register_client()

@@ -308,6 +308,7 @@ class _Run:
             select.promising(cand, self.spec.target_grade)
             and self.settings.full_on_finalist
             and self.base_run.baseline.runnable
+            and not cand.full_suite_ran
         ):
             self.check_cancel()
             self.emit("stage", f"Running all tests on {cand.id}...")

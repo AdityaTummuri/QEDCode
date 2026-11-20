@@ -72,7 +72,8 @@ def _ruff(files: dict[str, str]) -> tuple[list[dict] | None, str]:
         for rel, text in files.items():
             target = root / rel
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(text, encoding="utf-8", newline="")
+            # base versions come from git with undecodable bytes kept (surrogateescape)
+            target.write_text(text, encoding="utf-8", errors="surrogateescape", newline="")
         result = run(
             [
                 sys.executable,
