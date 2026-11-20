@@ -1,0 +1,7 @@
+# Keep LF line endings in the repository's own text files on every OS. The bug zoo projects and
+# test fixtures are compared byte for byte, so a CRLF checkout (Git for Windows' default) would
+# change what the tests see. QEDCode itself handles CRLF projects; see tests/unit/test_apply.py.
+* text=auto eol=lf
+*.docx binary
+*.png binary
+*.gguf binary

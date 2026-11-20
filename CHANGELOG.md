@@ -32,6 +32,16 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
   so a later try no longer overwrites the logs a receipt points to.
 - MCP: a job that crashes is logged with its traceback, and finished jobs no longer pile up in
   memory in a long-running `qed mcp` server.
+- Windows: JavaScript and TypeScript tests with `node --test` work (the reporter is passed to Node
+  as a `file://` URL; a plain `C:\...` path was rejected, so every Node run failed).
+- Windows: `qed memory clear` can replace a damaged memory database (a connection to the broken
+  file was left open, which locks it on Windows).
+- Windows: `qed uninstall --all` closes QEDCode's own log file before deleting `~/.qedcode`, and
+  uninstall never reports a folder as removed when it could not be removed.
+- The terminal UI no longer crashes when its status refresh fires while a dialog is open or the
+  app is closing.
+- The repository keeps LF line endings on every OS (`.gitattributes`), so the bug zoo and test
+  fixtures are the same on Windows.
 
 ### Changed
 - When no related tests are found and the suite is quick, the whole suite runs once and counts as

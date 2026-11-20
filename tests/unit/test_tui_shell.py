@@ -200,3 +200,18 @@ async def test_slash_commands_and_unknown_commands(tmp_path: Path) -> None:
         assert screen_name(app) != "TextScreen"
         await submit(pilot, "/models")
         assert any(ln.startswith("Using: fake:scripted") for ln in app.log_lines)
+
+
+async def test_the_status_refresh_survives_a_dialog_on_top(tmp_path: Path) -> None:
+    """The 5-second refresh timer can fire while a dialog (or shutdown) hides the header."""
+    from textual.screen import ModalScreen
+
+    app, _, _ = make_app(tmp_path)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await ready(app)
+        app.push_screen(ModalScreen())
+        await pilot.pause()
+        app.refresh_chrome()  # must not raise NoMatches
+        app.pop_screen()
+        await pilot.pause()
+        app.refresh_chrome()

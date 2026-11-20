@@ -97,8 +97,12 @@ class Memory:
     def _connect(self) -> sqlite3.Connection:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(self.path, timeout=5)
-        conn.row_factory = sqlite3.Row
-        conn.executescript(_SCHEMA)
+        try:
+            conn.row_factory = sqlite3.Row
+            conn.executescript(_SCHEMA)
+        except BaseException:
+            conn.close()  # a damaged file must not stay open (Windows could not delete it)
+            raise
         return conn
 
     def _safely(self, action, default):

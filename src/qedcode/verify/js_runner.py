@@ -76,7 +76,8 @@ def real_command(
 ) -> list[str]:
     runner = project.test_runner
     if runner == "node":
-        return [node, "--test", "--test-reporter", str(REPORTER),
+        # a file:// URL: on Windows Node reads a bare "C:\\..." specifier as a URL scheme "c:"
+        return [node, "--test", "--test-reporter", REPORTER.as_uri(),
                 "--test-reporter-destination", str(report), *files]  # fmt: skip
     assert binary is not None
     if runner == "vitest":

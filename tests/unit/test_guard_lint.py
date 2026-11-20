@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -479,6 +480,7 @@ def test_target_grade_rules_and_helpers() -> None:
 # ------------------------------------------------------------------ odd file names
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Windows file names cannot contain quotes")
 def test_quoted_paths_in_a_real_diff_are_still_guarded(tmp_path: Path) -> None:
     """git quotes names with quotes, tabs or backslashes; the guards must still see the file."""
     from qedcode.verify.guard import parse_diff, risk_findings
@@ -513,3 +515,26 @@ def test_ordinary_paths_still_pass_validation() -> None:
 
     for path in ("app/my file.py", "src/pkg/mod-x.py", "a/b/c_d.py", "pkg/ünï.py"):
         assert validate_path(path) is None, path
+
+
+def test_quoted_diff_headers_are_decoded_on_every_os() -> None:
+    from qedcode.verify.guard import parse_diff
+
+    diff = (
+        'diff --git "a/app/we\\"ird\\303\\274.py" "b/app/we\\"ird\\303\\274.py"\n'
+        "new file mode 100644\n"
+        "--- /dev/null\n"
+        '+++ "b/app/we\\"ird\\303\\274.py"\n'
+        "@@ -0,0 +1 @@\n"
+        "+import subprocess\n"
+        "diff --git a/app/ok.py b/app/ok.py\n"
+        "--- a/app/ok.py\n"
+        "+++ b/app/ok.py\n"
+        "@@ -1 +1 @@\n"
+        "-X = 1\n"
+        "+X = 2\n"
+    )
+    files = parse_diff(diff)
+    assert [f.path for f in files] == ['app/we"irdü.py', "app/ok.py"]
+    assert files[0].status == "added" and files[0].added == [(1, "import subprocess")]
+    assert files[1].added == [(1, "X = 2")]

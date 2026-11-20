@@ -186,3 +186,23 @@ def test_cli_uninstall_all_yes(tmp_path: Path, monkeypatch) -> None:
 
 def test_unused_imports_are_used() -> None:
     assert PY and Mode and Speed and ProjectConfig and save_project and keyring
+
+
+def test_uninstall_all_closes_the_log_file_and_never_claims_a_failed_removal(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Windows cannot delete an open file: the app's own log must be closed first, and a folder
+    that could not be removed must not be reported as removed."""
+    import logging
+
+    from qedcode.logging_setup import setup_logging
+
+    seed_home()
+    setup_logging()
+    handlers = [h for h in logging.getLogger("qedcode").handlers if getattr(h, "_qed_file", 0)]
+    assert handlers
+    monkeypatch.setattr("qedcode.engine.uninstall.shutil.rmtree", lambda *a, **k: None)
+    done = uninstall_all(None, lambda _prompt: True, include_keys=False)
+    assert not [h for h in logging.getLogger("qedcode").handlers if getattr(h, "_qed_file", 0)]
+    assert any("Could not remove everything" in line for line in done)
+    assert not any(line.startswith("Removed ") and "qedcode_home" in line for line in done)

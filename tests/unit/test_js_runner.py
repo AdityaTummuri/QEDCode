@@ -171,7 +171,7 @@ def test_real_commands_use_the_local_binary_and_never_npx(tmp_path: Path) -> Non
     assert jest[1:] == ["--json", f"--outputFile={report}", "--ci", "--runTestsByPath", "a.test.js"]
     node = real_command(config("node"), "/usr/bin/node", None, report, ["a.test.js"])
     assert node[:2] == ["/usr/bin/node", "--test"] and node[-1] == "a.test.js"
-    assert str(js_runner.REPORTER) in node and js_runner.REPORTER.is_file()
+    assert js_runner.REPORTER.as_uri() in node and js_runner.REPORTER.is_file()
     assert "npx" not in " ".join([*vitest, *jest, *node])
 
 
@@ -475,3 +475,11 @@ def test_the_sealed_test_box_is_for_python_projects_only(tmp_path: Path) -> None
     assert sandbox_for(config(sandbox="docker"), tmp_path) is None
     assert sandbox_for(ProjectConfig(sandbox="docker"), tmp_path) is not None
     assert os.name  # keep the import used
+
+
+def test_the_node_reporter_is_passed_as_a_file_url() -> None:
+    """Node's ESM loader reads a bare Windows path such as C:\\x\\r.mjs as the URL scheme 'c:'."""
+    config = ProjectConfig(language="javascript", test_runner="node", protected=list(JS_PROTECTED))
+    command = js_runner.real_command(config, "node", None, Path("report.json"), ["a.test.js"])
+    reporter = command[command.index("--test-reporter") + 1]
+    assert reporter.startswith("file:///") and reporter.endswith("node_reporter.mjs")

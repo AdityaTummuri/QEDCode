@@ -335,3 +335,30 @@ def test_qed_memory_clear_asks_first(tmp_path: Path, monkeypatch) -> None:
     assert declined.exit_code == 1 and len(api.memory_list(repo)) == 1
     done = CliRunner().invoke(app, ["memory", "clear"], input="y\n")
     assert "Forgot 1 fix(es)." in done.output and api.memory_list(repo) == []
+
+
+def test_a_damaged_database_never_leaves_a_connection_open(tmp_path: Path, monkeypatch) -> None:
+    """On Windows an open connection locks the file, so `qed memory clear` could not repair it."""
+    root = project_with(tmp_path, "a.py")
+    path = memory_path(root)
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"this is not an sqlite database" * 50)
+    opened: list[sqlite3.Connection] = []
+    real_connect = sqlite3.connect
+
+    def tracking(*args, **kwargs):
+        conn = real_connect(*args, **kwargs)
+        opened.append(conn)
+        return conn
+
+    monkeypatch.setattr("qedcode.project.memory.sqlite3.connect", tracking)
+    memory = Memory(root)
+    memory.lessons()
+    memory.record(make_receipt("t-1", "x fix", diff_for("a.py")))
+    assert opened
+    for conn in opened:
+        try:
+            conn.execute("SELECT 1")
+        except sqlite3.ProgrammingError:
+            continue  # closed, as it must be
+        raise AssertionError("a connection to the damaged database was left open")

@@ -18,6 +18,7 @@ from typing import Any
 from rich.text import Text
 from textual.app import App, ComposeResult, SuspendNotSupported
 from textual.binding import Binding
+from textual.css.query import NoMatches
 from textual.screen import ModalScreen
 from textual.widgets import Footer, Input, RichLog
 
@@ -197,10 +198,15 @@ class QedApp(App[None]):
     def refresh_chrome(self) -> None:
         if not self.is_mounted:
             return
-        self.query_one("#header", StatusHeader).show(
+        try:
+            header = self.query_one("#header", StatusHeader)
+            modebar = self.query_one("#modebar", ModeBar)
+        except NoMatches:
+            return  # a dialog is on top, or the app is closing: the next tick catches up
+        header.show(
             self.root.name, self.model_name(), self.backend_name(), self.gpu_text(), self.state
         )
-        self.query_one("#modebar", ModeBar).show(self.speed, self.mode, self.tests_label)
+        modebar.show(self.speed, self.mode, self.tests_label)
 
     def run_dialog(self, screen: ModalScreen[Any]) -> Any:
         """Show a dialog from the worker thread and wait for the answer (None if cancelled)."""

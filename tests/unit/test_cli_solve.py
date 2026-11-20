@@ -59,7 +59,7 @@ def test_solve_prints_progress_grade_explanation_and_receipt(project, monkeypatc
     assert "Grade A" in out and "repro test failed before, passes now" in out
     assert "paginate computed the end of each page" in out  # the plain-English explanation
     assert "Tries: c1: grade A" in out
-    assert "Receipt:" in out and "/.qed/receipts/" in out.replace("\n", "")
+    assert "Receipt:" in out and "/.qed/receipts/" in out.replace("\n", "").replace("\\", "/")
     assert "Apply it with: qed apply t-" in out
 
 

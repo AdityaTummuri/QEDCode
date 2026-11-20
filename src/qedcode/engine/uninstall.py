@@ -160,7 +160,13 @@ def uninstall_project(root: Path | str, confirm: Callable[[str], bool]) -> list[
         done.append("Removed QEDCode's git refs and worktrees.")
         _drop_exclude_line(root)
     shutil.rmtree(root / ".qed", ignore_errors=True)
-    done.append("Removed the .qed/ folder.")
+    if (root / ".qed").exists():
+        done.append(
+            "Could not remove everything in .qed/: a file there is still in use. Close other "
+            "QEDCode windows in this project, then delete the .qed/ folder."
+        )
+    else:
+        done.append("Removed the .qed/ folder.")
     return done
 
 
@@ -207,6 +213,15 @@ def uninstall_all(
             done.append(f"Removed the saved API key for {provider}.")
     home_dir = qedcode_home()
     if home_dir.exists():
+        from qedcode.logging_setup import close_logging
+
+        close_logging()  # our own open log file would block the delete on Windows
         shutil.rmtree(home_dir, ignore_errors=True)
-        done.append(f"Removed {home_dir}.")
+        if home_dir.exists():
+            done.append(
+                f"Could not remove everything in {home_dir}: a file there is still in use. "
+                "Close other QEDCode windows (and the model server), then delete the folder."
+            )
+        else:
+            done.append(f"Removed {home_dir}.")
     return done

@@ -32,6 +32,15 @@ def rotate_file(path: Path, max_bytes: int = MAX_LOG_BYTES, keep: int = KEEP_LOG
         return False
 
 
+def close_logging() -> None:
+    """Close QEDCode's log file (before deleting ~/.qedcode: Windows cannot delete an open file)."""
+    logger = logging.getLogger("qedcode")
+    for existing in list(logger.handlers):
+        if getattr(existing, "_qed_file", False):
+            logger.removeHandler(existing)
+            existing.close()
+
+
 def setup_logging(level: int = logging.INFO) -> Path | None:
     """Send the `qedcode` loggers to a rotating file. Never prints; returns the log path."""
     logger = logging.getLogger("qedcode")

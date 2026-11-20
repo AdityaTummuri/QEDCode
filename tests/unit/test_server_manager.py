@@ -23,17 +23,28 @@ from qedcode.runtime.server_manager import (
     parse_help_flags,
     probe_flags,
 )
+from qedcode.verify.run import kill_process_tree
 from tests.conftest import REPO_ROOT
 
 FAKE = REPO_ROOT / "tests" / "fixtures" / "fake_llama_server.py"
 
 
 def fake_children() -> list[psutil.Process]:
-    out = []
+    """Running fake servers. On Windows a venv's python.exe is a launcher that starts the real
+    interpreter as its child with the same command line; that pair is one server."""
+    found = []
     for child in psutil.Process().children(recursive=True):
         try:
             if "fake_llama_server.py" in " ".join(child.cmdline()):
-                out.append(child)
+                found.append(child)
+        except psutil.Error:
+            pass
+    pids = {p.pid for p in found}
+    out = []
+    for proc in found:
+        try:
+            if proc.ppid() not in pids:
+                out.append(proc)
         except psutil.Error:
             pass
     return out
@@ -78,7 +89,7 @@ def manager():
     mgr.stop_idle_watcher()
     mgr.stop()
     for proc in fake_children():  # belt and braces: never leave a server behind
-        proc.kill()
+        kill_process_tree(proc.pid)
     mgr.unregister_client()
 
 
