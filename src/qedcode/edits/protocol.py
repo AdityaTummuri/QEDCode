@@ -24,6 +24,7 @@ _FENCE_OPEN = re.compile(r"^\s*(`{3,}|~{3,})\s*([^`\s]*)[^`]*$")
 _FENCE_CLOSE = re.compile(r"^\s*(`{3,}|~{3,})\s*$")
 _SEARCH = re.compile(r"^\s*<{5,9}\s*SEARCH\s*$", re.IGNORECASE)
 _DIVIDER = re.compile(r"^\s*={5,9}\s*$")
+_EXACT_DIVIDER = re.compile(r"^=======\s*$")  # the documented marker: seven, at column 0
 _REPLACE = re.compile(r"^\s*>{5,9}\s*REPLACE\s*$", re.IGNORECASE)
 _COMMON_TAGS = {
     "",
@@ -247,6 +248,24 @@ class _Parser:
             )
         )
 
+    def _divider_line(self, start: int) -> int:
+        """Index of the line between SEARCH and REPLACE text, or len(lines) if there is none.
+
+        The exact `=======` marker wins over a loose one (5-9 `=`, maybe indented), so code whose
+        docstrings use reST underlines such as `    ========` (sympy, numpy) is not split there.
+        Only lines up to the block's `>>>>>>> REPLACE` are considered.
+        """
+        end = start
+        while end < len(self.lines) and not _REPLACE.match(self.lines[end]):
+            end += 1
+        for i in range(start, end):
+            if _EXACT_DIVIDER.match(self.lines[i]):
+                return i
+        for i in range(start, end):
+            if _DIVIDER.match(self.lines[i]):
+                return i
+        return len(self.lines)
+
     def _search_replace(self, path: str, label: str) -> None:
         self.skip_blank()
         fenced = False
@@ -258,8 +277,9 @@ class _Parser:
             self.error(f"{label}: expected <<<<<<< SEARCH after the header")
             return
         self.i += 1
+        divider = self._divider_line(self.i)
         search: list[str] = []
-        while self.i < len(self.lines) and not _DIVIDER.match(self.lines[self.i]):
+        while self.i < len(self.lines) and self.i != divider:
             search.append(self.lines[self.i])
             self.i += 1
         if self.i >= len(self.lines):

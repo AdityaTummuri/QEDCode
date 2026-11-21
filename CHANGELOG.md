@@ -15,6 +15,11 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
   `qed setup` ends with a one-line pointer to it.
 
 ### Fixed
+- The edit parser no longer splits a SEARCH/REPLACE block at a reST heading underline inside the
+  code (`    ========`, as in sympy and numpy docstrings). The exact `=======` marker now wins over
+  a loose one; a loose divider still works when the block has no exact one. Any edit whose
+  SEARCH text contained such a docstring was cut in half and failed with a syntax error. Found
+  by Benchy's new SWE-bench suite on a real sympy task.
 - `qed verify` (and the MCP `verify` tool) re-runs tests with the project's detected Python, the
   same one `qed check` uses, when the project settings were never confirmed in the terminal UI.
   It used QEDCode's own interpreter instead, so with QEDCode installed as a `uv tool` (no pytest

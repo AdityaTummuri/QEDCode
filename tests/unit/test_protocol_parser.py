@@ -422,3 +422,25 @@ def test_never_raises_on_garbage() -> None:
     for text in nasty:
         reply = parse_reply(text)
         assert not reply_ok(reply)
+
+
+def test_rest_underlines_in_the_search_text_are_not_the_divider() -> None:
+    """sympy and numpy docstrings underline headings with `========`; only the marker divides."""
+    text = (
+        "EDIT search_replace path=pkg/mod.py\n<<<<<<< SEARCH\ndef f():\n"
+        '    """Return one.\n\n    Examples\n    ========\n\n    >>> f()\n    1\n    """\n'
+        "    return 0\n=======\ndef f():\n"
+        '    """Return one.\n\n    Examples\n    ========\n\n    >>> f()\n    1\n    """\n'
+        "    return 1\n>>>>>>> REPLACE\n"
+    )
+    reply = parse_reply(text)
+    assert reply_ok(reply)
+    (edit,) = reply.edits
+    assert edit.search.count("========") == 1 and edit.search.endswith("    return 0")
+    assert edit.code.endswith("    return 1") and "========" in edit.code
+
+
+def test_a_loose_divider_still_works_when_there_is_no_exact_one() -> None:
+    text = "EDIT search_replace path=a.py\n<<<<<<< SEARCH\nx = 1\n  =====\nx = 2\n>>>>>>> REPLACE\n"
+    (edit,) = parse_reply(text).edits
+    assert (edit.search, edit.code) == ("x = 1", "x = 2")
