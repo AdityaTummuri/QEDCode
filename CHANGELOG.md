@@ -28,6 +28,7 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
   pytest runs them through `--doctest-glob`). A one-line `.gitignore` edit in a project with
   passing tests was graded B ("tested"). Config such as `pyproject.toml`, requirements, JSON or
   YAML still counts as a code change. Found while testing `qed check` from the Antigravity IDE.
+  The one-line summary ends with `no code changed outside tests` so the C is explained there too.
 
 ### Changed
 - **License**: QEDCode is now licensed under the Apache License 2.0 (was GNU GPL-3.0). A `NOTICE`

@@ -516,7 +516,7 @@ In words: **A** = a test failed before and passes now, the full suite shows no r
 
 **Inert files** are files no test can run or read: `.gitignore`, `.gitattributes`, `.editorconfig`, `LICENSE*`/`LICENCE*`, `*.md`, `*.rst` and anything under `docs/` (see `project/paths.py` `is_inert_path`). Python and JS/TS source files are never inert (they are judged by syntax tree, Python only). Docs stop being inert when the project's pytest config contains `doctest-glob`, because then pytest runs them. Every other file (`pyproject.toml`, requirements, JSON, YAML, templates, ...) counts as a code change, because code or the test run may read it. `cascade.changes_code` sets `Candidate.code_changed` from these rules.
 
-The one-line summary shown in UIs follows this shape: `Grade A · repro test failed before, passes now · 48/48 tests pass · lint clean · no protected files changed`. When the tests could not run at all it says `tests could not run: <reason>` instead of a count, and a weakened test adds `tests weakened in <files>`.
+The one-line summary shown in UIs follows this shape: `Grade A · repro test failed before, passes now · 48/48 tests pass · lint clean · no protected files changed`. When the tests could not run at all it says `tests could not run: <reason>` instead of a count, a weakened test adds `tests weakened in <files>`, and a change that alters no code outside tests adds `no code changed outside tests`.
 
 ## 9. Prompt templates
 

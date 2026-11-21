@@ -23,6 +23,7 @@ from qedcode.verify.test_additions import key_in_file
 
 RECEIPTS_DIR = Path(".qed") / "receipts"
 NOT_RUNNABLE_PREFIX = "pytest could not run before the change"
+NO_CODE_CHANGE_PREFIX = "The change alters no code outside tests"
 NETWORK_NOTE = "Tests ran on this computer without network blocking (v1 limitation)."
 SEALED_NOTE = (
     "Tests ran in a sealed Docker container with the network off; the project's dependencies "
@@ -83,6 +84,8 @@ def summary_line(receipt: Receipt) -> str:
     weakened = weakened_from_checks(receipt.checks)
     if weakened:
         parts.append(f"tests weakened in {', '.join(weakened)}")
+    if any(g.startswith(NO_CODE_CHANGE_PREFIX) for g in receipt.unverified):
+        parts.append("no code changed outside tests")
     return " · ".join(parts)
 
 
@@ -107,8 +110,8 @@ def unverified_gaps(
         gaps.append(f"{len(known)} test(s) were already failing before this change: {shown}")
     if not cand.code_changed:
         gaps.append(
-            "The change alters no code outside tests (only comments, formatting, or files the "
-            "tests never use such as docs or .gitignore), so passing tests say nothing about it."
+            f"{NO_CODE_CHANGE_PREFIX} (only comments, formatting, or files the tests never use "
+            "such as docs or .gitignore), so passing tests say nothing about it."
         )
     if cand.tests_passed == 0:
         gaps.append("No existing test covered this change.")

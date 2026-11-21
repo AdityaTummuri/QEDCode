@@ -401,3 +401,17 @@ def test_a_confirmed_project_config_wins_over_detection(tmp_path: Path) -> None:
     save_project(root, ProjectConfig(python="/opt/py/bin/python", confirmed=True))
     notes: list[str] = []
     assert _project_config(root, notes).python == "/opt/py/bin/python" and notes == []
+
+
+def test_summary_says_why_a_no_code_change_is_grade_c(tmp_path: Path) -> None:
+    """Grade C next to "67/67 tests pass" needs its reason on the same line."""
+    case = zoo_case(tmp_path, repro=False)
+    gitignore = (
+        "EDIT search_replace path=.gitignore\n<<<<<<< SEARCH\n.pytest_cache/\n=======\n"
+        ".pytest_cache/\n.claude/settings.local.json\n>>>>>>> REPLACE\n"
+    )
+    cand = evaluate_candidate(case.ctx, case.candidate(gitignore), run_full=True)
+    line = summary_line(make_receipt(case, cand))
+    assert line.startswith("Grade C · ") and line.endswith(" · no code changed outside tests")
+    fix = evaluate_candidate(case.ctx, case.candidate(cid="c2"), run_full=True)
+    assert "no code changed" not in summary_line(make_receipt(case, fix))
