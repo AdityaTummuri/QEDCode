@@ -23,6 +23,11 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
 - A candidate that changes no code outside tests (only comments or formatting, judged by the
   Python syntax tree) is now graded C instead of B. Its tests passed only because nothing changed.
   The receipt names the gap. Found by Benchy's scripted self-test.
+- The same C cap now covers changes that only touch files no test can run or read: `.gitignore`,
+  `.gitattributes`, `.editorconfig`, licences, Markdown/reST and `docs/` (docs count again when
+  pytest runs them through `--doctest-glob`). A one-line `.gitignore` edit in a project with
+  passing tests was graded B ("tested"). Config such as `pyproject.toml`, requirements, JSON or
+  YAML still counts as a code change. Found while testing `qed check` from the Antigravity IDE.
 
 ### Changed
 - **License**: QEDCode is now licensed under the Apache License 2.0 (was GNU GPL-3.0). A `NOTICE`

@@ -6,7 +6,14 @@ import pytest
 
 from qedcode.models.schemas import Grade, Speed
 from qedcode.vcs import worktree
-from qedcode.verify.cascade import Cancelled, ReproTest, evaluate_candidate, run_full
+from qedcode.verify.cascade import (
+    Cancelled,
+    ReproTest,
+    changes_code,
+    evaluate_candidate,
+    run_full,
+)
+from qedcode.verify.guard import FileDiff
 from tests.conftest import run_git
 from tests.zoo_helpers import REPRO_PATH, zoo_case
 
@@ -440,3 +447,57 @@ def test_a_real_fix_counts_as_a_code_change(tmp_path: Path) -> None:
     case = zoo_case(tmp_path, repro=False)
     cand = evaluate_candidate(case.ctx, case.candidate(), run_full=True)
     assert cand.code_changed is True and cand.grade is Grade.B
+
+
+GITIGNORE_ONLY = """PLAN:
+- ignore a local file
+
+EDIT search_replace path=.gitignore
+<<<<<<< SEARCH
+.pytest_cache/
+=======
+.pytest_cache/
+.claude/settings.local.json
+>>>>>>> REPLACE
+"""
+
+DATA_FILE = """PLAN:
+- add a data file
+
+EDIT create_file path=src/shop/sizes.json
+```json
+{"default": 10}
+```
+"""
+
+
+def test_a_gitignore_only_change_is_grade_c_not_b(tmp_path: Path) -> None:
+    """No test reads .gitignore, so passing tests are no evidence for the change."""
+    case = zoo_case(tmp_path, repro=False)
+    cand = evaluate_candidate(case.ctx, case.candidate(GITIGNORE_ONLY), run_full=True)
+    assert cand.failed_stage is None and cand.tests_passed > 0  # C from the cap, not "no tests"
+    assert cand.code_changed is False
+    assert cand.grade is Grade.C
+
+
+def test_a_gitignore_change_next_to_a_real_fix_keeps_grade_b(tmp_path: Path) -> None:
+    case = zoo_case(tmp_path, repro=False)
+    both = case.edits_text + "\n" + GITIGNORE_ONLY.split("\n\n", 1)[1]
+    cand = evaluate_candidate(case.ctx, case.candidate(both), run_full=True)
+    assert cand.code_changed is True and cand.grade is Grade.B
+
+
+def test_a_data_file_counts_as_a_code_change(tmp_path: Path) -> None:
+    """Code may read JSON, YAML or templates, so anything off the inert list still counts."""
+    case = zoo_case(tmp_path, repro=False)
+    cand = evaluate_candidate(case.ctx, case.candidate(DATA_FILE), run_full=True)
+    assert cand.failed_stage is None
+    assert cand.code_changed is True
+
+
+def test_docs_count_as_code_when_pytest_runs_them_as_doctests(tmp_path: Path) -> None:
+    readme = [FileDiff(path="README.md")]
+    assert changes_code(tmp_path, "HEAD", tmp_path, readme) is False
+    (tmp_path / "pytest.ini").write_text("[pytest]\naddopts = --doctest-glob='*.md'\n")
+    assert changes_code(tmp_path, "HEAD", tmp_path, readme) is True
+    assert changes_code(tmp_path, "HEAD", tmp_path, [FileDiff(path=".gitignore")]) is False

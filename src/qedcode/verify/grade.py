@@ -4,8 +4,8 @@ A = a test failed before and passes now, the full suite shows no regressions, no
     changed and no risky pattern needed approval.
 B = relevant tests pass with no regressions, but no fail-before-pass-after test or no full run.
 C = static checks pass but no relevant test ran, or the change alters no code outside tests
-    (only comments or formatting), or (qed check) it weakens a test, so passing tests say
-    nothing about it.
+    (only comments, formatting, or files no test uses such as docs), or (qed check) it weakens
+    a test, so passing tests say nothing about it.
 D = no check could run.
 None = rejected.
 """

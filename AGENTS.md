@@ -496,7 +496,7 @@ def grade(c: Candidate, base: Baseline) -> Grade | None:
     if not tests_ran:
         return Grade.C                               # checked, not tested
     if not c.code_changed:
-        return Grade.C                               # only comments/formatting changed outside tests
+        return Grade.C                               # outside tests: only comments/formatting or inert files
     if c_has_weakened_tests(c):
         return Grade.C                               # qed check: the tests were weakened
     g = Grade.A if passed(c, "fbpa") and c.full_suite_ran else Grade.B
@@ -505,7 +505,7 @@ def grade(c: Candidate, base: Baseline) -> Grade | None:
     return g
 ```
 
-In words: **A** = a test failed before and passes now, the full suite shows no regressions, nothing protected changed. **B** = relevant tests pass with no regressions, but no fail-before-pass-after test or no full-suite run. **C** = static checks pass but no relevant test ran, or the change alters no code outside tests (only comments or formatting), or (`qed check`) a test was weakened, so passing tests are no evidence. **D** = no check could run (for example only non-Python files changed and no tests exist).
+In words: **A** = a test failed before and passes now, the full suite shows no regressions, nothing protected changed. **B** = relevant tests pass with no regressions, but no fail-before-pass-after test or no full-suite run. **C** = static checks pass but no relevant test ran, or the change alters no code outside tests (only comments or formatting, or only inert files), or (`qed check`) a test was weakened, so passing tests are no evidence. **D** = no check could run (for example only non-Python files changed and no tests exist).
 
 **Receipts.** Write `.qed/receipts/<task id>.json` from the `Receipt` model (section 5). `commands` stores every command needed to re-check, with `{python}` as a placeholder for the interpreter and paths relative to the worktree root. `unverified` lists every gap in plain English, for example:
 
@@ -513,6 +513,8 @@ In words: **A** = a test failed before and passes now, the full suite shows no r
 - "2 tests were already failing before this change: tests/test\_io.py::test\_big\_file, ..."
 - "Tests ran on this computer without network blocking (v1 limitation)."
 - "You approved a risky pattern: subprocess in app/run.py."
+
+**Inert files** are files no test can run or read: `.gitignore`, `.gitattributes`, `.editorconfig`, `LICENSE*`/`LICENCE*`, `*.md`, `*.rst` and anything under `docs/` (see `project/paths.py` `is_inert_path`). Python and JS/TS source files are never inert (they are judged by syntax tree, Python only). Docs stop being inert when the project's pytest config contains `doctest-glob`, because then pytest runs them. Every other file (`pyproject.toml`, requirements, JSON, YAML, templates, ...) counts as a code change, because code or the test run may read it. `cascade.changes_code` sets `Candidate.code_changed` from these rules.
 
 The one-line summary shown in UIs follows this shape: `Grade A · repro test failed before, passes now · 48/48 tests pass · lint clean · no protected files changed`. When the tests could not run at all it says `tests could not run: <reason>` instead of a count, and a weakened test adds `tests weakened in <files>`.
 

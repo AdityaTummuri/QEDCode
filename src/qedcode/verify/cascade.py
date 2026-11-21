@@ -28,7 +28,7 @@ from qedcode.models.schemas import (
     TaskSpec,
 )
 from qedcode.project.context import select_targeted
-from qedcode.project.paths import is_js_path, is_test_file
+from qedcode.project.paths import is_inert_path, is_js_path, is_test_file
 from qedcode.vcs import worktree
 from qedcode.vcs.git import GitError, git_out
 from qedcode.vcs.snapshot import keep_candidate
@@ -225,16 +225,34 @@ def _is_test_path(path: str) -> bool:
     return is_test_file(path) or path.endswith("conftest.py")
 
 
-def changes_code(root: Path, base_commit: str, wt: Path, files: list[FileDiff]) -> bool:
-    """False when every change outside tests is a .py file whose syntax tree is unchanged.
+_PYTEST_CONFIGS = ("pytest.ini", "tox.ini", "setup.cfg", "pyproject.toml")
 
-    That catches candidates that only add comments or reformat: their tests pass because nothing
-    changed, which is no evidence for the task. Anything we cannot compare counts as a change.
+
+def _docs_are_tested(wt: Path) -> bool:
+    """Does the project's pytest config run Markdown/reST files as doctests (`--doctest-glob`)?"""
+    for name in _PYTEST_CONFIGS:
+        try:
+            if "doctest-glob" in (wt / name).read_text(encoding="utf-8", errors="replace"):
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def changes_code(root: Path, base_commit: str, wt: Path, files: list[FileDiff]) -> bool:
+    """False when every change outside tests leaves the code the tests run unchanged.
+
+    That is a .py file whose syntax tree is unchanged (only comments or formatting), or a file no
+    test can run or read (`is_inert_path`: .gitignore, licences, docs). Such candidates pass their
+    tests because nothing changed, which is no evidence. Anything we cannot compare counts.
     """
     code = [f for f in files if not _is_test_path(f.path)]
     if not code:
         return False
+    docs_tested = _docs_are_tested(wt)
     for f in code:
+        if is_inert_path(f.path, docs_are_tested=docs_tested):
+            continue
         if f.status != "modified" or f.binary or not f.path.endswith(".py"):
             return True
         try:

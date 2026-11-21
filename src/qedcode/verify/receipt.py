@@ -107,8 +107,8 @@ def unverified_gaps(
         gaps.append(f"{len(known)} test(s) were already failing before this change: {shown}")
     if not cand.code_changed:
         gaps.append(
-            "The change alters no code outside tests (only comments or formatting), so passing "
-            "tests say nothing about it."
+            "The change alters no code outside tests (only comments, formatting, or files the "
+            "tests never use such as docs or .gitignore), so passing tests say nothing about it."
         )
     if cand.tests_passed == 0:
         gaps.append("No existing test covered this change.")

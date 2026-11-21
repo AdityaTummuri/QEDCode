@@ -111,7 +111,7 @@ class Candidate(BaseModel):
     grade: Grade | None = None  # None = rejected
     tests_passed: int = 0
     full_suite_ran: bool = False
-    code_changed: bool = True  # False = outside tests, only comments or formatting changed
+    code_changed: bool = True  # False = outside tests only comments/formatting/docs changed
 
 
 class Baseline(BaseModel):

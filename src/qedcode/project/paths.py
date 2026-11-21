@@ -56,6 +56,28 @@ def is_protected(path: str, patterns: list[str]) -> bool:
     return matches_any(path, patterns)
 
 
+INERT_NAMES = (".gitignore", ".gitattributes", ".editorconfig")
+INERT_PREFIXES = ("license", "licence")  # LICENSE, LICENSE.txt, LICENCE.md, ...
+INERT_DOC_SUFFIXES = (".md", ".rst")
+
+
+def is_inert_path(path: str, docs_are_tested: bool = False) -> bool:
+    """True for a file that no test can run or read: git/editor settings, licences and docs.
+
+    Source files (Python, JS/TS) are never inert; their changes are judged by syntax tree.
+    `docs_are_tested` is True when pytest runs Markdown/reST files as doctests, so docs count.
+    """
+    p = path.replace("\\", "/")
+    name = p.rsplit("/", 1)[-1]
+    if p.endswith(".py") or is_js_path(p):
+        return False
+    if name in INERT_NAMES or name.lower().startswith(INERT_PREFIXES):
+        return True
+    if docs_are_tested:
+        return False
+    return p.startswith("docs/") or name.lower().endswith(INERT_DOC_SUFFIXES)
+
+
 def is_js_path(path: str) -> bool:
     """True for a JavaScript or TypeScript source file name."""
     return path.lower().endswith(JS_SUFFIXES)

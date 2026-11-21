@@ -34,7 +34,7 @@ from qedcode.project.detect_js import (
     runner_for,
     version_tuple,
 )
-from qedcode.project.paths import is_js_path, is_protected, is_test_file
+from qedcode.project.paths import is_inert_path, is_js_path, is_protected, is_test_file
 from qedcode.project.repo_map import list_source_files, repo_map, top_level_symbols_js
 from qedcode.verify.guard import risk_check, risk_findings, scope_check
 from qedcode.verify.lint import parse_check
@@ -484,3 +484,46 @@ def test_the_detected_config_round_trips_through_project_toml(tmp_path: Path) ->
     assert loaded.language == "javascript" and loaded.test_runner == "node"
     assert loaded.protected == JS_PROTECTED
     assert ProjectDetection(root=tmp_path, python="", python_source="").language == "python"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ".gitignore",
+        "sub/.gitattributes",
+        ".editorconfig",
+        "LICENSE",
+        "LICENSE.txt",
+        "Licence.md",
+        "README.md",
+        "CHANGELOG.rst",
+        "docs/guide.txt",
+        "docs/img/logo.png",
+    ],
+)
+def test_inert_paths(path: str) -> None:
+    assert is_inert_path(path)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "pyproject.toml",
+        "setup.cfg",
+        "requirements.txt",
+        "src/app/data.json",
+        "config.yaml",
+        "templates/page.html",
+        "docs/conf.py",
+        "docs/example.ts",
+        "src/app/main.py",
+    ],
+)
+def test_paths_that_can_change_what_tests_do_are_not_inert(path: str) -> None:
+    assert not is_inert_path(path)
+
+
+def test_docs_are_not_inert_when_pytest_runs_them() -> None:
+    assert not is_inert_path("README.md", docs_are_tested=True)
+    assert not is_inert_path("docs/guide.txt", docs_are_tested=True)
+    assert is_inert_path(".gitignore", docs_are_tested=True)
