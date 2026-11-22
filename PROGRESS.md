@@ -1,7 +1,7 @@
 # QEDCode progress
 
 ## Current step
-Roadmap build (docs/QEDCode Roadmap to a Masterpiece.md), 2026-11-23: every code and docs item first, then a real-hardware test pass, then fixes, then publishing.
+Roadmap build, step 2 of 3: test on real hardware (the OMEN laptop, Ollama with qwen3.5:4b and qwen2.5-coder:7b), list the problems, then fix and publish. Step 1 (build) finished 2026-11-23; full gate 1348 passed, 1 skipped. Version bump to 0.2.0 waits for publishing.
 
 ## Done
 - Setup, 2026-11-20: AGENTS.md (from the AI Build Brief), CLAUDE.md, PROGRESS.md, .gitignore, docs/ committed.
