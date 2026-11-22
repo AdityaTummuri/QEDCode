@@ -113,6 +113,8 @@ def test_role_settings_match_the_brief() -> None:
         "coder": (None, 2000),
         "repairer": (0.3, 2000),
         "explainer": (0.3, 250),
+        "safety_net": (0.3, 1500),  # AGENTS.md 15.11
+        "hunter": (0.5, 1500),  # AGENTS.md 15.12
     }
     assert CODER_MAX_TOKENS_SURE == 3000
 
