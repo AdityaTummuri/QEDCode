@@ -236,7 +236,22 @@ class _Run:
             run_dir=self.run_dir,
             name=f"{self.spec.id}-baseline",
             cancelled=self.cb.cancelled,
+            full_limit_s=self.settings.full_suite_limit_s or None,
         )
+        base = self.base_run.baseline
+        if base.full_skipped:
+            self.emit(
+                "warning",
+                f"Your full test suite is too slow to run on every task ({base.full_skipped}), "
+                "so only the related tests run; the best grade possible is B.",
+            )
+        if base.slow_tests:
+            self.emit(
+                "warning",
+                "These related test files are too slow to run on every try and are left out: "
+                + ", ".join(base.slow_tests[:5])
+                + (" ..." if len(base.slow_tests) > 5 else ""),
+            )
         if not self.base_run.baseline.runnable:
             self.emit(
                 "warning",
@@ -308,6 +323,7 @@ class _Run:
             select.promising(cand, self.spec.target_grade)
             and self.settings.full_on_finalist
             and self.base_run.baseline.runnable
+            and not self.base_run.baseline.full_skipped
             and not cand.full_suite_ran
         ):
             self.check_cancel()
@@ -425,6 +441,7 @@ class _Run:
                 not self.settings.full_on_finalist
                 or best.full_suite_ran
                 or not self.base_run.baseline.runnable
+                or self.base_run.baseline.full_skipped
             ):
                 return best
             self.check_cancel()

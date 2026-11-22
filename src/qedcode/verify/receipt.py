@@ -102,8 +102,16 @@ def unverified_gaps(
     if not baseline.runnable:
         gaps.append(f"{NOT_RUNNABLE_PREFIX} ({baseline.reason or 'unknown reason'}).")
     if not cand.full_suite_ran:
-        why = " (fast speed)" if task.speed.value == "fast" else ""
-        gaps.append(f"Full suite not run{why}.")
+        if baseline.full_skipped:
+            gaps.append(f"Full suite not run: {baseline.full_skipped}, too slow for every task.")
+        else:
+            why = " (fast speed)" if task.speed.value == "fast" else ""
+            gaps.append(f"Full suite not run{why}.")
+    if baseline.slow_tests:
+        shown = ", ".join(baseline.slow_tests[:5]) + (
+            ", ..." if len(baseline.slow_tests) > 5 else ""
+        )
+        gaps.append(f"Related test files left out because each is too slow to run: {shown}")
     known = sorted(k for k, v in baseline.results.items() if v in ("failed", "error"))
     if known:
         shown = ", ".join(known[:5]) + (", ..." if len(known) > 5 else "")

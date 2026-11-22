@@ -18,6 +18,9 @@ class SpeedSettings:
     test_writer: Literal["off", "bugfix_feature", "unless_docs"]
     baseline_full: bool  # False = related tests only
     full_on_finalist: bool
+    # Longest the whole suite may take before the change; slower suites are not run for the task
+    # (a big repository's suite would use most of the time budget on every run). 0 = not run.
+    full_suite_limit_s: int
     max_files: int  # files the locator may pick
     max_changed_lines: int  # per candidate
     helper: Literal["never", "after_repairs"]
@@ -32,6 +35,7 @@ SPEED_DIAL: dict[Speed, SpeedSettings] = {
         test_writer="off",
         baseline_full=False,
         full_on_finalist=False,
+        full_suite_limit_s=0,
         max_files=3,
         max_changed_lines=200,
         helper="never",
@@ -44,6 +48,7 @@ SPEED_DIAL: dict[Speed, SpeedSettings] = {
         test_writer="bugfix_feature",
         baseline_full=True,
         full_on_finalist=True,
+        full_suite_limit_s=120,
         max_files=5,
         max_changed_lines=300,
         helper="after_repairs",
@@ -56,6 +61,7 @@ SPEED_DIAL: dict[Speed, SpeedSettings] = {
         test_writer="unless_docs",
         baseline_full=True,
         full_on_finalist=True,
+        full_suite_limit_s=300,
         max_files=8,
         max_changed_lines=600,
         helper="after_repairs",

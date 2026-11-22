@@ -463,11 +463,15 @@ def _run_stages(ctx: CascadeContext, cand: Candidate, wt: Path, run_full: bool) 
         # the full stage (it is one) instead of running the same tests twice.
         _stage_tests(ctx, cand, wt, "full", None)
         return
-    if selection == []:
+    # Files the baseline found too slow would time out here too: leave them out.
+    runnable = [t for t in selection if t not in ctx.baseline.slow_tests]
+    if not selection:
         _skip(ctx, cand, "targeted", "no related tests were found")
-    elif not _stage_tests(ctx, cand, wt, "targeted", selection):
+    elif not runnable:
+        _skip(ctx, cand, "targeted", "every related test file is too slow to run")
+    elif not _stage_tests(ctx, cand, wt, "targeted", runnable):
         return
-    if run_full:
+    if run_full and not ctx.baseline.full_skipped:
         _check_cancel(ctx)
         _stage_tests(ctx, cand, wt, "full", None)
 
@@ -533,7 +537,7 @@ def evaluate_candidate(
 
 def run_full(ctx: CascadeContext, cand: Candidate) -> Candidate:
     """Run the full suite on a finished candidate (the finalist) and regrade it."""
-    if cand.commit is None or cand.failed_stage is not None:
+    if cand.commit is None or cand.failed_stage is not None or ctx.baseline.full_skipped:
         return cand
     wt = worktree.create(ctx.root, cand.commit, f"{ctx.task.id}-{cand.id}-full")
     try:

@@ -181,6 +181,26 @@ def test_fast_speed_skips_the_full_suite_and_caps_at_b(tmp_path: Path) -> None:
     assert "Full suite not run (fast speed)." in receipt["unverified"]
 
 
+@pytest.mark.parametrize("speed,limit", [(Speed.NORMAL, 120), (Speed.SURE, 300)])
+def test_check_gives_the_full_suite_the_speeds_limit(tmp_path: Path, monkeypatch, speed, limit):
+    # Found by Benchy's agent mode: on sympy `qed check` waited the project's 300 s test timeout
+    # for a full suite that never finishes, instead of the speed's full-suite limit.
+    import qedcode.engine.check as check_mod
+
+    seen: dict = {}
+    real = check_mod.baseline_run
+
+    def spy(*args, **kwargs):
+        seen.update(kwargs)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(check_mod, "baseline_run", spy)
+    project = zoo_repo(tmp_path)
+    apply_solution(project)
+    assert api.check(project, speed=speed).grade is Grade.B
+    assert seen["full_limit_s"] == limit
+
+
 def test_events_are_reported_through_the_callbacks(tmp_path: Path) -> None:
     project = zoo_repo(tmp_path)
     apply_solution(project)

@@ -415,3 +415,15 @@ def test_summary_says_why_a_no_code_change_is_grade_c(tmp_path: Path) -> None:
     assert line.startswith("Grade C · ") and line.endswith(" · no code changed outside tests")
     fix = evaluate_candidate(case.ctx, case.candidate(cid="c2"), run_full=True)
     assert "no code changed" not in summary_line(make_receipt(case, fix))
+
+
+def test_receipts_say_when_the_full_suite_or_slow_files_were_left_out(tmp_path: Path) -> None:
+    case = zoo_case(tmp_path, repro=False)
+    case.ctx.baseline.full_skipped = "the whole test suite did not finish within 120 seconds"
+    case.ctx.baseline.slow_tests = ["tests/test_wester.py"]
+    cand = evaluate_candidate(case.ctx, case.candidate(), run_full=False)
+    gaps = make_receipt(case, cand).unverified
+    assert any(
+        g.startswith("Full suite not run: the whole test suite did not finish") for g in gaps
+    )
+    assert any("too slow to run: tests/test_wester.py" in g for g in gaps)

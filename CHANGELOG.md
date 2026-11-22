@@ -14,6 +14,21 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
   the same model used on its own. Installing asks first; nothing runs unless you type the command.
   `qed setup` ends with a one-line pointer to it.
 
+### Changed
+- Big repositories no longer stall the solve before the first try. At normal and sure speed the
+  full suite gets 120 s / 300 s before the change; a slower suite is marked too slow for the task
+  (not run on the finalist either, so the best grade is B) and the related tests run instead.
+  Related tests now run one file at a time with a 60 s limit each; slower files are left out of
+  every run and named in the receipt. Before, one slow file (sympy's `test_wester.py`, about
+  380 s) made the whole run time out after 300 s, which capped the result at C, and at fast speed
+  used the whole time budget before the model was asked anything. Found by Benchy's SWE-bench
+  suite.
+- `qed check` uses the same full-suite limit (it waited the project's 300 s test timeout instead;
+  on sympy one check took 306 s, now 126 s at normal speed and 6 s at fast). A project remembers
+  that its full suite did not finish (`.qed/full_suite_too_slow.json`), so later checks and solves
+  go straight to the related tests instead of waiting for the same timeout again. Found by
+  Benchy's agent mode.
+
 ### Fixed
 - The edit parser no longer splits a SEARCH/REPLACE block at a reST heading underline inside the
   code (`    ========`, as in sympy and numpy docstrings). The exact `=======` marker now wins over

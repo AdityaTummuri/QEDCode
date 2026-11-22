@@ -239,6 +239,8 @@ class Baseline(BaseModel):
     full: bool = False
     runnable: bool = True                     # False = pytest could not run at all
     reason: str = ""
+    full_skipped: str = ""                    # why the full suite is not run for this task
+    slow_tests: list[str] = []                # related test files left out as too slow
 
 class Receipt(BaseModel):
     schema_version: Literal[1] = 1
@@ -298,6 +300,7 @@ The controller tries cheap things first and stops the moment a candidate reaches
 | Test writer | off | on for bugfix and feature | on unless kind is docs |
 | Baseline | targeted tests only | full suite | full suite |
 | Full suite on the finalist | no | yes | yes |
+| Longest the full suite may take before the change (slower: related tests only, best grade B) | – | 120 s | 300 s |
 | Max files from locator | 3 | 5 | 8 |
 | Max changed lines per candidate | 200 | 300 | 600 |
 | Target grade | B | A if a repro test exists, else B | A |
@@ -474,6 +477,8 @@ Every candidate runs the same stages in this order, cheapest first; the first fa
 2. Test files named after a changed module: `test_<stem>.py` or `<stem>_test.py`.
 3. Test files that import a changed module (regex for `import pkg.mod`, `from pkg.mod import`, `from pkg import mod`).
 4. If nothing matched and the baseline full suite took 60 seconds or less, run the full suite instead.
+
+**Slow suites and slow test files (big repositories).** The baseline gives the full suite the speed's limit (120 s normal, 300 s sure, never more than the project timeout). If it does not finish, `Baseline.full_skipped` says so, the full suite is not run again for this task (not on the finalist either, so the best grade is B), and the related tests run instead. Related tests run one file at a time before the change, each with a limit of 60 s (or the project timeout if lower); a file over the limit goes into `Baseline.slow_tests` and is left out of every candidate's targeted run, because it would time out there too. With no related file left, the baseline is not runnable (best grade C). The receipt names both gaps. One slow file used to make the whole related run time out: on sympy, `utilities/tests/test_wester.py` alone takes about 380 s while the other related files take about 17 s together.
 
 **pytest command** (the interpreter comes from the project config):
 

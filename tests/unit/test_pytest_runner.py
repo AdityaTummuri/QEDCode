@@ -443,3 +443,70 @@ def test_file_level_failures_count_as_failing_before() -> None:
     assert failed_before("t.a::b", {"t.a::b": "failed"})
     assert not failed_before("t.a::b", {"t.a::b": "passed", "t.a::c": "failed"})
     assert not failed_before("t.a::b", {})
+
+
+# ------------------------------------------------------------------ slow suites and slow files
+
+SLOW = "import time\ndef test_slow():\n    time.sleep(30)\n"
+FAST = "def test_fast():\n    assert True\n"
+
+
+def test_a_too_slow_full_suite_falls_back_to_the_related_tests(tmp_path: Path) -> None:
+    root = make_repo(tmp_path / "r", {"tests/test_slow.py": SLOW, "tests/test_fast.py": FAST})
+    snap = snapshot(root, "t-fs")
+    run = baseline_run(
+        root,
+        snap,
+        ProjectConfig(python=PY),
+        full=True,
+        related=["tests/test_fast.py"],
+        full_limit_s=2,
+    )
+    base = run.baseline
+    assert base.runnable and not base.full and run.full_seconds is None
+    assert "did not finish within 2 seconds" in base.full_skipped
+    assert base.results == {"tests.test_fast::test_fast": "passed"}
+    assert worktree.list_worktrees(root) == []
+
+
+def test_a_known_too_slow_suite_is_not_waited_for_again(tmp_path: Path) -> None:
+    import time
+
+    root = make_repo(tmp_path / "r", {"tests/test_slow.py": SLOW, "tests/test_fast.py": FAST})
+    snap = snapshot(root, "t-fs")
+    args = dict(full=True, related=["tests/test_fast.py"])
+    baseline_run(root, snap, ProjectConfig(python=PY), full_limit_s=2, **args)
+    started = time.monotonic()
+    again = baseline_run(root, snap, ProjectConfig(python=PY), full_limit_s=2, **args).baseline
+    assert time.monotonic() - started < 2  # no second wait for the same timeout
+    assert "measured on an earlier run" in again.full_skipped
+    assert again.results == {"tests.test_fast::test_fast": "passed"}
+    # A longer limit than the one that was exceeded tries the full suite again.
+    longer = baseline_run(root, snap, ProjectConfig(python=PY), full_limit_s=3, **args).baseline
+    assert "within 3 seconds" in longer.full_skipped
+
+
+def test_related_files_run_one_by_one_and_slow_ones_are_left_out(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr("qedcode.verify.baseline.RELATED_FILE_LIMIT_S", 2)
+    root = make_repo(tmp_path / "r", {"tests/test_slow.py": SLOW, "tests/test_fast.py": FAST})
+    snap = snapshot(root, "t-rs")
+    related = ["tests/test_slow.py", "tests/test_fast.py"]
+    base = baseline(root, snap, ProjectConfig(python=PY), full=False, related=related)
+    assert base.runnable and base.slow_tests == ["tests/test_slow.py"]
+    assert base.results == {"tests.test_fast::test_fast": "passed"}
+    assert base.full_skipped == ""
+
+
+def test_when_every_related_file_is_slow_the_baseline_is_not_runnable(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setattr("qedcode.verify.baseline.RELATED_FILE_LIMIT_S", 2)
+    root = make_repo(tmp_path / "r", {"tests/test_slow.py": SLOW})
+    snap = snapshot(root, "t-as")
+    base = baseline(
+        root, snap, ProjectConfig(python=PY), full=False, related=["tests/test_slow.py"]
+    )
+    assert not base.runnable and "took longer than 2 seconds" in base.reason
+    assert base.slow_tests == ["tests/test_slow.py"]

@@ -501,3 +501,23 @@ def test_docs_count_as_code_when_pytest_runs_them_as_doctests(tmp_path: Path) ->
     (tmp_path / "pytest.ini").write_text("[pytest]\naddopts = --doctest-glob='*.md'\n")
     assert changes_code(tmp_path, "HEAD", tmp_path, readme) is True
     assert changes_code(tmp_path, "HEAD", tmp_path, [FileDiff(path=".gitignore")]) is False
+
+
+def test_slow_related_files_are_left_out_of_candidate_runs(tmp_path: Path) -> None:
+    case = zoo_case(tmp_path, repro=False)
+    case.ctx.baseline.slow_tests = ["tests/test_pages.py"]
+    cand = evaluate_candidate(case.ctx, case.candidate(), run_full=False)
+    assert "targeted" not in [c.stage for c in cand.checks]
+    assert any(
+        "targeted: skipped (every related test file is too slow" in e.message for e in case.events
+    )
+    assert cand.tests_passed == 0 and cand.grade is Grade.C
+
+
+def test_a_full_suite_marked_too_slow_is_never_run(tmp_path: Path) -> None:
+    case = zoo_case(tmp_path, repro=False)
+    case.ctx.baseline.full_skipped = "the whole test suite did not finish within 120 seconds"
+    cand = evaluate_candidate(case.ctx, case.candidate(), run_full=True)
+    run_full(case.ctx, cand)
+    assert not cand.full_suite_ran and not any(c.stage == "full" for c in cand.checks)
+    assert cand.grade is Grade.B

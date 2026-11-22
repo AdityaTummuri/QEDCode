@@ -159,6 +159,7 @@ def _check_locked(
         run_dir=run_dir,
         name=f"{task.id}-base",
         cancelled=cb.cancelled,
+        full_limit_s=settings.full_suite_limit_s or None,
     )
     if not base_run.baseline.runnable:
         cb.on_event(Event(kind="warning", message=base_run.baseline.reason))

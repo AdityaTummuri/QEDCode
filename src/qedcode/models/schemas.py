@@ -120,6 +120,8 @@ class Baseline(BaseModel):
     full: bool = False
     runnable: bool = True  # False = pytest could not run at all
     reason: str = ""
+    full_skipped: str = ""  # why the full suite is not run for this task ("" = not skipped)
+    slow_tests: list[str] = Field(default_factory=list)  # related files left out as too slow
 
 
 class Receipt(BaseModel):
