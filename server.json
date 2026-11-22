@@ -1,0 +1,30 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.AdityaTummuri/qedcode",
+  "title": "QEDCode",
+  "description": "Grade AI code changes A-D with a re-runnable proof: several tries, deterministic checks.",
+  "repository": {
+    "url": "https://github.com/AdityaTummuri/QEDCode",
+    "source": "github"
+  },
+  "websiteUrl": "https://adityatummuri.github.io/QEDCode/",
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "qedcode",
+      "version": "0.1.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "mcp"
+        }
+      ]
+    }
+  ]
+}

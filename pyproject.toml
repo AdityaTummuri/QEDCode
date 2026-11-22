@@ -69,7 +69,7 @@ packages = ["src/qedcode"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-extend-exclude = ["bugzoo/0*", "docs", "*.md"]
+extend-exclude = ["bugzoo/0*", "docs", "*.md", "notebooks"]  # notebooks use shell magics
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
@@ -86,3 +86,4 @@ markers = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["E501"]  # scripted replies and fixtures contain long lines on purpose
 "src/qedcode/engine/doctor.py" = ["E501"]  # each fix is one readable sentence
+"src/qedcode/engine/night.py" = ["E501"]  # the report's HTML and CSS live in strings
