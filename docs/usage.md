@@ -59,9 +59,15 @@ harder, `u` undo, `r` receipt, `m` speed, `s` settings, `Esc` cancel, `?` help.
 | --- | --- | --- |
 | `fast` | 1 | quick checks, no repro test; the full suite is skipped |
 | `normal` (default) | up to 3 | writes a test that fails first for bugs and new features, runs all tests |
-| `sure` | up to 6 | always writes a test first and aims for grade A |
+| `sure` | up to 6 | always writes a test first and aims for grade A; after a passing try, one more looks for a fix that disagrees (Smart Questions) |
 
 QEDCode stops as soon as a try is proven, so easy tasks stay quick even at `sure`.
+
+**Smart Questions.** When two tries pass every test but are different changes, QEDCode runs both
+on generated inputs until they disagree and asks one question, for example "For
+`paginate([], 0, 0)`, should it return `[]` (fix 1) or raise `ValueError` (fix 2)?". Your answer
+becomes a test, and the fix that passes it is the result. Where nobody can answer (scripts, MCP),
+the question is shown with the result and listed in the receipt under "not proven".
 
 ## Languages
 

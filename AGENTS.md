@@ -1342,3 +1342,22 @@ Rules:
 | `engine/api.py`, `cli.py` | `api.night_*`; `qed night [add\|list\|clear\|run\|report]` |
 
 **Rules.** One task at a time under the project lock, exactly like `qed solve` (no apply, no questions answered, risky code never approved, the helper only if pre-approved). Quiet mode is forced on for the run. The report escapes every piece of text (task text, diffs and model replies are data).
+
+### 15.14 Smart Questions ("A or B?", v1.2)
+
+**What it does.** When two candidates pass every test but are different changes, the tests did not decide the task, so one of them may be wrong in a way nobody checked. QEDCode runs both on generated inputs until they disagree, then asks one concrete question: "For `paginate([], 0, 10)`, should it return `[]` (fix 1) or raise `ValueError` (fix 2)?" The answer becomes a new test, and the result is the fix that passes it. The ambiguity is settled with proof, not a guess.
+
+**When.** After the tries and repairs, if at least two candidates passed (graded, or promising) with different diffs. At `sure` speed one extra try is made after the first passing one, to look for such a disagreement. Python projects only.
+
+**Finding a disagreement.** For each top-level function both diffs change (by the syntax tree of candidate 1's file), inputs come from a fixed pool (`[]`, `[1, 2, 3]`, `0`, `1`, `-1`, `2`, `10`, `""`, `"abc"`, `None`) for the function's required positional parameters, in a fixed order, at most 300 calls. They run inside each candidate's worktree as a QEDCode-written **pytest file** (so the command is the same allowed pytest command as every test run; rule 2 is unchanged), which records `repr(result)` or the exception's class name per call into a JSON file in the worktree. The first input where the two records differ, and both outcomes can be written as a test (a literal value per `ast.literal_eval`, or an exception), is the question.
+
+**Asking.** `Callbacks.ask` with the question and the two answers. The terminal UI shows a dialog. Where no one can answer (CLI scripts, MCP, Night Shift), nothing is asked: the best candidate is kept and the receipt's notes and the result message state the open question.
+
+**The answer becomes a test.** A test asserting the chosen behaviour (`assert f(...) == <value>`, or that the call raises an exception with that class name) is appended to the repro test; the chosen candidate's edits are checked again as a new candidate (`q1`) under the full cascade, and the other candidate is excluded from the final choice. If the chosen fix does not pass, the result is the best remaining one, as usual.
+
+| Module | Change |
+| --- | --- |
+| `engine/questions.py` (new) | `changed_functions(diff)`, `probe_inputs(n)`, `probe_test(module, func, inputs, out)`, `run_probe(...)`, `disagreement(a, b, inputs)`, `answer_test(...)` |
+| `engine/solve.py` | one extra try at sure speed; `smart_question()` before the finalist is chosen; `excluded` candidates |
+
+**v1.2 limits.** Top-level functions only; inputs are generic values, not property-based (that can come later); a candidate whose import fails in the probe is skipped.

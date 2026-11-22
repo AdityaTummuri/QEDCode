@@ -21,6 +21,9 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
   (also `next_step` in `--json` and in the MCP `check` tool).
 - `qed apply --commit`: commit an applied fix with `QED-Grade` and `QED-Receipt` trailers and its
   receipt in git notes (`git log --notes=qed`).
+- **Smart Questions.** When two tries pass every test but differ, QEDCode finds an input where
+  they disagree and asks which behaviour is right; the answer becomes a test. At `sure` speed one
+  extra try looks for such a disagreement after the first passing one.
 - `qed tests`: the Safety Net Builder writes tests for functions no test mentions and keeps only
   the ones that pass today and catch mutants.
 - `qed hunt`: the Bug Hunter writes tests for suspected bugs, keeps the ones that fail on

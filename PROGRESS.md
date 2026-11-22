@@ -67,6 +67,8 @@ Roadmap build (docs/QEDCode Roadmap to a Masterpiece.md), 2026-11-23: every code
 - Bug Hunter (15.12), 2026-11-23: engine/hunter.py (hunter role + prompt; findings = tests failing on today's code; each solved with solve(given_repro=...)); qed hunt. Benchy hit-rate/precision report not built yet (Benchy side).
 - Night Shift (15.13), 2026-11-23: engine/night.py (queue.json, run_night with quiet mode forced on, self-contained escaped HTML report); qed night add [--file|--failing]|list|clear|run|report.
 
+- Smart Questions (15.14), 2026-11-23: engine/questions.py (changed top-level functions, fixed input pool over required params, max 300 calls, a QEDCode-written pytest probe file per candidate worktree writing JSON, first testable disagreement ignoring TypeError, answer test appended to the repro); solve: one extra try at sure speed after the first passing one, smart_question() before the finalist, excluded candidates, q1 re-evaluation; unanswered questions go into SolveResult.question and the receipt's unverified list. 5 new tests.
+
 ## Known issues
 - Ruff is told to skip `*.md` and `docs/` so AGENTS.md stays byte-identical to the brief.
 - HelperConfig has an extra 'base_url' field (not in the brief's TOML) so an openai_compat helper has somewhere to point; the brief's make_client(role='helper') needs it.

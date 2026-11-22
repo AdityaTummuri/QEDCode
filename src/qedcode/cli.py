@@ -206,6 +206,8 @@ def _print_solve(console: Console, result: SolveResult) -> None:
 
         tries = ", ".join(describe(c) for c in result.candidates)
         console.print(f"\nTries: {tries}", markup=False)
+        if result.question:
+            console.print(f"\nOpen question: {result.question}", markup=False)
         if result.receipt_path:
             console.print(f"Receipt: {result.receipt_path}", markup=False)
         if "Applied to" not in result.message:

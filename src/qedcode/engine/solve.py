@@ -101,6 +101,8 @@ class _Run:
     ctx: ContextBundle = field(init=False)
     base_run: BaselineRun = field(init=False)
     repro: ReproTest | None = None
+    excluded: set[str] = field(default_factory=set)  # passed, but not what the user answered
+    second_opinion: bool = False  # sure speed: one extra try after the first passing one
     cctx: CascadeContext = field(init=False)
     deadline: float = 0.0
 
@@ -179,6 +181,7 @@ class _Run:
         self.try_coders()
         self.repair_near_misses()
         self.ask_helper()
+        self.smart_question()
         return self.finalize()
 
     def understand(self) -> None:
@@ -359,8 +362,13 @@ class _Run:
     def try_coders(self) -> None:
         repro_text = self.repro.content if self.repro else None
         for number, temperature in enumerate(temperatures_for(self.speed), start=1):
-            if self.should_stop() or self.done_trying():
+            if self.should_stop():
                 break
+            if self.done_trying():
+                if not self.wants_second_opinion():
+                    break
+                self.second_opinion = True
+                self.emit("stage", "A try passed; one more try looks for a fix that disagrees...")
             self.cooldown()
             self.emit("stage", f"Try {number}: asking the model (temperature {temperature})...")
             reply = self.roles.coder(
@@ -379,6 +387,82 @@ class _Run:
                 reply=reply.reply,
             )
             self.evaluate(cand)
+
+    def passing(self) -> list[Candidate]:
+        return [
+            c
+            for c in self.pool
+            if c.id not in self.excluded
+            and (c.grade is not None or select.promising(c, self.spec.target_grade))
+            and c.commit
+        ]
+
+    def wants_second_opinion(self) -> bool:
+        """Sure speed: after the first passing try, one more (Smart Questions, AGENTS.md 15.14)."""
+        return (
+            self.speed is Speed.SURE
+            and not self.second_opinion
+            and len(self.passing()) == 1
+            and self.project is not None
+            and self.project.language == "python"
+        )
+
+    def smart_question(self) -> None:
+        """Two passing fixes differ: find an input where they disagree and ask which is right."""
+        from qedcode.engine import questions
+
+        passing = self.passing()
+        if len(passing) < 2 or self.project is None or self.project.language != "python":
+            return
+        first, second = (
+            passing[0],
+            next((c for c in passing[1:] if c.diff != passing[0].diff), None) or passing[0],
+        )
+        if first is second or self.should_stop():
+            return
+        self.emit(
+            "stage",
+            f"{first.id} and {second.id} both pass; looking for an input where they disagree...",
+        )
+        found = questions.find_disagreement(
+            self.root, self.project, (first.commit, first.diff), (second.commit, second.diff)
+        )
+        if found is None:
+            self.emit("log", "No disagreement found on the generated inputs.")
+            return
+        answer = questions.parse_answer(self.cb.ask(found.question()))
+        if answer is None:
+            self.notes.append(
+                f"Open question (nobody could answer it here): {found.question()} "
+                f"QEDCode kept the best-graded fix."
+            )
+            self.question = found.question()
+            return
+        chosen, other = (first, second) if answer == 1 else (second, first)
+        outcome = found.first if answer == 1 else found.second
+        if self.repro is None:
+            self.notes.append(
+                f"You chose fix {answer} for {found.call()}; there was no repro test to add it to."
+            )
+            self.excluded.add(other.id)
+            return
+        self.repro = ReproTest(
+            self.repro.path,
+            self.repro.content.rstrip("\n") + "\n" + questions.answer_test(found, outcome),
+            self.repro.base_failures,
+        )
+        self.cctx.repro = self.repro
+        self.excluded.update({first.id, second.id})
+        self.emit("stage", f"Your answer became a test; checking fix {answer} again with it...")
+        again = Candidate(
+            id="q1",
+            role=chosen.role,
+            parent_id=chosen.id,
+            model=chosen.model,
+            temperature=chosen.temperature,
+            reply=chosen.reply,
+        )
+        self.evaluate(again)
 
     def repair_near_misses(self) -> None:
         for number in range(1, self.settings.repair_rounds + 1):
@@ -457,7 +541,7 @@ class _Run:
     def pick_finalist(self) -> Candidate | None:
         """The best candidate, after the full suite has been run on it where it is required."""
         while True:
-            best = select.best(self.pool)
+            best = select.best([c for c in self.pool if c.id not in self.excluded])
             if best is None:
                 return None
             if (
@@ -491,6 +575,8 @@ class _Run:
             model_info=info,
         )
         self.measure_strength(receipt)
+        if self.question:  # Smart Questions: two passing fixes disagree and nobody answered
+            receipt.unverified.insert(0, f"Open question: {self.question}")
         path = save_receipt(self.root, receipt)
         line = summary_line(receipt)
         self.emit("stage", "Explaining the change...")
@@ -505,6 +591,7 @@ class _Run:
             receipt_path=str(path),
             explanation=explanation,
             message=line,
+            question=self.question,
         )
 
     def measure_strength(self, receipt) -> None:
