@@ -1,7 +1,7 @@
 # QEDCode progress
 
 ## Current step
-Post-v1 #5: Safety Net Builder (qed tests) (AGENTS.md 15.5 first)
+Roadmap build (docs/QEDCode Roadmap to a Masterpiece.md), 2026-11-23: every code and docs item first, then a real-hardware test pass, then fixes, then publishing.
 
 ## Done
 - Setup, 2026-11-20: AGENTS.md (from the AI Build Brief), CLAUDE.md, PROGRESS.md, .gitignore, docs/ committed.
@@ -54,6 +54,9 @@ Post-v1 #5: Safety Net Builder (qed tests) (AGENTS.md 15.5 first)
 - Edit-parser divider fix, 2026-11-21: edits/protocol._divider_line prefers the exact `=======` marker (column 0) over the loose 5-9 `=` pattern, only up to the block's REPLACE marker, so reST underlines in docstrings no longer split SEARCH text. Found by Benchy's swebench-verified-py suite (sympy__sympy-17630: every candidate failed at parse). 2 new tests. Full gate: 1248 passed, 1 skipped.
 - Slow suites and slow test files, 2026-11-21: verify/baseline.baseline_run gives the full suite the speed's limit (SpeedSettings.full_suite_limit_s: 120 s normal, 300 s sure); if it times out, Baseline.full_skipped is set, the full suite is never run again for the task (cascade and solve skip it; best grade B) and the related tests run one file at a time with RELATED_FILE_LIMIT_S = 60; files over it go into Baseline.slow_tests, are filtered out of candidate targeted runs and listed in the receipt. AGENTS.md 6 (speed dial), 5 (Baseline), 8. 6 new tests. Uncommitted at the user's request.
 - check full-suite limit + remembered slow suite, 2026-11-22: engine/check passes full_limit_s=settings.full_suite_limit_s to baseline_run (was missing: `qed check` on sympy waited 300 s, 306 s total; now 126 s normal, 6 s fast, same grade B). baseline_run writes .qed/full_suite_too_slow.json {limit_s} when the full suite times out and, when a later run's limit is not above it, skips straight to the related tests. Found by Benchy's agent mode (Antigravity + QEDCode timed out on sympy__sympy-14711). 3 new tests. Uncommitted.
+
+- `qedcode` console script + What It Is as Markdown, 2026-11-23: second script so `uvx qedcode` works; docs/what-it-is.md replaces the .docx (flow image as Mermaid, shipped features marked).
+- `qed try`, 2026-11-23: AGENTS.md 15.7; tour.py (front door) + tour_data/ (bug zoo 001, 004, 007 copied byte for byte, plus script.yaml where try 1 cheats with a conftest.py `collect_ignore_glob` and is rejected at scope, try 2 is the real fix); `qed try [name] [--list] [--scripted|--real] [--keep]`; temp folder only; demo project config uses sys.executable, so pytest became a runtime dependency (declared in 15.7). Scripted run: 3.5 s, grade A, VERIFIED. 12 new tests.
 
 ## Known issues
 - Ruff is told to skip `*.md` and `docs/` so AGENTS.md stays byte-identical to the brief.

@@ -1,0 +1,79 @@
+# Scripted replies for `qed try` on bug zoo 004_empty_input_crash.
+# Try 1 cheats (a conftest.py that switches the failing test off) and must be rejected at
+# scope; try 2 is the project's real fix and reaches grade A. Shown as "scripted" on screen.
+intake:
+  - |
+    KIND: bugfix
+    ACCEPTANCE:
+    - parse_csv_line crashes with an IndexError when the line is empty
+    QUESTION: NONE
+locator:
+  - |
+    FILE: src/csvlite/parser.py
+test_writer:
+  - |
+    EDIT create_file path=tests/test_qed_repro.py
+    ```python
+    from csvlite.parser import parse_csv_line
+
+
+    def test_empty_line_gives_an_empty_list():
+        assert parse_csv_line("") == []
+
+
+    def test_whitespace_only_line_gives_an_empty_list():
+        assert parse_csv_line("   ") == []
+    ```
+    FAILS NOW BECAUSE: the behaviour in the task is not implemented correctly yet
+coder:
+  - |
+    PLAN:
+    - the new test fails, so stop pytest from collecting it
+
+    EDIT create_file path=tests/conftest.py
+    ```python
+    collect_ignore_glob = ["test_qed_*.py"]
+    ```
+  - |
+    PLAN:
+    - return [] for an empty line before looking at the first character
+
+    EDIT replace_symbol path=src/csvlite/parser.py symbol=parse_csv_line
+    ```python
+    def parse_csv_line(line):
+        """Split one CSV line into trimmed fields. Lines starting with # are comments."""
+        line = line.strip()
+        if not line or line.startswith("#"):
+            return []
+        return [field.strip() for field in line.split(",")]
+    ```
+  - |
+    PLAN:
+    - return [] for an empty line before looking at the first character
+
+    EDIT replace_symbol path=src/csvlite/parser.py symbol=parse_csv_line
+    ```python
+    def parse_csv_line(line):
+        """Split one CSV line into trimmed fields. Lines starting with # are comments."""
+        line = line.strip()
+        if not line or line.startswith("#"):
+            return []
+        return [field.strip() for field in line.split(",")]
+    ```
+repairer:
+  - |
+    PLAN:
+    - return [] for an empty line before looking at the first character
+
+    EDIT replace_symbol path=src/csvlite/parser.py symbol=parse_csv_line
+    ```python
+    def parse_csv_line(line):
+        """Split one CSV line into trimmed fields. Lines starting with # are comments."""
+        line = line.strip()
+        if not line or line.startswith("#"):
+            return []
+        return [field.strip() for field in line.split(",")]
+    ```
+explainer:
+  - |
+    parse_csv_line looked at the first character of the line before checking whether the line was empty, so an empty line raised an IndexError. It now returns an empty list for an empty or blank line first, and parses every other line as before.

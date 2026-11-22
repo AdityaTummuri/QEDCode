@@ -255,6 +255,115 @@ def solve_command(
     raise typer.Exit(2 if result.status == "error" else 1)
 
 
+@app.command("try")
+def try_command(
+    project: Annotated[
+        str | None, typer.Argument(help="A demo project (default: 001, see --list).")
+    ] = None,
+    list_only: Annotated[bool, typer.Option("--list", help="List the demo projects.")] = False,
+    scripted: Annotated[
+        bool, typer.Option("--scripted", help="Use the scripted demo model even if one is set up.")
+    ] = False,
+    real: Annotated[bool, typer.Option("--real", help="Use your configured model.")] = False,
+    keep: Annotated[bool, typer.Option("--keep", help="Keep the demo folder afterwards.")] = False,
+) -> None:
+    """See QEDCode work in about a minute, on a tiny bundled project (no GPU needed)."""
+    import shutil
+
+    from qedcode import tour
+
+    console = Console()
+    if list_only:
+        for name in tour.list_projects():
+            console.print(f"{name}: {tour.task_text(name)}", markup=False)
+        return
+    try:
+        name = tour.find_project(project)
+    except tour.TourError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    use_real = real or (tour.has_model_setup() and not scripted)
+    client = None
+    notes: list[str] = []
+    if use_real:
+        try:
+            client = make_client(load_global(), "main")
+        except ModelError as exc:
+            if real:
+                typer.echo(str(exc), err=True)
+                raise typer.Exit(2) from exc
+            notes.append(f"Your model is not ready ({exc}), so the demo uses the scripted model.")
+    for note in notes:
+        console.print(note, markup=False)
+    if client is None:
+        console.print(f"[bold]{tour.SCRIPTED_NOTE}[/bold] (run `qed try --real` after `qed setup`)")
+    console.print(f"Demo project: {name}\nTask: {tour.task_text(name)}\n", markup=False)
+
+    def show(event: Event) -> None:
+        line = event_line(event, include_result=False)
+        if line:
+            console.print(line, style="dim", markup=False, highlight=False)
+
+    dest = tour.make_dest()
+    try:
+        result = tour.run_tour(
+            name, dest, client=client, cb=NonInteractiveCallbacks(on_event=show), scripted=False
+        )
+    except tour.TourError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    finally:
+        if client is not None:
+            try:
+                client.unload()
+            except Exception:  # noqa: BLE001 - unloading is best effort
+                pass
+        if not keep:
+            shutil.rmtree(dest, ignore_errors=True)
+    _print_tour(console, result, dest if keep else None)
+    if result.solve.status != "done" or result.verify is None or not result.verify.verified:
+        raise typer.Exit(1)
+
+
+def _print_tour(console: Console, result, kept: Path | None) -> None:
+    from qedcode import tour
+
+    solved = result.solve
+    best = solved.best
+    console.print()
+    if solved.status != "done" or best is None:
+        console.print(solved.message, markup=False)
+    else:
+        console.print(_grade_text(best.grade))
+        console.print(solved.message, markup=False)
+        tries = ", ".join(
+            f"{c.id}: " + (f"grade {c.grade.value}" if c.grade else f"rejected at {c.failed_stage}")
+            for c in solved.candidates
+        )
+        console.print(f"Tries: {tries}", markup=False)
+        if solved.explanation:
+            console.print(f"\n{solved.explanation}", markup=False)
+    if best is not None and best.diff:
+        console.print("\nThe change:", markup=False)
+        console.print(best.diff.strip(), markup=False, highlight=False)
+    if result.verify is not None:
+        console.print("\n$ qed verify <receipt>", markup=False)
+        console.print(
+            "[bold green]VERIFIED[/bold green]"
+            if result.verify.verified
+            else "[bold red]NOT VERIFIED[/bold red]"
+        )
+        for problem in result.verify.mismatches:
+            console.print(f"- {problem}", markup=False)
+    if result.scripted:
+        console.print(f"\n({tour.SCRIPTED_NOTE}.)", markup=False)
+    if kept is not None:
+        console.print(f"The demo project is kept in {result.project}", markup=False)
+    console.print("\nNext steps:", markup=False)
+    for command, why in tour.next_steps():
+        console.print(f"  {command:<12} {why}", markup=False)
+
+
 class _no_status:  # noqa: N801 - a tiny context manager standing in for console.status
     def __enter__(self) -> None:
         return None

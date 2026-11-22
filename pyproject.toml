@@ -39,6 +39,7 @@ dependencies = [
     "tree-sitter>=0.26.1",
     "tree-sitter-javascript>=0.25.0",
     "tree-sitter-typescript>=0.23.2",
+    "pytest>=8.0",  # AGENTS.md 15.7: `qed try` runs its demo tests with QEDCode's own Python
 ]
 
 [project.scripts]

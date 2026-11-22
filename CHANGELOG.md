@@ -5,6 +5,11 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
 ## [Unreleased]
 
 ### Added
+- `qed try` (and `uvx qedcode try`): the whole loop on a tiny bundled project in about a minute,
+  with no GPU. It shows a try that cheats (a `conftest.py` that switches the failing test off)
+  being rejected, the real fix reaching grade A, and `qed verify` returning VERIFIED. With no model
+  set up it uses a scripted model and says so; `--real` uses your model.
+- A `qedcode` command beside `qed`, so `uvx qedcode` works.
 - `qed connect antigravity` and `qed connect vscode`: register QEDCode's MCP server with Google
   Antigravity (through `agy mcp add`, or a careful merge of `~/.gemini/config/mcp_config.json`
   with a backup) and with VS Code (through `code --add-mcp`). `qed setup` offers them too. The

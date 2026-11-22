@@ -1,0 +1,1 @@
+top_scores returns the lowest scores first. I want the highest scores, best first.

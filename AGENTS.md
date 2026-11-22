@@ -1223,3 +1223,21 @@ Rules:
 | `cli.py` | `qed connect` help lists the new agents |
 
 **v1.1 limits.** Workspace configs (`<workspace>/.agents/mcp_config.json`, `.vscode/mcp.json`) are not written. VS Code Insiders (`code-insiders`) and VS Code forks other than Antigravity are not detected. The VS Code path follows the VS Code docs of 2026-11-21 and has not been run against a real VS Code install by the build.
+
+### 15.7 Try it in a minute (`qed try`, v1.2)
+
+**What it does.** `qed try` (and `uvx qedcode try`) runs the whole loop on a tiny bundled project so a stranger sees a verified grade A before downloading a 3–6 GB model. It copies a bundled bug zoo project into a temporary git repository, runs `solve` at normal speed, shows the diff, the grade and the explanation, re-runs the receipt with `verify` (VERIFIED), and ends with three next steps: `qed check` on your own repo, `qed setup`, `qed connect`.
+
+**Scripted or real.** With no model set up (no `~/.qedcode/config.toml`), or with `--scripted`, the model is the project's bundled `FakeModel` script and the screen says so first: "scripted: shows the engine, not model quality". The script's first try cheats (it adds a `conftest.py` that switches off the failing test) and is rejected at `scope`; the second try is the real fix and reaches grade A. With a model set up, or `--real`, the configured model does the work and nothing is scripted.
+
+**New dependency (allowed from this section on):** `pytest` becomes a runtime dependency (it was dev only). The demo project's tests run with QEDCode's own interpreter, so `uvx qedcode try` needs no download and no question. User projects still use their own Python, as before.
+
+| Module | Change |
+| --- | --- |
+| `tour.py` (new, a front door like `benchy_link.py`; the engine never imports it) | `list_projects()`, `prepare(name, dest)`, `run_tour(...) -> TourResult`, `next_steps()` |
+| `tour_data/<NNN_name>/` (new) | copies of bug zoo projects 001, 004 and 007 (task, source, visible tests) plus `script.yaml`; a unit test keeps them identical to `bugzoo/` |
+| `cli.py` | `qed try [name] [--list] [--scripted\|--real] [--keep]` |
+
+**Rules.** The demo writes only inside its temporary folder (removed at the end unless `--keep`); it never touches the current folder or its git repository. Its project config is written as confirmed with QEDCode's interpreter, so detection never asks anything. A real run follows every normal rule (asks before downloads, uses the shared server).
+
+**v1.2 limits.** Python projects only; the scripted run shows the engine's behaviour and wording, not real-model speed or quality.

@@ -1,0 +1,70 @@
+# Scripted replies for `qed try` on bug zoo 007_sort_order.
+# Try 1 cheats (a conftest.py that switches the failing test off) and must be rejected at
+# scope; try 2 is the project's real fix and reaches grade A. Shown as "scripted" on screen.
+intake:
+  - |
+    KIND: bugfix
+    ACCEPTANCE:
+    - top_scores returns the lowest scores first
+    QUESTION: NONE
+locator:
+  - |
+    FILE: src/board/scores.py
+test_writer:
+  - |
+    EDIT create_file path=tests/test_qed_repro.py
+    ```python
+    from board.scores import top_scores
+
+
+    def test_returns_the_highest_scores_best_first():
+        assert top_scores([3, 9, 1, 7], 2) == [9, 7]
+
+
+    def test_default_is_the_top_three():
+        assert top_scores([1, 2, 3, 4, 5]) == [5, 4, 3]
+    ```
+    FAILS NOW BECAUSE: the behaviour in the task is not implemented correctly yet
+coder:
+  - |
+    PLAN:
+    - the new test fails, so stop pytest from collecting it
+
+    EDIT create_file path=tests/conftest.py
+    ```python
+    collect_ignore_glob = ["test_qed_*.py"]
+    ```
+  - |
+    PLAN:
+    - sort in descending order before taking the first n
+
+    EDIT search_replace path=src/board/scores.py
+    <<<<<<< SEARCH
+        return sorted(scores)[:n]
+    =======
+        return sorted(scores, reverse=True)[:n]
+    >>>>>>> REPLACE
+  - |
+    PLAN:
+    - sort in descending order before taking the first n
+
+    EDIT search_replace path=src/board/scores.py
+    <<<<<<< SEARCH
+        return sorted(scores)[:n]
+    =======
+        return sorted(scores, reverse=True)[:n]
+    >>>>>>> REPLACE
+repairer:
+  - |
+    PLAN:
+    - sort in descending order before taking the first n
+
+    EDIT search_replace path=src/board/scores.py
+    <<<<<<< SEARCH
+        return sorted(scores)[:n]
+    =======
+        return sorted(scores, reverse=True)[:n]
+    >>>>>>> REPLACE
+explainer:
+  - |
+    top_scores sorted the scores from lowest to highest and took the first n, so it returned the worst scores. It now sorts from highest to lowest before taking the first n, so the best scores come first.
