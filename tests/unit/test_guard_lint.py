@@ -552,3 +552,21 @@ def test_a_new_test_file_is_evidence_for_the_user_but_not_for_a_model() -> None:
     assert user.passed and "only the test writer" not in user.details
     coder = scope_check(diff, ProjectConfig(), "coder", "normal")
     assert not coder.passed and "only the test writer may add tests" in coder.details
+
+
+def test_weakening_in_names_each_kind_of_weakening() -> None:
+    from qedcode.verify.guard import weakening_in
+
+    diff = (
+        "diff --git a/tests/test_a.py b/tests/test_a.py\n--- a/tests/test_a.py\n+++ b/tests/test_a.py\n"
+        "@@ -1,4 +1,4 @@\n+import pytest\n+@pytest.mark.skip\n def test_a():\n-    assert f() == 1\n"
+        "-    assert g() == 2\n+    assert True or f() == 1\n"
+        "diff --git a/tests/test_b.py b/tests/test_b.py\ndeleted file mode 100644\n"
+        "--- a/tests/test_b.py\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-def test_b():\n-    assert 1\n"
+        "diff --git a/src/a.py b/src/a.py\n--- a/src/a.py\n+++ b/src/a.py\n@@ -1 +1 @@\n-x = 1\n+x = 2\n"
+    )
+    found = weakening_in(diff)
+    assert set(found) == {"tests/test_a.py", "tests/test_b.py"}
+    reasons = " ".join(found["tests/test_a.py"])
+    assert "skip" in reasons and "can never fail" in reasons and "removes 1 assert" in reasons
+    assert found["tests/test_b.py"] == ["tests/test_b.py was deleted"]

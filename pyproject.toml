@@ -88,3 +88,4 @@ markers = [
 "src/qedcode/engine/doctor.py" = ["E501"]  # each fix is one readable sentence
 "src/qedcode/engine/night.py" = ["E501"]  # the report's HTML and CSS live in strings
 "scripts/build_site.py" = ["E501"]  # level code and stubs live in strings
+"scripts/study_test_weakening.py" = ["E501"]  # URLs and table rows

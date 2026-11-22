@@ -213,6 +213,22 @@ def _weakening(file: FileDiff, *, always_true_asserts: bool = False) -> list[str
     return problems
 
 
+def weakening_in(diff: str) -> dict[str, list[str]]:
+    """Every test file a diff weakens, with the reasons: added skips or xfails, asserts that can
+    never fail, removed asserts, deleted test files. Used by `qed check` rules and the
+    test-weakening study (scripts/study_test_weakening.py)."""
+    found: dict[str, list[str]] = {}
+    for f in parse_diff(diff):
+        if not _is_test_path(f.path):
+            continue
+        problems = _weakening(f, always_true_asserts=True)
+        if f.status == "deleted":
+            problems.append(f"{f.path} was deleted")
+        if problems:
+            found[f.path] = problems
+    return found
+
+
 def scope_check(
     diff: str,
     project: ProjectConfig,
