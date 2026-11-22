@@ -483,7 +483,11 @@ def sys_platform_name() -> str:
 
 
 def current_hardware(host: Host | None = None) -> HardwareInfo:
-    """The hardware to plan with: the saved config when it exists, otherwise a fresh detection."""
+    """The hardware to plan with: the saved config when it names hardware, otherwise a fresh
+    detection. A config saved before `qed setup` (for example by `qed models use`) holds only the
+    default "cpu" entry, which says nothing about the machine, so it is detected again."""
     if global_config_path().exists():
-        return info_from_config(load_global().hardware)
+        saved = load_global().hardware
+        if saved.vendor != "cpu" or saved.gpu_name or saved.vram_gb:
+            return info_from_config(saved)
     return detect(host)

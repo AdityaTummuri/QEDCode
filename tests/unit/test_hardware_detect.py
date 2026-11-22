@@ -378,3 +378,18 @@ def test_qed_doctor_shows_the_hardware_check(monkeypatch, tmp_path) -> None:
     assert "QEDCode doctor" in result.stdout and "hardware" in result.stdout
     assert "RTX 5060 Ti" in result.stdout and "15.9 GB" in result.stdout
     assert "nvidia-smi" in result.stdout
+
+
+def test_a_default_cpu_entry_in_the_config_is_detected_again(monkeypatch) -> None:
+    from qedcode.config import GlobalConfig, save_global
+    from qedcode.hardware import detect as d
+
+    save_global(GlobalConfig())  # e.g. written by `qed models use` before any `qed setup`
+    found = d.HardwareInfo(vendor="nvidia", gpu_name="RTX 4050", vram_gb=6.0, backend="cuda")
+    monkeypatch.setattr(d, "detect", lambda host=None: found)
+    assert d.current_hardware() == found
+    cfg = GlobalConfig()
+    cfg.hardware.vendor = "amd"
+    cfg.hardware.vram_gb = 8.0
+    save_global(cfg)
+    assert d.current_hardware().vendor == "amd"  # a real saved choice is kept

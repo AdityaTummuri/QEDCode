@@ -373,7 +373,7 @@ def _print_tour(console: Console, result, kept: Path | None) -> None:
         console.print("\nThe change:", markup=False)
         console.print(best.diff.strip(), markup=False, highlight=False)
     if result.verify is not None:
-        console.print("\n$ qed verify <receipt>", markup=False)
+        console.print("\n$ qed verify <receipt>", markup=False, highlight=False)
         console.print(
             "[bold green]VERIFIED[/bold green]"
             if result.verify.verified
@@ -387,7 +387,7 @@ def _print_tour(console: Console, result, kept: Path | None) -> None:
         console.print(f"The demo project is kept in {result.project}", markup=False)
     console.print("\nNext steps:", markup=False)
     for command, why in tour.next_steps():
-        console.print(f"  {command:<12} {why}", markup=False)
+        console.print(f"  {command:<12} {why}", markup=False, highlight=False)
 
 
 class _no_status:  # noqa: N801 - a tiny context manager standing in for console.status
