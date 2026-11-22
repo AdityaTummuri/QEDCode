@@ -538,3 +538,17 @@ def test_quoted_diff_headers_are_decoded_on_every_os() -> None:
     assert [f.path for f in files] == ['app/we"irdü.py', "app/ok.py"]
     assert files[0].status == "added" and files[0].added == [(1, "import subprocess")]
     assert files[1].added == [(1, "X = 2")]
+
+
+def test_a_new_test_file_is_evidence_for_the_user_but_not_for_a_model() -> None:
+    from qedcode.config import ProjectConfig
+    from qedcode.verify.guard import scope_check
+
+    diff = (
+        "diff --git a/tests/test_new.py b/tests/test_new.py\nnew file mode 100644\n"
+        "--- /dev/null\n+++ b/tests/test_new.py\n@@ -0,0 +1,2 @@\n+def test_x():\n+    assert 1 == 1\n"
+    )
+    user = scope_check(diff, ProjectConfig(), "user", "normal")
+    assert user.passed and "only the test writer" not in user.details
+    coder = scope_check(diff, ProjectConfig(), "coder", "normal")
+    assert not coder.passed and "only the test writer may add tests" in coder.details

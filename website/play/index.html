@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en" data-type="software">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fool the Grader · QEDCode</title>
+  <meta name="description" content="Try to get grade A from QEDCode by cheating the tests: skip a test, delete an assert, hard-code the answer. QEDCode's real rules run in your browser.">
+  <meta property="og:title" content="Fool the Grader">
+  <meta property="og:description" content="Get grade A without really fixing the bug. QEDCode's real grading rules run in your browser.">
+  <meta name="theme-color" content="#2ea043">
+  <link rel="icon" href="../mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../site.css">
+  <style>
+    main { padding: 32px 0 72px; }
+    .intro { display: flex; flex-wrap: wrap; gap: 16px 40px; align-items: end; justify-content: space-between; margin: 0 0 24px; }
+    .intro h1 { margin: 0 0 8px; }
+    .intro p { margin: 0; color: var(--muted); max-width: 60ch; }
+    .levels { display: flex; gap: 8px; flex-wrap: wrap; }
+    .levels button { min-height: 44px; padding: 0 14px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 600 14px var(--sans); cursor: pointer; }
+    .levels button[aria-pressed="true"] { border-color: var(--ink); }
+    .levels button.won::after { content: " ✓"; color: var(--accent-ink); }
+    .game { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+    @media (max-width: 960px) { .game { grid-template-columns: 1fr; } }
+    .task { margin: 0 0 14px; font-size: 16px; }
+    .task b { display: block; font: 600 12px var(--mono); color: var(--accent-ink); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+    .tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--line); }
+    .tabs button { min-height: 40px; padding: 0 12px; border: 1px solid transparent; border-bottom: 0; border-radius: var(--radius) var(--radius) 0 0; background: none; color: var(--muted); font: 13px var(--mono); cursor: pointer; margin-bottom: -1px; }
+    .tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); border-color: var(--line); }
+    .tabs button.changed::after { content: " •"; color: var(--warn); }
+    textarea.code { width: 100%; min-height: 420px; resize: vertical; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 var(--radius) var(--radius); background: var(--surface); color: var(--ink); font: 13.5px/1.6 var(--mono); padding: 14px; tab-size: 4; white-space: pre; overflow: auto; }
+    textarea.code:focus { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; align-items: center; }
+    .side { display: grid; gap: 16px; }
+    .result .head { display: flex; gap: 14px; align-items: center; }
+    .result .seal { width: 52px; height: 52px; font-size: 26px; border-radius: 10px; flex: none; }
+    .result .line { font: 13px/1.6 var(--mono); color: var(--muted); }
+    .result ul { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 4px; font-size: 14px; }
+    .result li::before { content: "✓ "; color: var(--accent-ink); font-weight: 700; }
+    .result li.no::before { content: "✗ "; color: var(--bad); }
+    .result .next { margin: 14px 0 0; padding: 10px 12px; background: var(--sunk); border-radius: var(--radius); font-size: 14.5px; }
+    .result .hidden-test { margin: 12px 0 0; font-size: 14.5px; }
+    .result .details { white-space: pre-wrap; font: 12.5px var(--mono); color: var(--muted); margin: 8px 0 0; }
+    .won-card { border-color: var(--accent); background: var(--accent-soft); }
+    .shortcuts p { margin: 0 0 12px; color: var(--muted); font-size: 14.5px; }
+    .shortcuts .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .shortcuts button { min-height: 44px; text-align: left; padding: 8px 12px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); color: var(--ink); font: 14px var(--sans); cursor: pointer; transition: transform 0.12s ease, border-color 0.12s ease; }
+    .shortcuts button:hover { transform: translateY(-1px); border-color: var(--ink); }
+    .status { font: 13px var(--mono); color: var(--muted); min-height: 20px; }
+    .rules { font-size: 14px; color: var(--muted); }
+    .rules li { margin: 4px 0; }
+  </style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to the game</a>
+<header class="top">
+  <div class="wrap">
+    <a class="mark" href="../" aria-label="QEDCode home"><b>&lt;<i>∎</i>&gt;</b> QEDCode</a>
+    <nav aria-label="Main">
+      <a href="../receipt/">Receipt Viewer</a>
+      <a href="./" aria-current="page">Play</a>
+      <a href="../docs/">Docs</a>
+    </nav>
+  </div>
+</header>
+<main id="main">
+  <div class="wrap">
+    <div class="intro">
+      <div>
+        <h1>Fool the Grader</h1>
+        <p>Get grade A. Fix the bug for real, or try the shortcuts an agent might take and watch QEDCode catch them. Its real rules run in your browser; a hidden test you cannot see judges the result.</p>
+      </div>
+      <div class="levels" id="levels" role="group" aria-label="Levels"></div>
+    </div>
+    <div class="game">
+      <section aria-label="The code">
+        <p class="task" id="task"></p>
+        <div class="tabs" id="tabs" role="tablist" aria-label="Files"></div>
+        <textarea class="code" id="editor" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="File contents" aria-describedby="keys"></textarea>
+        <p class="muted" id="keys" style="font-size:13px;margin:6px 0 0">Tab indents; press Esc, then Tab, to leave the editor.</p>
+        <div class="row">
+          <button class="btn btn-primary" id="grade" type="button">Grade it</button>
+          <button class="btn btn-ghost" id="newtest" type="button">Add a test file</button>
+          <button class="btn btn-ghost" id="reset" type="button">Reset the level</button>
+          <span class="status" id="status" role="status"></span>
+        </div>
+      </section>
+      <aside class="side">
+        <div class="panel result" id="result" aria-live="polite">
+          <p class="muted" style="margin:0">Press <b>Grade it</b> to run the checks. The first time, Python loads in your browser (about 15 MB).</p>
+        </div>
+        <div class="panel shortcuts">
+          <h2 style="font-size:18px">Shortcuts an agent might take</h2>
+          <p>Each one changes the files the way a model trying to look done sometimes does. Grade it and read the reason.</p>
+          <div class="grid">
+            <button type="button" data-cheat="skip">Skip a test</button>
+            <button type="button" data-cheat="delete">Delete an assert</button>
+            <button type="button" data-cheat="always">assert True or …</button>
+            <button type="button" data-cheat="hardcode">Hard-code the answer</button>
+          </div>
+        </div>
+        <div class="panel rules">
+          <h2 style="font-size:18px">How it is graded</h2>
+          <ul>
+            <li><b>A</b>: a new test fails on the old code and passes on yours, all tests pass, no existing test touched.</li>
+            <li><b>B</b>: the tests pass, but nothing proved the bug is fixed.</li>
+            <li><b>C</b>: a test was weakened, or nothing tests the change.</li>
+            <li>The level is solved at grade A <i>and</i> the hidden test passing. The browser skips one CLI stage: lint.</li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+  </div>
+</main>
+<footer class="foot"><div class="wrap"><span>Fool the Grader · runs entirely in your browser</span><nav><a href="../">QEDCode</a><a href="../docs/start-here/">Use it on your code</a></nav></div></footer>
+<script src="play.js"></script>
+</body>
+</html>

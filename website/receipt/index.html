@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en" data-type="software">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Receipt Viewer · QEDCode</title>
+  <meta name="description" content="Open a QEDCode proof receipt: the grade, every check that ran, the diff and what is not proven. Read in your browser; nothing is uploaded.">
+  <meta name="theme-color" content="#2ea043">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" href="../mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../site.css">
+  <style>
+    main { padding: 40px 0 80px; }
+    .drop { border: 2px dashed var(--line); border-radius: var(--radius-lg); padding: 40px 24px; text-align: center; background: var(--surface); }
+    .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+    .drop p { margin: 0 0 16px; color: var(--muted); }
+    .drop label { cursor: pointer; }
+    .drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+    .status { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 20px; }
+    .pill { font: 600 12.5px var(--mono); padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); }
+    .pill.ok { color: var(--accent-ink); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: var(--accent-soft); }
+    .pill.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); background: var(--bad-soft); }
+    .head { display: flex; gap: 20px; align-items: center; margin: 0 0 24px; }
+    .head .seal { width: 72px; height: 72px; font-size: 38px; border-radius: 12px; flex: none; }
+    .head h1 { font-size: clamp(22px, 3vw, 32px); margin: 0 0 6px; }
+    .summary { font: 14px/1.6 var(--mono); color: var(--muted); }
+    .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 24px; align-items: start; }
+    @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+    .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+    .steps li { display: grid; grid-template-columns: 26px 1fr; gap: 10px; padding: 9px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); font-size: 14.5px; }
+    .steps .ic { font: 700 14px var(--mono); }
+    .steps .ok .ic { color: var(--accent-ink); } .steps .no .ic { color: var(--bad); } .steps .skip .ic { color: var(--muted); }
+    .steps small { display: block; color: var(--muted); font-size: 13px; }
+    h2.small { font-size: 18px; margin: 28px 0 10px; }
+    .diff { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: auto; font: 12.5px/1.55 var(--mono); margin: 0; padding: 10px 0; max-height: 560px; }
+    .diff span { display: block; padding: 0 14px; white-space: pre; }
+    .diff .add { background: var(--accent-soft); } .diff .del { background: var(--bad-soft); } .diff .hunk { color: var(--muted); } .diff .file { font-weight: 700; padding-top: 6px; }
+    ul.plain { margin: 0; padding-left: 20px; } ul.plain li { margin: 4px 0; }
+    dl.meta { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; font-size: 14px; }
+    dl.meta dt { color: var(--muted); } dl.meta dd { margin: 0; word-break: break-all; }
+    .err { border-left: 4px solid var(--bad); }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to the content</a>
+<header class="top">
+  <div class="wrap">
+    <a class="mark" href="../" aria-label="QEDCode home"><b>&lt;<i>∎</i>&gt;</b> QEDCode</a>
+    <nav aria-label="Main">
+      <a href="./" aria-current="page">Receipt Viewer</a>
+      <a href="../play/">Play</a>
+      <a href="../docs/receipts/">Format</a>
+    </nav>
+  </div>
+</header>
+<main id="main">
+  <div class="wrap">
+    <section id="intro">
+      <h1>Receipt Viewer</h1>
+      <p class="lede">Open a QEDCode proof receipt. It is read in your browser and never leaves your computer.</p>
+      <div class="drop" id="drop">
+        <p>Drop a receipt file (<code>.qed/receipts/&lt;task&gt;.json</code>) here, or paste a receipt link into the address bar.</p>
+        <div class="actions" style="justify-content:center">
+          <label class="btn btn-primary" for="file">Choose a receipt file</label>
+          <a class="btn btn-ghost" href="?sample">Open a sample</a>
+        </div>
+        <input id="file" type="file" accept=".json,application/json">
+      </div>
+    </section>
+
+    <section id="problem" class="panel err" hidden role="alert"></section>
+
+    <article id="view" hidden aria-live="polite">
+      <div class="status" id="status"></div>
+      <div class="head">
+        <span class="seal" id="seal"></span>
+        <div><h1 id="task"></h1><div class="summary" id="summary"></div></div>
+      </div>
+      <div class="cols">
+        <div>
+          <h2 class="small">The checks, cheapest first</h2>
+          <ol class="steps" id="steps"></ol>
+          <h2 class="small">Failed before, passes after</h2>
+          <ul class="plain" id="fbpa"></ul>
+          <h2 class="small" id="strength-title" hidden>Proof strength</h2>
+          <p id="strength" hidden></p>
+          <h2 class="small">Not proven</h2>
+          <ul class="plain" id="gaps"></ul>
+          <h2 class="small">Details</h2>
+          <dl class="meta" id="meta"></dl>
+        </div>
+        <div>
+          <h2 class="small">The change</h2>
+          <pre class="diff" id="diff"></pre>
+          <h2 class="small">Re-run it</h2>
+          <p class="muted">Inside the repository it came from: <code>qed verify &lt;receipt file or this link&gt;</code>. It re-runs the tests on the old and the new code and prints VERIFIED only if every result still holds.</p>
+        </div>
+      </div>
+    </article>
+  </div>
+</main>
+<footer class="foot"><div class="wrap"><span>QEDCode Receipt Viewer · nothing is uploaded or stored</span><nav><a href="../">QEDCode</a><a href="../docs/receipts/">The receipt format</a></nav></div></footer>
+<script src="viewer.js"></script>
+</body>
+</html>

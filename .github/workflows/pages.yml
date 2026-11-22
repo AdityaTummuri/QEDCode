@@ -1,0 +1,55 @@
+name: Website
+
+# Builds the static site (website/ + generated levels, schema and sample receipt + the MkDocs
+# docs) and deploys it to GitHub Pages: https://adityatummuri.github.io/QEDCode/
+# One-time setup: Settings > Pages > Source: GitHub Actions.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - "docs/**"
+      - "mkdocs.yml"
+      - "scripts/build_site.py"
+      - "bugzoo/**"
+      - "src/qedcode/**"
+      - ".github/workflows/pages.yml"
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - name: Build the site
+        run: |
+          uv sync
+          git config --global user.email "ci@example.com"
+          git config --global user.name "CI"
+          uv run python scripts/build_site.py --out _site
+          NO_MKDOCS_2_WARNING=1 uvx --with mkdocs-material==9.8.1 mkdocs build --strict -d _site/docs
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5

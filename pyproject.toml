@@ -87,3 +87,4 @@ markers = [
 "tests/**" = ["E501"]  # scripted replies and fixtures contain long lines on purpose
 "src/qedcode/engine/doctor.py" = ["E501"]  # each fix is one readable sentence
 "src/qedcode/engine/night.py" = ["E501"]  # the report's HTML and CSS live in strings
+"scripts/build_site.py" = ["E501"]  # level code and stubs live in strings

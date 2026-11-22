@@ -1,0 +1,71 @@
+# The docs half of the website (the landing page, Receipt Viewer and game are plain files in
+# website/). Built by .github/workflows/pages.yml into _site/docs.
+site_name: QEDCode docs
+site_description: The proof layer for AI-written code.
+site_url: https://adityatummuri.github.io/QEDCode/docs/
+repo_url: https://github.com/AdityaTummuri/QEDCode
+repo_name: AdityaTummuri/QEDCode
+edit_uri: edit/main/docs/
+docs_dir: docs
+site_dir: _site/docs
+exclude_docs: |
+  QEDCode — *
+  QEDCode Roadmap*
+  qedcode-roadmap.md
+theme:
+  name: material
+  logo: assets/mark.svg
+  favicon: assets/mark.svg
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: green
+      accent: green
+      toggle: {icon: material/weather-night, name: Dark}
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: green
+      accent: green
+      toggle: {icon: material/weather-sunny, name: Light}
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+markdown_extensions:
+  - admonition
+  - tables
+  - attr_list
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+nav:
+  - Home: index.md
+  - Start here: start-here.md
+  - Install: install.md
+  - Using QEDCode: usage.md
+  - Agents: agents.md
+  - GitHub Action: github-action.md
+  - How it works: how-it-works.md
+  - Receipts: receipts.md
+  - Safety model: safety.md
+  - Results: results.md
+  - Troubleshooting: troubleshooting.md
+  - FAQ: faq.md
+  - The story:
+      - What it is: what-it-is.md
+      - Built by AI, proven by tests: case-study.md
+      - Decision records:
+          - adr/index.md
+          - adr/0001-model-never-runs-commands.md
+          - adr/0002-receipts-are-data.md
+          - adr/0003-docker-is-optional.md
+          - adr/0004-no-submission-server.md
+          - adr/0005-swe-bench-not-terminal-bench.md
+          - adr/0006-apache-license.md
+          - adr/0007-no-backend.md

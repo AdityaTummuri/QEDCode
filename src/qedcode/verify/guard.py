@@ -257,7 +257,8 @@ def scope_check(
                 )
         if f.status == "deleted":
             problems.append(f"{f.path} was deleted; files may not be deleted.")
-        if f.status == "added" and is_test_file(f.path) and role != "test_writer":
+        if f.status == "added" and is_test_file(f.path) and role not in ("test_writer", "user"):
+            # a model try may not add tests; the user's own new test is evidence (qed check)
             problems.append(f"{f.path} is a new test file; only the test writer may add tests.")
         weak = _weakening(f, always_true_asserts=role == "user")
         if weak and f.path not in weakened:

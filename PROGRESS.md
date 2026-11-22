@@ -69,6 +69,8 @@ Roadmap build (docs/QEDCode Roadmap to a Masterpiece.md), 2026-11-23: every code
 
 - Smart Questions (15.14), 2026-11-23: engine/questions.py (changed top-level functions, fixed input pool over required params, max 300 calls, a QEDCode-written pytest probe file per candidate worktree writing JSON, first testable disagreement ignoring TypeError, answer test appended to the repro); solve: one extra try at sure speed after the first passing one, smart_question() before the finalist, excluded candidates, q1 re-evaluation; unanswered questions go into SolveResult.question and the receipt's unverified list. 5 new tests.
 
+- Website (15.15), 2026-11-23: website/ (landing, site.css system, Receipt Viewer, Fool the Grader with Pyodide 0.28.3 in a worker running the real guard/grade/receipt modules), scripts/build_site.py (levels, browser modules + stubs, schema, sample receipt), mkdocs.yml (Material 9.8.1, --strict clean), pages.yml. Checked in headless Chromium at 1440 and 390: no sideways scroll; viewer shows the sample with schema valid and checksum matching; the game graded the hard-code shortcut A with the hidden test failing and the skip shortcut C with the CLI wording. Found and fixed on the way: scope listed the user's own new test file as a problem; next_step said "Nothing to prove" before "undo the weakened test". Not built: the replay gallery (needs Phase 1 recordings); the Benchy dashboard deploys from the Benchy repo.
+
 ## Known issues
 - Ruff is told to skip `*.md` and `docs/` so AGENTS.md stays byte-identical to the brief.
 - HelperConfig has an extra 'base_url' field (not in the brief's TOML) so an openai_compat helper has somewhere to point; the brief's make_client(role='helper') needs it.

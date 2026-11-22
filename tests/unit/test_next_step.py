@@ -64,3 +64,12 @@ def test_c_without_tests_and_untestable_changes() -> None:
     assert next_step(_receipt("C", unverified=[inert])).startswith("Nothing to prove")
     broken = f"{NOT_RUNNABLE_PREFIX} (no pytest)."
     assert "qed doctor" in next_step(_receipt("D", checks=[], unverified=[broken]))
+
+
+def test_a_weakened_test_wins_over_no_code_change() -> None:
+    weakened = CheckResult(
+        stage="scope", passed=True, details="Protected files changed: t.py\nTests weakened: t.py"
+    )
+    inert = f"{NO_CODE_CHANGE_PREFIX} (only comments)."
+    receipt = _receipt("C", checks=[weakened, *_receipt("B").checks], unverified=[inert])
+    assert next_step(receipt).startswith("Undo the change that weakens tests in t.py")

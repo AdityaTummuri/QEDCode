@@ -326,12 +326,15 @@ def next_step(receipt: Receipt) -> str:
     weakened = weakened_from_checks(receipt.checks)
     if any(g.startswith(NOT_RUNNABLE_PREFIX) for g in gaps):
         return "Make the tests runnable (the receipt says why they could not); see `qed doctor`."
-    if any(g.startswith(NO_CODE_CHANGE_PREFIX) for g in gaps):
-        return "Nothing to prove: only comments, formatting or files no test uses changed."
-    if weakened:
+    if weakened:  # first: a weakened test is the thing to undo, whatever else changed
         return (
             f"Undo the change that weakens tests in {', '.join(weakened)} (a skip, removed asserts "
             "or an assert that can never fail); passing tests prove nothing while it is there."
+        )
+    if any(g.startswith(NO_CODE_CHANGE_PREFIX) for g in gaps):
+        return (
+            "Nothing to prove: only tests, comments, formatting or files no test uses changed. "
+            "Change the code itself to fix something."
         )
     passed, _total = test_counts(receipt.checks)
     if not passed:

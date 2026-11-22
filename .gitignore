@@ -12,3 +12,4 @@ build/
 .qed/
 .coverage
 htmlcov/
+_site/

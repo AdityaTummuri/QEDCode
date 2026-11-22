@@ -1253,7 +1253,7 @@ Rules:
 | `verify/receipt.py` | `RECEIPT_VIEWER_URL`, `receipt_link(receipt, viewer)`, `receipt_from_link(link)` (the inverse, used by tests and `qed verify <link>`), `describe(receipt) -> list[str]` |
 | `verify/verify.py` | `verify_receipt` also accepts a receipt link (decoded in memory, then verified like a file) |
 | `cli.py` | `qed receipt [path] [--link] [--json] [--viewer]`; `qed verify` accepts a link |
-| `website/receipt/` | the Receipt Viewer (section 15.12) |
+| `website/receipt/` | the Receipt Viewer (section 15.15) |
 
 **Rules.** A link longer than 64 KB is refused with a message (receipts with very large patches go as files). Decoding a link never runs anything; verifying one follows the same rules as a file (receipts are data, rule 2).
 
@@ -1361,3 +1361,18 @@ Rules:
 | `engine/solve.py` | one extra try at sure speed; `smart_question()` before the finalist is chosen; `excluded` candidates |
 
 **v1.2 limits.** Top-level functions only; inputs are generic values, not property-based (that can come later); a candidate whose import fails in the probe is skipped.
+
+### 15.15 The website (static, GitHub Pages)
+
+**What it is.** One static site at `https://adityatummuri.github.io/QEDCode/`, rebuilt by `.github/workflows/pages.yml` on pushes that touch it and on every release tag. No backend, accounts, cookies or analytics (section 15 roadmap rule: everything runs on a machine the user already has).
+
+| Part | Where | Notes |
+| --- | --- | --- |
+| Landing page | `website/index.html`, `website/site.css`, `website/site.js` | the shared system (tokens, buttons, terminal frame, seals) every page uses; a recorded `qed try` replay |
+| Receipt Viewer | `website/receipt/` | section 15.8: decodes `#r=` links in the browser (`DecompressionStream`), checks the JSON Schema generated from `Receipt`, recomputes the patch SHA-256 (`crypto.subtle`), renders every value with `textContent` |
+| Fool the Grader | `website/play/` | three bug zoo levels; `grader.py` runs in Pyodide 0.28.3 inside a Web Worker (an endless loop is stopped after 60 s) and imports QEDCode's real `verify/guard.py`, `verify/grade.py` and `verify/receipt.py`, so verdicts and wording match `qed check`; stubs replace `tomli_w` and `vcs/git.py`; lint does not run in the browser and the page says so; a hidden test judges the result; `?try=<shortcut>&level=<n>` links show one shortcut being caught |
+| Docs | `docs/` + `mkdocs.yml` | MkDocs Material, built with `--strict`; the planning documents in `docs/` are excluded |
+
+**Generated, never hand-kept** (`scripts/build_site.py`): `play/levels.json` from `bugzoo/`, `play/py/` (the QEDCode modules the grader imports), `receipt/receipt.schema.json` from the `Receipt` model and `receipt/sample.json` from a scripted `qed try` run.
+
+**Rules.** Scripts load only from the site itself and the pinned Pyodide CDN path (a test enforces it). Receipt and game text is never inserted as HTML (a test enforces it). Pages work at 390 px wide without sideways scrolling and respect `prefers-reduced-motion` and `prefers-color-scheme`.

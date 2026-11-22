@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en" data-type="software">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QEDCode: the proof layer for AI-written code</title>
+  <meta name="description" content="QEDCode grades every AI code change A to D from your own tests, says why, and writes a receipt anyone can re-run. Open source; checking needs no model and no GPU.">
+  <meta property="og:title" content="QEDCode: the proof layer for AI-written code">
+  <meta property="og:description" content="Every AI code change gets a grade, a reason and a receipt anyone can re-run.">
+  <meta property="og:type" content="website">
+  <meta name="theme-color" content="#2ea043">
+  <link rel="icon" href="mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="site.css">
+  <style>
+    .hero { min-height: calc(100svh - 61px); display: grid; align-items: center; padding: 56px 0; }
+    .hero .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: 56px; align-items: center; }
+    .hero .term pre { height: 500px; overflow: hidden; }
+    @media (max-width: 960px) { .hero .wrap { grid-template-columns: minmax(0, 1fr); gap: 36px; } .hero .term pre { height: auto; min-height: 320px; } }
+    .band { padding: 96px 0; border-top: 1px solid var(--line); }
+    .band.sunk { background: var(--sunk); }
+    .split { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 56px; align-items: start; }
+    @media (max-width: 960px) { .split { grid-template-columns: minmax(0, 1fr); gap: 32px; } }
+    .ladder { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; counter-reset: s; }
+    .ladder li { counter-increment: s; display: grid; grid-template-columns: 34px minmax(0, 1fr) 124px 76px; gap: 12px; align-items: center; padding: 10px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); font-size: 15px; }
+    .ladder li::before { content: counter(s); font: 600 13px var(--mono); color: var(--muted); }
+    .ladder b { font-weight: 600; }
+    .ladder .lane { font: 600 12px var(--mono); padding: 3px 8px; border-radius: 4px; white-space: nowrap; justify-self: end; }
+    @media (max-width: 560px) { .ladder li { grid-template-columns: 18px minmax(0, 1fr) auto auto; gap: 8px; padding: 9px 10px; font-size: 14px; } .ladder .lane { font-size: 11px; padding: 2px 5px; } }
+    .lane.ok { background: var(--accent-soft); color: var(--accent-ink); }
+    .lane.no { background: var(--bad-soft); color: var(--bad); }
+    .lane.skip { color: var(--muted); }
+    .ladder li.stop { border-color: var(--bad); }
+    .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 14px; color: var(--muted); margin: 18px 0 0; }
+    .grades { width: 100%; border-collapse: collapse; margin-top: 28px; font-size: 15px; }
+    .grades td { padding: 10px 0; border-top: 1px solid var(--line); vertical-align: top; }
+    .grades td:first-child { width: 56px; }
+    .door h3 { display: flex; align-items: center; gap: 10px; }
+    .door pre { background: var(--sunk); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; overflow-x: auto; margin: 16px 0 0; font-size: 13px; line-height: 1.6; }
+    .door p { margin: 0; color: var(--muted); }
+    .cert { display: grid; gap: 14px; }
+    .cert-top { display: flex; gap: 14px; align-items: center; }
+    .cert-top .seal { width: 56px; height: 56px; font-size: 28px; border-radius: 10px; }
+    .ticks { display: flex; flex-wrap: wrap; gap: 6px; }
+    .ticks span { font: 12px var(--mono); padding: 4px 8px; border-radius: 4px; background: var(--accent-soft); color: var(--accent-ink); }
+    .cert .gap { font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 12px; }
+    .link-demo { font: 12.5px var(--mono); color: var(--muted); word-break: break-all; background: var(--sunk); border-radius: var(--radius); padding: 10px 12px; }
+    .numbers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 36px; }
+    @media (max-width: 960px) { .numbers { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 560px) { .numbers { grid-template-columns: 1fr; } }
+    .numbers .panel { padding: 18px; }
+    .numbers .status { font: 600 12px var(--mono); color: var(--warn); margin: 0 0 10px; }
+    .numbers h3 { font-size: 17px; margin-bottom: 6px; }
+    .numbers p { margin: 0; font-size: 14.5px; color: var(--muted); }
+    .close { padding: 112px 0; text-align: left; border-top: 1px solid var(--line); }
+    .close h2 { font-size: clamp(32px, 4.4vw, 54px); max-width: 18ch; }
+    .works { color: var(--muted); max-width: 70ch; margin: 28px 0 0; font-size: 15px; }
+  </style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to the content</a>
+<header class="top">
+  <div class="wrap">
+    <a class="mark" href="./" aria-label="QEDCode home"><b>&lt;<i>∎</i>&gt;</b> QEDCode</a>
+    <nav aria-label="Main">
+      <a class="opt" href="docs/start-here/">For agent users</a>
+      <a class="opt" href="receipt/">Receipt Viewer</a>
+      <a href="play/">Play</a>
+      <a href="docs/">Docs</a>
+      <a href="https://github.com/AdityaTummuri/QEDCode">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="wrap">
+      <div data-enter>
+        <p class="eyebrow">Open source · Apache-2.0</p>
+        <h1 id="hero-title">The proof layer for AI-written code</h1>
+        <p class="lede">QEDCode grades every code change A to D from your own tests, says why, and writes a receipt anyone can re-run. Checking needs no model and no GPU.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="play/">Play Fool the Grader</a>
+          <span class="cmd"><span>uvx qedcode try</span><button type="button" data-copy="uvx qedcode try">Copy</button></span>
+        </div>
+      </div>
+      <div class="term" data-enter="2" aria-label="A recorded qed try session">
+        <div class="term-bar"><i></i><i></i><i></i><span>qed try</span></div>
+        <pre id="replay"></pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="ladder" aria-labelledby="ladder-title">
+    <div class="wrap split">
+      <div>
+        <p class="eyebrow">How a change is judged</p>
+        <h2 id="ladder-title">Agents say “fixed”. QEDCode checks the evidence.</h2>
+        <p class="lede">Every change walks the same ladder, cheapest check first. The first failure rejects it with the reason, and one function writes every grade from what actually ran.</p>
+        <table class="grades">
+          <tr><td><span class="seal A">A</span></td><td><b>Proven.</b> A test failed before, passes now; the full suite shows no regressions; no test was touched.</td></tr>
+          <tr><td><span class="seal B">B</span></td><td><b>Tested.</b> The tests pass, but nothing proved the exact problem.</td></tr>
+          <tr><td><span class="seal C">C</span></td><td><b>Checked.</b> It parses and lints, but no test covers it, or a test was weakened.</td></tr>
+          <tr><td><span class="seal D">D</span></td><td><b>Not checked.</b> Nothing could run, and it says why.</td></tr>
+        </table>
+      </div>
+      <div>
+        <ol class="ladder" aria-label="The eight checks, with what happened to two tries">
+          <li><b>apply</b><span class="lane ok">try 1</span><span class="lane ok">try 2</span></li>
+          <li><b>parse</b><span class="lane ok">try 1</span><span class="lane ok">try 2</span></li>
+          <li class="stop"><b>scope: no test weakened</b><span class="lane no">try 1 rejected</span><span class="lane ok">try 2</span></li>
+          <li><b>risk</b><span class="lane skip">—</span><span class="lane ok">try 2</span></li>
+          <li><b>lint</b><span class="lane skip">—</span><span class="lane ok">try 2</span></li>
+          <li><b>failed before, passes after</b><span class="lane skip">—</span><span class="lane ok">try 2</span></li>
+          <li><b>related tests</b><span class="lane skip">—</span><span class="lane ok">try 2</span></li>
+          <li><b>full suite</b><span class="lane skip">—</span><span class="lane ok">grade A</span></li>
+        </ol>
+        <p class="legend"><span>Try 1 added a <code>conftest.py</code> that switched the failing test off.</span><span>Try 2 fixed the code.</span></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="band sunk" id="doors" aria-labelledby="doors-title">
+    <div class="wrap">
+      <p class="eyebrow">Two ways in</p>
+      <h2 id="doors-title">Check what your agent wrote, or let a small model write it.</h2>
+      <div class="grid-2" style="margin-top:36px">
+        <div class="panel door">
+          <h3>You use Claude Code, Cursor or Copilot</h3>
+          <p>Let the agent make its change, then grade it. No model, no setup. In a pull request, the action posts the grade and blocks changes that weaken tests.</p>
+<pre><code>uvx qedcode check --fail-below B
+
+# .github/workflows/qedcode.yml
+- uses: AdityaTummuri/QEDCode@v0.2.0
+  with:
+    fail-below: B</code></pre>
+          <p style="margin-top:14px"><a href="docs/start-here/">Start here</a> · <a href="docs/github-action/">The GitHub Action</a></p>
+        </div>
+        <div class="panel door">
+          <h3>You run small local models</h3>
+          <p>A 4–9B model on a 4–6 GB card is wrong too often to trust once. QEDCode asks for several tries, tests each one in a throw-away copy, and keeps the one it can prove.</p>
+<pre><code>uv tool install qedcode
+qed setup          # picks a model that fits your GPU
+qed solve "fix the login bug"
+qed apply          # only when you say so; qed undo reverses it</code></pre>
+          <p style="margin-top:14px"><a href="docs/install/">Install</a> · <a href="docs/usage/">Every command</a></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="receipts" aria-labelledby="receipts-title">
+    <div class="wrap split">
+      <div>
+        <p class="eyebrow">Receipts</p>
+        <h2 id="receipts-title">Proof you can paste into a pull request.</h2>
+        <p class="lede">Every result writes a receipt: the patch, every check that ran, what is not proven. <code>qed receipt --link</code> packs it into a link. The receipt rides after the <code>#</code>, which browsers never send to a server, so nothing is uploaded anywhere.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="receipt/?sample">Open a sample receipt</a>
+          <a class="btn btn-ghost" href="docs/receipts/">Read the format</a>
+        </div>
+      </div>
+      <div class="panel cert" aria-label="A sample receipt">
+        <div class="cert-top"><span class="seal A">A</span><div><b>top_scores returns the highest scores, best first</b><br><span class="muted">007_sort_order · qed try</span></div></div>
+        <div class="ticks"><span>apply</span><span>parse</span><span>scope</span><span>risk</span><span>lint</span><span>fail before / pass after</span><span>related tests</span><span>full suite</span></div>
+        <div>2 tests failed before the change and pass now · 6/6 tests pass · proof strength 2/2</div>
+        <div class="gap">Not proven: tests ran on this computer without network blocking.</div>
+        <div class="link-demo">https://adityatummuri.github.io/QEDCode/receipt/#r=H4sIAAAAAAACE-1YX2_bNhD_KoSeGkSyRNlybAM…</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band sunk" id="numbers" aria-labelledby="numbers-title">
+    <div class="wrap">
+      <p class="eyebrow">Results</p>
+      <h2 id="numbers-title">Four numbers, measured with hidden tests.</h2>
+      <p class="lede">Real-model runs are under way on local hardware with <a href="https://github.com/AdityaTummuri/QEDCode-benchy">QEDCode Benchy</a>. Nothing is published before it is run, and the losses stay in.</p>
+      <div class="numbers">
+        <div class="panel"><p class="status">being measured</p><h3>Resolution lift</h3><p>Tasks solved by the same model bare vs. through QEDCode, with 95% intervals.</p></div>
+        <div class="panel"><p class="status">being measured</p><h3>Grade honesty</h3><p>When QEDCode says A, how often the hidden tests agree.</p></div>
+        <div class="panel"><p class="status">being measured</p><h3>Silent failures</h3><p>Changes that look done but are wrong, handed back without a warning.</p></div>
+        <div class="panel"><p class="status">being measured</p><h3>The size jump</h3><p>Whether a 4B model with QEDCode matches a 9B model alone.</p></div>
+      </div>
+      <p style="margin-top:28px"><a href="docs/results/">How each number is measured</a></p>
+    </div>
+  </section>
+
+  <section class="close" aria-labelledby="close-title">
+    <div class="wrap">
+      <h2 id="close-title">Make the next agent show its work.</h2>
+      <div class="actions">
+        <span class="cmd"><span>uvx qedcode check</span><button type="button" data-copy="uvx qedcode check">Copy</button></span>
+        <a class="btn btn-ghost" href="https://github.com/AdityaTummuri/QEDCode">Star it on GitHub</a>
+      </div>
+      <p class="works">Works with Claude Code, Cursor, OpenCode, Cline, Antigravity and VS Code through MCP; GitHub Actions and pre-commit; llama.cpp, Ollama, LM Studio and cloud models; Python and JavaScript/TypeScript projects on macOS, Linux and Windows.</p>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <span>QEDCode · Apache-2.0 · no accounts, no telemetry</span>
+    <nav aria-label="Footer">
+      <a href="docs/">Docs</a><a href="docs/faq/">FAQ</a><a href="docs/case-study/">Case study</a>
+      <a href="docs/adr/">Decisions</a><a href="https://github.com/AdityaTummuri/QEDCode-benchy">Benchy</a>
+      <a href="https://github.com/AdityaTummuri/QEDCode-AgentSkill">Agent Skill</a>
+    </nav>
+  </div>
+</footer>
+<script src="site.js"></script>
+<script>
+  // A recorded `qed try` session (scripted demo model), typed out once.
+  const lines = [
+    ["$ uvx qedcode try 007", ""],
+    ["scripted: shows the engine, not model quality", "t-dim"],
+    ["Task: top_scores returns the lowest scores first. I want the highest scores, best first.", ""],
+    ["Taking a snapshot of your project...", "t-dim"],
+    ["Writing a test that shows the problem ... done (it fails now)", "t-dim"],
+    ["Try 1: asking the model (temperature 0.2)...", ""],
+    ["  c1 · scope: Rejected: tests/conftest.py is a new test file; only the test writer may add tests.", "t-bad"],
+    ["Try 2: asking the model (temperature 0.7)...", ""],
+    ["  c2 · fbpa: 2 test(s) failed before the change and pass now.", "t-ok"],
+    ["  c2 · full: 6/6 tests pass.", "t-ok"],
+    ["Measuring proof strength (small breakages of the changed lines)...", "t-dim"],
+    ["", ""],
+    ["GRADE_A Grade A · repro test failed before, passes now · 6/6 tests pass · proof strength 2/2", ""],
+    ["", ""],
+    ["$ qed verify <receipt>", ""],
+    ["VERIFIED", "t-ok"],
+  ];
+  QED.replay(document.getElementById("replay"), lines);
+</script>
+</body>
+</html>

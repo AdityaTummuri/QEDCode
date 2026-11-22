@@ -30,6 +30,9 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
   today's code, and tries a proven fix for each. Nothing is applied.
 - `qed night add|list|clear|run|report`: the Night Shift queues tasks, solves them unattended
   in quiet mode and writes one HTML report.
+- The website (GitHub Pages): a landing page, the Receipt Viewer (open a receipt link or file,
+  schema and checksum checked in the browser), **Fool the Grader** (try to cheat QEDCode's real
+  grading rules, running in your browser with Pyodide, judged by a hidden test) and the docs.
 - The QEDCode Check GitHub Action (`uses: AdityaTummuri/QEDCode@v0.2.0`): grades a pull request
   with `qed check`, posts one sticky comment with the next step and a Receipt Viewer link, can
   fail below a grade, works safely for pull requests from forks, and can sign receipts with
@@ -44,6 +47,9 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
   `qed setup` ends with a one-line pointer to it.
 
 ### Changed
+- `qed check` no longer lists a new test file you added as a scope problem ("only the test
+  writer may add tests" is for model tries); your own new test is evidence. The "To raise the
+  grade" advice names a weakened test before anything else.
 - Big repositories no longer stall the solve before the first try. At normal and sure speed the
   full suite gets 120 s / 300 s before the change; a slower suite is marked too slow for the task
   (not run on the finalist either, so the best grade is B) and the related tests run instead.
