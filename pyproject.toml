@@ -43,6 +43,7 @@ dependencies = [
 
 [project.scripts]
 qed = "qedcode.cli:app"
+qedcode = "qedcode.cli:app"  # so `uvx qedcode` works (uvx runs the command named like the package)
 
 [project.urls]
 Homepage = "https://github.com/AdityaTummuri/QEDCode"

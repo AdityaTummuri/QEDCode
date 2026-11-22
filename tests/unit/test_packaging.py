@@ -19,7 +19,7 @@ def test_the_version_is_the_same_everywhere() -> None:
 
 def test_the_console_script_and_license_are_declared() -> None:
     project = PYPROJECT["project"]
-    assert project["scripts"] == {"qed": "qedcode.cli:app"}
+    assert project["scripts"] == {"qed": "qedcode.cli:app", "qedcode": "qedcode.cli:app"}
     assert project["license"] == "Apache-2.0"
     assert project["license-files"] == ["LICENSE", "NOTICE"]
     assert "Apache License" in (ROOT / "LICENSE").read_text(encoding="utf-8")
