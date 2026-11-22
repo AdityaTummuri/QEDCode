@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: "17 4 * * 1"  # Mondays: also test against the newest allowed dependencies
+  workflow_dispatch:
 
 jobs:
   test:
@@ -39,3 +42,19 @@ jobs:
             src/qedcode/project src/qedcode/runtime src/qedcode/hardware; then
             echo "Engine modules must not import UI modules"; exit 1
           fi
+
+  newest-dependencies:
+    # Upstream breakage turns this red before a user hits it. The lock file is not changed.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - name: Install the newest allowed versions
+        run: uv sync --upgrade
+      - name: Git identity for tests
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "CI"
+      - name: Tests
+        run: uv run pytest -m "not gpu"

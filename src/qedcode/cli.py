@@ -1213,11 +1213,29 @@ def models_download(
 
 @models_app.command("use")
 def models_use(
-    model: str = typer.Argument(..., help="A model id, or the path to a .gguf file."),
+    model: str = typer.Argument(
+        ..., help="A catalog id, ollama:<tag> (a model Ollama serves), or a .gguf file path."
+    ),
 ) -> None:
-    """Make a downloaded model the one QEDCode uses."""
+    """Choose the model QEDCode uses: from the catalog, from Ollama, or any GGUF file."""
     console = Console()
     cfg = load_global()
+    if model.startswith("ollama:"):
+        tag = model.removeprefix("ollama:").strip()
+        if not tag:
+            typer.echo(
+                "Name the Ollama model, for example: qed models use ollama:qwen3.5:4b", err=True
+            )
+            raise typer.Exit(2)
+        cfg.local.backend = "ollama"
+        cfg.local.model = tag
+        save_global(cfg)
+        console.print(
+            f"QEDCode will use {tag} through Ollama. Make sure it is pulled (`ollama pull {tag}`); "
+            "`qed doctor` checks that Ollama answers.",
+            markup=False,
+        )
+        return
     if model.lower().endswith(".gguf"):
         cfg.local.backend = "llamacpp"
         cfg.local.model = model
