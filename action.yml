@@ -1,0 +1,162 @@
+name: QEDCode Check
+description: Catch AI pull requests that cheat their tests. Grades the change A-D with a receipt anyone can re-run.
+author: AdityaTummuri
+branding:
+  icon: check-circle
+  color: green
+
+inputs:
+  mode:
+    description: "check (run qed check on this pull request) or comment (post the comment saved by a check run; for PRs from forks, in a workflow_run job)."
+    default: check
+  fail-below:
+    description: "Fail the job when the grade is below this: A, B, C, D, or none (default: report only)."
+    default: none
+  speed:
+    description: "fast, normal or sure (fast skips the full suite, so its best grade is B)."
+    default: normal
+  base:
+    description: "Commit to compare with (default: the pull request's base commit)."
+    default: ""
+  version:
+    description: "What to install, as a uvx --from spec (default: the latest qedcode from PyPI)."
+    default: qedcode
+  working-directory:
+    description: "The project folder inside the repository."
+    default: "."
+  comment:
+    description: "Post or update one sticky comment on the pull request (needs pull-requests: write)."
+    default: "true"
+  attest:
+    description: "Sign the receipt with a GitHub artifact attestation (needs id-token: write and attestations: write)."
+    default: "false"
+  github-token:
+    description: "Token for the comment."
+    default: ${{ github.token }}
+
+outputs:
+  grade:
+    description: "A, B, C, D, or empty when the change was rejected or the check could not run."
+    value: ${{ steps.report.outputs.grade }}
+  status:
+    description: "graded, rejected, no_changes, error"
+    value: ${{ steps.report.outputs.status }}
+  summary:
+    description: "The one-line summary."
+    value: ${{ steps.report.outputs.summary }}
+  next-step:
+    description: "What would raise the grade (empty for A)."
+    value: ${{ steps.report.outputs.next-step }}
+  receipt-link:
+    description: "A Receipt Viewer link with the whole receipt inside (empty when too large)."
+    value: ${{ steps.report.outputs.receipt-link }}
+
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      if: inputs.mode == 'check'
+
+    - name: Grade the pull request with qed check
+      id: check
+      if: inputs.mode == 'check'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        QED_SPEC: ${{ inputs.version }}
+        QED_BASE: ${{ inputs.base || github.event.pull_request.base.sha }}
+        QED_SPEED: ${{ inputs.speed }}
+        QED_OUT: ${{ runner.temp }}/qedcode-check
+      run: |
+        mkdir -p "$QED_OUT"
+        if [ -z "$QED_BASE" ]; then
+          echo "::error::No base commit: run this on pull_request events or set the 'base' input."
+          echo '{"status": "error", "message": "No base commit to compare with."}' > "$QED_OUT/result.json"
+          exit 0
+        fi
+        if ! git cat-file -e "$QED_BASE^{commit}" 2>/dev/null; then
+          git fetch --no-tags --quiet origin "$QED_BASE" || true
+        fi
+        set +e
+        uvx --from "$QED_SPEC" qedcode check --base "$QED_BASE" --speed "$QED_SPEED" --json > "$QED_OUT/result.json"
+        set -e
+        receipt=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('receipt_path') or '')" "$QED_OUT/result.json" 2>/dev/null || true)
+        if [ -n "$receipt" ] && [ -f "$receipt" ]; then
+          cp "$receipt" "$QED_OUT/receipt.json"
+          uvx --from "$QED_SPEC" qedcode receipt "$receipt" --link > "$QED_OUT/link.txt" 2>/dev/null || true
+        fi
+
+    - name: Write the comment
+      id: report
+      if: inputs.mode == 'check'
+      shell: bash
+      # Everything that comes from the pull request goes through env, never into the script text.
+      env:
+        QED_OUT: ${{ runner.temp }}/qedcode-check
+        QED_FAIL_BELOW: ${{ inputs.fail-below }}
+        QED_PR: ${{ github.event.pull_request.number }}
+        QED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        QED_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        python3 "$GITHUB_ACTION_PATH/action/report.py" render \
+          --result "$QED_OUT/result.json" --link-file "$QED_OUT/link.txt" \
+          --fail-below "$QED_FAIL_BELOW" --out "$QED_OUT" \
+          --pr "$QED_PR" --head-sha "$QED_HEAD_SHA" --run-url "$QED_RUN_URL"
+        cat "$QED_OUT/comment.md" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Keep the receipt and the comment
+      if: inputs.mode == 'check'
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: qedcode-check
+        path: |
+          ${{ runner.temp }}/qedcode-check/comment.md
+          ${{ runner.temp }}/qedcode-check/pr.json
+          ${{ runner.temp }}/qedcode-check/receipt.json
+          ${{ runner.temp }}/qedcode-check/result.json
+        if-no-files-found: warn
+
+    - name: Sign the receipt (GitHub artifact attestation)
+      if: inputs.mode == 'check' && inputs.attest == 'true' && hashFiles(format('{0}/qedcode-check/receipt.json', runner.temp)) != ''
+      uses: actions/attest@ce27ba3b4a9a139d9a20a4a07d69fabb52f1e5bc # v2.4.0
+      with:
+        subject-path: ${{ runner.temp }}/qedcode-check/receipt.json
+        predicate-type: https://adityatummuri.github.io/QEDCode/receipt/v1
+        predicate-path: ${{ runner.temp }}/qedcode-check/receipt.json
+
+    - name: Post the comment
+      if: inputs.mode == 'check' && inputs.comment == 'true' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        QED_OUT: ${{ runner.temp }}/qedcode-check
+      run: python3 "$GITHUB_ACTION_PATH/action/report.py" post --dir "$QED_OUT"
+
+    - name: Fetch the comment saved by the check run (PR from a fork)
+      if: inputs.mode == 'comment' && github.event.workflow_run.conclusion != 'skipped'
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      with:
+        name: qedcode-check
+        run-id: ${{ github.event.workflow_run.id }}
+        github-token: ${{ inputs.github-token }}
+        path: ${{ runner.temp }}/qedcode-check
+
+    - name: Post the saved comment
+      if: inputs.mode == 'comment'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        QED_EXPECTED_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        QED_OUT: ${{ runner.temp }}/qedcode-check
+      run: python3 "$GITHUB_ACTION_PATH/action/report.py" post --dir "$QED_OUT"
+
+    - name: Enforce fail-below
+      if: inputs.mode == 'check' && steps.report.outputs.failed == 'true'
+      shell: bash
+      env:
+        QED_GRADE: ${{ steps.report.outputs.grade }}
+        QED_FAIL_BELOW: ${{ inputs.fail-below }}
+        QED_NEXT: ${{ steps.report.outputs.next-step }}
+      run: |
+        printf '::error::QEDCode grade %s is below %s. %s\n' "${QED_GRADE:-none}" "$QED_FAIL_BELOW" "$QED_NEXT"
+        exit 1

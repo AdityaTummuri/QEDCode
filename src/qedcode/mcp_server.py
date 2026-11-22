@@ -284,6 +284,7 @@ class QedMcpService:
                 "receipt_path": outcome.receipt_path,
                 "message": outcome.message,
                 "notes": outcome.notes,
+                "next_step": outcome.next_step,
             }
 
         try:
@@ -359,8 +360,9 @@ def build_server(service: QedMcpService | None = None) -> MCPServer:
         """Grade the uncommitted changes in the project (for example code you just wrote).
 
         Runs the project's tests and checks, with no model involved, and returns a grade, a
-        one-line summary, any failing tests, notes (for example when the tests could not run)
-        and a proof receipt path.
+        one-line summary, any failing tests, notes (for example when the tests could not run),
+        next_step (the one thing that would raise the grade; empty for grade A) and a proof
+        receipt path.
         """
         return await service.check(speed, base, project_dir, ctx)
 

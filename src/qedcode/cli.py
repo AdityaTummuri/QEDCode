@@ -125,9 +125,16 @@ def check_command(
     allow_risky: Annotated[
         bool, typer.Option("--allow-risky", help="Do not stop at risky code.")
     ] = False,
+    fail_below: Annotated[
+        str,
+        typer.Option(
+            "--fail-below", help="Exit with 1 when the grade is below this (A, B, C or D)."
+        ),
+    ] = "",
 ) -> None:
     """Grade the changes you made yourself (uncommitted work) and write a proof receipt."""
     chosen = _parse_speed(speed)
+    floor = _parse_grade(fail_below) if fail_below else None
     console = Console(stderr=True) if as_json else Console()
 
     def show(event) -> None:
@@ -140,8 +147,23 @@ def check_command(
     else:
         _print_check(Console(), outcome)
     if outcome.status == "graded":
+        if floor is not None and outcome.grade is not None and outcome.grade.rank() < floor.rank():
+            if not as_json:
+                Console().print(
+                    f"Grade {outcome.grade.value} is below {floor.value} (--fail-below).",
+                    markup=False,
+                )
+            raise typer.Exit(1)
         return
     raise typer.Exit(1 if outcome.status in ("rejected", "cancelled") else 2)
+
+
+def _parse_grade(value: str) -> Grade:
+    try:
+        return Grade(value.strip().upper())
+    except ValueError:
+        typer.echo(f"'{value}' is not a grade. Use A, B, C or D.", err=True)
+        raise typer.Exit(2) from None
 
 
 def _print_check(console: Console, outcome) -> None:
@@ -159,6 +181,8 @@ def _print_check(console: Console, outcome) -> None:
         last = outcome.candidate.checks[-1] if outcome.candidate.checks else None
         if last is not None and last.details:
             console.print(last.details[:800], markup=False, highlight=False)
+    if outcome.next_step:
+        console.print(f"To raise the grade: {outcome.next_step}", markup=False)
     for note in outcome.notes:
         console.print(f"Note: {note}", markup=False)
     if outcome.receipt_path:
@@ -384,20 +408,99 @@ def _log_crash(exc: Exception) -> None:
     )
 
 
+@app.command("tests")
+def tests_command(
+    path: Annotated[str, typer.Argument(help="Only this file or folder (default: all).")] = "",
+    speed: Annotated[str | None, typer.Option("--speed", help="fast, normal or sure.")] = None,
+) -> None:
+    """Safety Net Builder: write tests for code no test covers, keep only the ones that work."""
+    config = load_global()
+    chosen = _parse_speed(speed) if speed else config.engine.speed
+    console = Console()
+
+    def show(event: Event) -> None:
+        line = event_line(event, include_result=False)
+        if line:
+            console.print(line, style="dim", markup=False, highlight=False)
+
+    result = api.build_tests(
+        Path.cwd(), path, speed=chosen, cb=NonInteractiveCallbacks(on_event=show), config=config
+    )
+    console.print()
+    if result.status == "done" and result.best is not None:
+        console.print(_grade_text(result.best.grade))
+        console.print(result.explanation, markup=False)
+        console.print(result.message, markup=False)
+        if result.best.diff:
+            console.print("\nThe tests:", markup=False)
+            console.print(result.best.diff.strip(), markup=False, highlight=False)
+        return
+    console.print(result.message, markup=False)
+    raise typer.Exit(2 if result.status == "error" else 1)
+
+
+@app.command("hunt")
+def hunt_command(
+    path: Annotated[str, typer.Argument(help="Only this file or folder (default: all).")] = "",
+    speed: Annotated[str | None, typer.Option("--speed", help="fast, normal or sure.")] = None,
+) -> None:
+    """Bug Hunter: look for bugs, prove each with a failing test, then try a proven fix."""
+    config = load_global()
+    chosen = _parse_speed(speed) if speed else config.engine.speed
+    console = Console()
+
+    def show(event: Event) -> None:
+        line = event_line(event, include_result=False)
+        if line:
+            console.print(line, style="dim", markup=False, highlight=False)
+
+    result = api.hunt(
+        Path.cwd(), path, speed=chosen, cb=NonInteractiveCallbacks(on_event=show), config=config
+    )
+    console.print()
+    for number, finding in enumerate(result.findings, start=1):
+        where = f"{finding.target.path}:{finding.target.symbol}"
+        console.print(f"{number}. {where}: {finding.description}", markup=False)
+        console.print(f"   test: {finding.test_path}::{finding.test_name}", markup=False)
+        solved = finding.result
+        if finding.fixed and solved is not None:
+            console.print(
+                f"   proven fix (grade A): review it, then `qed apply {solved.task.id}`",
+                markup=False,
+            )
+        elif solved is not None and solved.best is not None and solved.best.grade is not None:
+            console.print(
+                f"   fix found, grade {solved.best.grade.value} (not proven): "
+                f"`qed receipt` / `qed apply {solved.task.id}`",
+                markup=False,
+            )
+        else:
+            console.print(
+                "   not fixed: " + (solved.message if solved else "skipped"), markup=False
+            )
+    console.print(result.message, markup=False)
+    if result.status in ("error", "cancelled"):
+        raise typer.Exit(2 if result.status == "error" else 1)
+
+
 @app.command("apply")
 def apply_command(
     task_id: Annotated[
         str | None, typer.Argument(help="A task id (default: the last result).")
     ] = None,
     yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask about a low grade.")] = False,
+    commit: Annotated[
+        bool,
+        typer.Option("--commit", help="Also commit it, with its receipt in git notes."),
+    ] = False,
 ) -> None:
     """Apply a finished result to your files (undo it any time with `qed undo`)."""
     console = Console()
-    outcome = api.apply_result(Path.cwd(), task_id)
+    outcome = api.apply_result(Path.cwd(), task_id, commit=commit)
     if outcome.status == "needs_confirmation":
         console.print(outcome.message, markup=False)
         if yes or typer.confirm("Apply it anyway?", default=False):
-            outcome = api.apply_result(Path.cwd(), task_id, allow_low_grade=True)
+            outcome = api.apply_result(Path.cwd(), task_id, allow_low_grade=True, commit=commit)
         else:
             raise typer.Exit(1)
     console.print(outcome.message, markup=False)
@@ -728,7 +831,10 @@ def uninstall_command(
 
 @app.command("verify")
 def verify_command(
-    receipt: Annotated[Path, typer.Argument(help="A receipt file (.qed/receipts/<task>.json).")],
+    receipt: Annotated[
+        str,
+        typer.Argument(help="A receipt file (.qed/receipts/<task>.json) or a receipt link."),
+    ],
 ) -> None:
     """Re-run a proof receipt and print VERIFIED or what no longer matches."""
     console = Console()
@@ -746,6 +852,99 @@ def verify_command(
     for problem in result.mismatches:
         console.print(f"- {problem}", markup=False, highlight=False)
     raise typer.Exit(1)
+
+
+@app.command("receipt")
+def receipt_command(
+    receipt: Annotated[
+        Path | None, typer.Argument(help="A receipt file (default: the last result's).")
+    ] = None,
+    link: Annotated[
+        bool, typer.Option("--link", help="Print a link that opens it in the Receipt Viewer.")
+    ] = False,
+    as_json: Annotated[bool, typer.Option("--json", help="Print the receipt file.")] = False,
+    viewer: Annotated[
+        str, typer.Option("--viewer", help="Receipt Viewer address (for a self-hosted copy).")
+    ] = "",
+    from_commit: Annotated[
+        str,
+        typer.Option("--commit", help="Read the receipt a commit carries (qed apply --commit)."),
+    ] = "",
+) -> None:
+    """Show a proof receipt in plain English, or make a link anyone can open."""
+    from qedcode.engine.solve import read_last_result
+    from qedcode.verify.receipt import (
+        RECEIPT_VIEWER_URL,
+        RECEIPTS_DIR,
+        describe,
+        load_receipt,
+        receipt_link,
+        receipt_path,
+    )
+
+    console = Console()
+    path = receipt
+    if from_commit:
+        import tempfile
+
+        from qedcode.vcs.patch import commit_receipt
+
+        stored = commit_receipt(api.resolve_root(), from_commit)
+        if stored is None:
+            typer.echo(
+                f"Commit {from_commit} carries no QEDCode receipt (none in refs/notes/qed). Fetch "
+                "them with `git fetch origin refs/notes/qed:refs/notes/qed`.",
+                err=True,
+            )
+            raise typer.Exit(2)
+        handle = tempfile.NamedTemporaryFile(
+            "w", suffix=".json", delete=False, encoding="utf-8", prefix="qed-receipt-"
+        )
+        with handle:
+            handle.write(stored)
+        path = Path(handle.name)
+    if path is None:
+        root = api.resolve_root()
+        last = read_last_result(root) or {}
+        saved = sorted(
+            (root / RECEIPTS_DIR).glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True
+        )
+        if last.get("task_id") and receipt_path(root, str(last["task_id"])).exists():
+            path = receipt_path(root, str(last["task_id"]))
+        elif saved:
+            path = saved[0]  # `qed check` writes receipts but no "last result"
+        else:
+            typer.echo(
+                "There is no receipt here yet. Run `qed solve` or `qed check` first, or pass a "
+                "receipt file.",
+                err=True,
+            )
+            raise typer.Exit(2)
+    try:
+        loaded = load_receipt(path)
+    except ValueError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    if as_json:
+        typer.echo(Path(path).read_text(encoding="utf-8"))
+        return
+    if link:
+        try:
+            url = receipt_link(loaded, viewer or RECEIPT_VIEWER_URL)
+        except ValueError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(2) from exc
+        typer.echo(
+            "Note: the link contains the whole receipt, including the diff. Share it only where "
+            "this code may go. Nothing is uploaded: the receipt rides in the link itself.",
+            err=True,
+        )
+        typer.echo(url)
+        return
+    for line in describe(loaded):
+        console.print(line, markup=False, highlight=False)
+    console.print(f"\nFile: {path}", markup=False)
+    console.print("Re-check it with `qed verify`, or share it with `qed receipt --link`.")
 
 
 @app.command()
@@ -790,6 +989,116 @@ def doctor(
     console.print(f"\n{ok} ok, {warnings} warning(s), {failures} problem(s).", markup=False)
     if failures:
         raise typer.Exit(1)
+
+
+night_app = typer.Typer(
+    help="Night Shift: queue tasks, let them run unattended, read one report in the morning.",
+    invoke_without_command=True,
+)
+app.add_typer(night_app, name="night")
+
+
+@night_app.callback()
+def night_main(ctx: typer.Context) -> None:
+    """Show the queue when no subcommand is given."""
+    if ctx.invoked_subcommand is None:
+        night_list()
+
+
+@night_app.command("add")
+def night_add(
+    task: Annotated[str | None, typer.Argument(help="What to do, in plain words.")] = None,
+    file: Annotated[Path | None, typer.Option("--file", help="One task per line.")] = None,
+    failing: Annotated[
+        bool, typer.Option("--failing", help="Queue one task per failing test on HEAD.")
+    ] = False,
+    speed: Annotated[str | None, typer.Option("--speed", help="fast, normal or sure.")] = None,
+) -> None:
+    """Add tasks to the night queue."""
+    from qedcode.engine.night import Queue, failing_test_tasks, tasks_from_file
+
+    chosen = _parse_speed(speed) if speed else load_global().engine.speed
+    requests = [task] if task else []
+    if file is not None:
+        try:
+            requests += tasks_from_file(file.read_text(encoding="utf-8"))
+        except OSError as exc:
+            typer.echo(f"Cannot read {file}: {exc}.", err=True)
+            raise typer.Exit(2) from exc
+    if failing:
+        requests += failing_test_tasks(api.night_failing_tests())
+    if not requests:
+        typer.echo(
+            'Say what to queue: qed night add "fix the login bug", --file or --failing.', err=True
+        )
+        raise typer.Exit(2)
+    added = Queue(api.resolve_root()).add(requests, chosen)
+    Console().print(f"Queued {added} task(s). Run them with `qed night run`.", markup=False)
+
+
+@night_app.command("list")
+def night_list() -> None:
+    """Show the queued tasks."""
+    from qedcode.engine.night import Queue
+
+    tasks = Queue(api.resolve_root()).load()
+    console = Console()
+    if not tasks:
+        console.print('The night queue is empty. Add a task with `qed night add "<task>"`.')
+        return
+    for number, item in enumerate(tasks, start=1):
+        console.print(f"{number}. [{item.speed}] {item.request}", markup=False)
+
+
+@night_app.command("clear")
+def night_clear() -> None:
+    """Empty the night queue."""
+    from qedcode.engine.night import Queue
+
+    removed = Queue(api.resolve_root()).clear()
+    Console().print(f"Removed {removed} queued task(s).", markup=False)
+
+
+@night_app.command("run")
+def night_run_command() -> None:
+    """Solve every queued task (quiet mode on), then write the morning report."""
+    console = Console()
+    stopping = {"now": False}
+
+    def on_task(index: int, total: int, request: str) -> None:
+        console.print(f"[{index}/{total}] {request}", markup=False)
+
+    def show(event: Event) -> None:
+        line = event_line(event, include_result=False)
+        if line:
+            console.print(line, style="dim", markup=False, highlight=False)
+
+    try:
+        run = api.night_run(
+            cb=NonInteractiveCallbacks(on_event=show),
+            stop=lambda: stopping["now"],
+            on_task=on_task,
+        )
+    except ModelError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    except KeyboardInterrupt:
+        console.print("Stopped. Finished tasks are in the report; the rest stay queued.")
+        raise typer.Exit(1) from None
+    console.print(f"\nReport: {run.report_path}", markup=False)
+    console.print("Nothing was applied. Apply a result with `qed apply <task id>`.")
+
+
+@night_app.command("report")
+def night_report() -> None:
+    """Print the path of the newest Night Shift report."""
+    from qedcode.engine.night import latest_report
+
+    path = latest_report(api.resolve_root())
+    if path is None:
+        typer.echo("There is no Night Shift report yet. Run `qed night run` first.", err=True)
+        raise typer.Exit(2)
+    typer.echo(str(path))
 
 
 models_app = typer.Typer(

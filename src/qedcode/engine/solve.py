@@ -58,6 +58,7 @@ from qedcode.verify.cascade import (
     run_full,
 )
 from qedcode.verify.guard import changed_paths
+from qedcode.verify.mutate import strength_for
 from qedcode.verify.receipt import build_receipt, save_receipt, summary_line
 
 LAST_RESULT = "last_result.json"
@@ -85,6 +86,7 @@ class _Run:
     examples: str = ""
     pause_s: float = 0.0  # quiet mode: wait between model calls
     sleep: Callable[[float], None] = time.sleep
+    given_repro: tuple[str, str] | None = None  # (path, content): a test that must fail first
     calls_made: int = 0
     spec: TaskSpec = field(init=False)
     notes: list[str] = field(default_factory=list)
@@ -260,6 +262,9 @@ class _Run:
             )
 
     def make_repro(self) -> None:
+        if self.given_repro is not None and self.base_run.baseline.runnable:
+            self.use_given_repro(*self.given_repro)
+            return
         if not (test_writer_on(self.speed, self.spec.kind) and self.base_run.baseline.runnable):
             return
         language = self.project.language  # type: ignore[union-attr]
@@ -293,6 +298,24 @@ class _Run:
                 "The new test passes on the current code, so it proves nothing; "
                 + ("trying once more." if attempt == 1 else "continuing without it."),
             )
+
+    def use_given_repro(self, path: str, content: str) -> None:
+        """A failing test supplied by the caller (Bug Hunter, Smart Questions) is the repro."""
+        failures = fails_on_base(
+            self.root,
+            self.snap,
+            self.project,  # type: ignore[arg-type]
+            path,
+            content,
+            run_dir=self.run_dir,
+            name=f"{self.spec.id}-repro",
+            cancelled=self.cb.cancelled,
+        )
+        if failures:
+            self.repro = ReproTest(path, content, failures)
+            self.emit("stage", f"Using the test that shows the problem ({path}): it fails now")
+        else:
+            self.emit("warning", f"The given test {path} passes on the current code; ignored.")
 
     def add_resumed(self) -> None:
         """'Try harder': begin with the previous best candidate if the files are unchanged."""
@@ -467,6 +490,7 @@ class _Run:
             base_ref=snapshot_ref(self.spec.id),
             model_info=info,
         )
+        self.measure_strength(receipt)
         path = save_receipt(self.root, receipt)
         line = summary_line(receipt)
         self.emit("stage", "Explaining the change...")
@@ -482,6 +506,20 @@ class _Run:
             explanation=explanation,
             message=line,
         )
+
+    def measure_strength(self, receipt) -> None:
+        """Mutation testing of the new tests (AGENTS.md 15.9); it never changes the grade."""
+        if self.speed is Speed.FAST or not receipt.fbpa_tests:
+            return
+        self.emit("stage", "Measuring proof strength (small breakages of the changed lines)...")
+        score = strength_for(self.root, receipt, self.project, cancelled=self.cb.cancelled)  # type: ignore[arg-type]
+        if score is not None and score.total:
+            receipt.mutation = score
+            self.emit(
+                "log",
+                f"Proof strength {score.killed}/{score.total}: the new tests caught "
+                f"{score.killed} of {score.total} mutants.",
+            )
 
     def no_fix(self) -> SolveResult:
         near = select.near_miss(self.pool)
@@ -591,6 +629,7 @@ def solve(
     learn: bool = False,
     pause_s: float = 0.0,
     sleep: Callable[[float], None] = time.sleep,
+    given_repro: tuple[str, str] | None = None,
 ) -> SolveResult:
     """Run one task end to end and return a graded, explained result (or the reason there is none).
 
@@ -617,6 +656,7 @@ def solve(
         learn=learn,
         pause_s=pause_s,
         sleep=sleep,
+        given_repro=given_repro,
     )
     run.spec = task
     try:

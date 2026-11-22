@@ -124,6 +124,14 @@ class Baseline(BaseModel):
     slow_tests: list[str] = Field(default_factory=list)  # related files left out as too slow
 
 
+class MutationScore(BaseModel):
+    """Proof strength (AGENTS.md 15.9): mutants of the changed lines the new tests caught."""
+
+    killed: int = 0
+    total: int = 0
+    survivors: list[str] = Field(default_factory=list)  # "src/x.py line 7: `<` -> `<=`"
+
+
 class Receipt(BaseModel):
     schema_version: Literal[1] = 1
     qed_version: str
@@ -144,6 +152,7 @@ class Receipt(BaseModel):
     model_info: dict = Field(default_factory=dict)  # backend, model, ctx, temps, helper_used
     commands: list[list[str]] = Field(default_factory=list)  # what verify re-runs
     sandbox: str = ""  # "docker" when the tests ran in the sealed test box, else ""
+    mutation: MutationScore | None = None  # proof strength; None when it was not measured
 
 
 class SolveResult(BaseModel):

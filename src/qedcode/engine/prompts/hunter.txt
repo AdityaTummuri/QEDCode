@@ -1,0 +1,20 @@
+Look for bugs in `{symbol}` in {path}.
+
+CODE:
+{code_context}
+
+HOW EXISTING TESTS LOOK ({example_test_path}):
+{example_test_snippet}
+
+Find up to 3 inputs where `{symbol}` most likely does the WRONG thing: a real bug (a crash on a
+valid input, an off-by-one, a wrong branch, a missed edge case such as empty, zero or negative),
+not a style issue. For each, write one test that asserts the CORRECT behaviour, so it fails while
+the bug is there. Give every test a one-line docstring saying what is wrong. If the code looks
+correct, write one test of its trickiest edge case.
+Rules: import the code the same way the existing tests do; {test_rules}
+
+Reply in exactly this format:
+EDIT create_file path={test_path}
+```{fence}
+<the whole test file>
+```

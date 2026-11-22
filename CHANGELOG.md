@@ -10,6 +10,27 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
   being rejected, the real fix reaching grade A, and `qed verify` returning VERIFIED. With no model
   set up it uses a scripted model and says so; `--real` uses your model.
 - A `qedcode` command beside `qed`, so `uvx qedcode` works.
+- **Proof strength (mutation testing).** For a result with a test that failed before and passes
+  after, QEDCode now breaks the changed lines in small ways (`<` to `<=`, `+` to `-`,
+  `return None`, ...) and re-runs the new tests on each. The summary line says
+  `proof strength 8/9` and the receipt lists the mutants that survived. Grades are unchanged.
+- `qed receipt [file] [--link] [--json] [--commit <ref>]`: a receipt in plain English, or a link
+  that opens it in the Receipt Viewer with the whole receipt inside the link (nothing is
+  uploaded). `qed verify` accepts such a link.
+- `qed check --fail-below <grade>` for CI and pre-commit, and a "To raise the grade: ..." line
+  (also `next_step` in `--json` and in the MCP `check` tool).
+- `qed apply --commit`: commit an applied fix with `QED-Grade` and `QED-Receipt` trailers and its
+  receipt in git notes (`git log --notes=qed`).
+- `qed tests`: the Safety Net Builder writes tests for functions no test mentions and keeps only
+  the ones that pass today and catch mutants.
+- `qed hunt`: the Bug Hunter writes tests for suspected bugs, keeps the ones that fail on
+  today's code, and tries a proven fix for each. Nothing is applied.
+- `qed night add|list|clear|run|report`: the Night Shift queues tasks, solves them unattended
+  in quiet mode and writes one HTML report.
+- The QEDCode Check GitHub Action (`uses: AdityaTummuri/QEDCode@v0.2.0`): grades a pull request
+  with `qed check`, posts one sticky comment with the next step and a Receipt Viewer link, can
+  fail below a grade, works safely for pull requests from forks, and can sign receipts with
+  GitHub artifact attestations. A pre-commit hook (`id: qedcode-check`) as well.
 - `qed connect antigravity` and `qed connect vscode`: register QEDCode's MCP server with Google
   Antigravity (through `agy mcp add`, or a careful merge of `~/.gemini/config/mcp_config.json`
   with a backup) and with VS Code (through `code --add-mcp`). `qed setup` offers them too. The

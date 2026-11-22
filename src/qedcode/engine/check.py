@@ -34,7 +34,8 @@ from qedcode.vcs.snapshot import snapshot
 from qedcode.verify.baseline import baseline_run
 from qedcode.verify.cascade import Cancelled, CascadeContext, evaluate_candidate
 from qedcode.verify.guard import changed_paths
-from qedcode.verify.receipt import build_receipt, save_receipt, summary_line
+from qedcode.verify.mutate import strength_for
+from qedcode.verify.receipt import build_receipt, next_step, save_receipt, summary_line
 
 
 class CheckOutcome(BaseModel):
@@ -50,6 +51,7 @@ class CheckOutcome(BaseModel):
     task_id: str = ""
     candidate: Candidate | None = None
     notes: list[str] = Field(default_factory=list)
+    next_step: str = ""  # what would raise the grade ("" for grade A)
 
 
 def _stage(cb: Callbacks, message: str) -> None:
@@ -211,6 +213,9 @@ def _check_locked(
         base_ref=base,
         model_info={"backend": "none", "mode": "check"},
     )
+    if receipt.fbpa_tests and task.speed is not Speed.FAST:
+        _stage(cb, "Measuring proof strength (small breakages of the changed lines)...")
+        receipt.mutation = strength_for(root, receipt, project, cancelled=cb.cancelled)
     path = save_receipt(root, receipt)
     line = summary_line(receipt)
     cb.on_event(Event(kind="result", message=line, data={"grade": candidate.grade.value}))
@@ -225,4 +230,5 @@ def _check_locked(
         task_id=task.id,
         candidate=candidate,
         notes=notes,
+        next_step=next_step(receipt),
     )

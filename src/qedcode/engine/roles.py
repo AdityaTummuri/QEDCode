@@ -39,6 +39,8 @@ ROLE_SETTINGS: dict[str, tuple[float | None, int]] = {
     "coder": (None, 2000),
     "repairer": (0.3, 2000),
     "explainer": (0.3, 250),
+    "safety_net": (0.3, 1500),
+    "hunter": (0.5, 1500),
 }
 CODER_MAX_TOKENS_SURE = 3000
 MAX_ACCEPTANCE = 4
@@ -388,6 +390,77 @@ class Roles:
         prompt = fixed.replace(CODE_SLOT, files_block(fitted), 1)
         parsed, problem, _ = self._ask(
             "test_writer",
+            prompt,
+            temperature=temperature or 0.3,
+            max_tokens=max_tokens,
+            parse=lambda text: parse_test_writer(text, test_path),
+            label=label,
+        )
+        return None if problem else parsed  # type: ignore[return-value]
+
+    def safety_net(
+        self,
+        symbol: str,
+        path: str,
+        code_files: list[ContextFile],
+        example_test: ContextFile | None,
+        test_path: str,
+        *,
+        label: str = "",
+    ) -> TestWriterResult | None:
+        """Write ONE test file that PASSES on today's code (AGENTS.md 15.11); None when unusable."""
+        return self._symbol_tests(
+            "safety_net", symbol, path, code_files, example_test, test_path, label
+        )
+
+    def hunter(
+        self,
+        symbol: str,
+        path: str,
+        code_files: list[ContextFile],
+        example_test: ContextFile | None,
+        test_path: str,
+        *,
+        label: str = "",
+    ) -> TestWriterResult | None:
+        """Write tests of the CORRECT behaviour where a bug is suspected (AGENTS.md 15.12)."""
+        return self._symbol_tests(
+            "hunter", symbol, path, code_files, example_test, test_path, label
+        )
+
+    def _symbol_tests(
+        self,
+        role: str,
+        symbol: str,
+        path: str,
+        code_files: list[ContextFile],
+        example_test: ContextFile | None,
+        test_path: str,
+        label: str,
+    ) -> TestWriterResult | None:
+        temperature, max_tokens = ROLE_SETTINGS[role]
+        snippet, example_path = NO_TESTS, "no example"
+        if example_test is not None:
+            example_path = example_test.path
+            snippet = "\n".join(example_test.content.splitlines()[:MAX_TEST_SNIPPET_LINES])
+        stack = stack_for(self.project, test_path)
+        fixed = format_prompt(
+            role,
+            symbol=symbol,
+            path=path,
+            code_context=CODE_SLOT,
+            example_test_path=example_path,
+            example_test_snippet=snippet,
+            test_path=test_path,
+            test_kind=stack.test_kind,
+            test_rules=stack.test_rules,
+            fence=stack.fence,
+        )
+        room = self._budget(max_tokens) - estimate_tokens(fixed)
+        fitted = fit_files(code_files, max(room, 256), [symbol])
+        prompt = fixed.replace(CODE_SLOT, files_block(fitted), 1)
+        parsed, problem, _ = self._ask(
+            role,
             prompt,
             temperature=temperature or 0.3,
             max_tokens=max_tokens,

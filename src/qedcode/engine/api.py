@@ -23,7 +23,7 @@ from qedcode.project.memory import Lesson, Memory
 from qedcode.runtime.client import ModelClient, ModelError, make_client
 from qedcode.runtime.quiet import pause_seconds
 from qedcode.vcs.git import GitError, has_commits, is_git_repo, repo_root
-from qedcode.vcs.patch import PatchRefused, apply_to_user, undo_last
+from qedcode.vcs.patch import PatchRefused, apply_to_user, commit_applied, undo_last
 from qedcode.verify.receipt import load_receipt, receipt_path
 from qedcode.verify.verify import VerifyResult, verify_receipt
 
@@ -83,6 +83,7 @@ def solve(
     allow_test_edits: bool = False,
     apply: bool = False,
     resume: SolveResult | None = None,
+    given_repro: tuple[str, str] | None = None,
 ) -> SolveResult:
     """Fix or build something: several tries, deterministic checks, one proven result.
 
@@ -134,6 +135,7 @@ def solve(
         resume=resume,
         learn=cfg.engine.learn,
         pause_s=pause_seconds(cfg),
+        given_repro=given_repro,
     )
     if apply and result.status == "done" and result.best is not None:
         if result.best.grade in (Grade.A, Grade.B):
@@ -154,10 +156,12 @@ def apply_result(
     *,
     allow_low_grade: bool = False,
     learn: bool | None = None,
+    commit: bool = False,
 ) -> ApplyOutcome:
     """Apply a finished result to the user's files (the only way files are ever changed).
 
-    `learn` says whether to remember an A/B fix for next time (default: the saved setting)."""
+    `learn` says whether to remember an A/B fix for next time (default: the saved setting).
+    `commit` also commits the patch's files with the receipt as a git note (AGENTS.md 15.10)."""
     folder = resolve_root(root)
     last = read_last_result(folder) or {}
     wanted = task_id or str(last.get("task_id", ""))
@@ -195,12 +199,48 @@ def apply_result(
     if load_global().engine.learn if learn is None else learn:
         remembered = Memory(folder).record(receipt)
     note = " QEDCode will remember this fix." if remembered else ""
+    if commit:
+        try:
+            sha = commit_applied(
+                folder, done.files, commit_message(receipt, path), path.read_text(encoding="utf-8")
+            )
+        except PatchRefused as exc:
+            return ApplyOutcome(
+                status="error",
+                task_id=wanted,
+                files=exc.files,
+                grade=receipt.grade,
+                message=str(exc),
+            )
+        return ApplyOutcome(
+            status="applied",
+            task_id=wanted,
+            grade=receipt.grade,
+            files=done.files,
+            message=f"Applied to {', '.join(done.files)} and committed as {sha[:12]} with its "
+            f"receipt in git notes (see it with `git log --notes=qed`; share it with "
+            f"`git push origin refs/notes/qed`). Git hooks did not run for this commit.{note}",
+        )
     return ApplyOutcome(
         status="applied",
         task_id=wanted,
         grade=receipt.grade,
         files=done.files,
         message=f"Applied to {', '.join(done.files)}. Undo any time with `qed undo`.{note}",
+    )
+
+
+def commit_message(receipt, receipt_file: Path) -> str:
+    """`<task>` + the summary line + QED-Grade and QED-Receipt trailers."""
+    import hashlib
+
+    from qedcode.verify.receipt import summary_line
+
+    title = (receipt.task.request.strip().splitlines() or ["QEDCode fix"])[0][:72]
+    digest = hashlib.sha256(receipt_file.read_bytes()).hexdigest()
+    return (
+        f"{title}\n\n{summary_line(receipt)}\n\n"
+        f"QED-Grade: {receipt.grade.value}\nQED-Receipt: sha256:{digest}\n"
     )
 
 
@@ -267,3 +307,105 @@ def sandbox_off(root: Path | str | None = None) -> bool:
     from qedcode.engine import sandbox_setup as setup_module
 
     return setup_module.turn_off(resolve_root(root))
+
+
+def build_tests(
+    root: Path | str | None = None,
+    path: str = "",
+    *,
+    speed: Speed | None = None,
+    cb: Callbacks | None = None,
+    config: GlobalConfig | None = None,
+    client: ModelClient | None = None,
+) -> SolveResult:
+    """Safety Net Builder: tests for code no test covers, kept only if they catch mutants."""
+    from qedcode.engine.safety_net import build_safety_net
+
+    cfg = config or load_global()
+    chosen = speed or cfg.engine.speed
+    start = Path(root) if root is not None else Path.cwd()
+    if not is_git_repo(start) or not has_commits(repo_root(start)):
+        return _error_result(
+            "qed tests", chosen, "Run this inside a git repository with at least one commit."
+        )
+    try:
+        model = client or make_client(cfg, "main")
+    except ModelError as exc:
+        return _error_result("qed tests", chosen, str(exc))
+    return build_safety_net(repo_root(start), path, chosen, cb or NonInteractiveCallbacks(), model)
+
+
+def hunt(
+    root: Path | str | None = None,
+    path: str = "",
+    *,
+    speed: Speed | None = None,
+    cb: Callbacks | None = None,
+    config: GlobalConfig | None = None,
+    client: ModelClient | None = None,
+):
+    """Bug Hunter: suspected bugs confirmed by a failing test, each with a proven fix if found."""
+    from qedcode.engine.hunter import HuntResult
+    from qedcode.engine.hunter import hunt as _hunt
+
+    cfg = config or load_global()
+    chosen = speed or cfg.engine.speed
+    start = Path(root) if root is not None else Path.cwd()
+    if not is_git_repo(start) or not has_commits(repo_root(start)):
+        return HuntResult("error", "Run this inside a git repository with at least one commit.")
+    try:
+        model = client or make_client(cfg, "main")
+    except ModelError as exc:
+        return HuntResult("error", str(exc))
+    callbacks = cb or NonInteractiveCallbacks()
+    folder = repo_root(start)
+
+    def solve_one(request: str, repro: tuple[str, str]) -> SolveResult:
+        return solve(
+            folder, request, speed=chosen, cb=callbacks, config=cfg, client=model, given_repro=repro
+        )
+
+    return _hunt(folder, path, chosen, callbacks, model, solve_one)
+
+
+def night_failing_tests(root: Path | str | None = None) -> list[str]:
+    """The tests failing on HEAD right now (for `qed night add --failing`)."""
+    from qedcode.engine.check import project_config_for
+    from qedcode.vcs.git import git_out
+    from qedcode.verify.baseline import baseline_run
+
+    folder = resolve_root(root)
+    project = project_config_for(folder, [])
+    head = git_out(folder, "rev-parse", "HEAD")
+    run = baseline_run(folder, head, project, full=True, related=[], name="night-failing")
+    return sorted(k for k, v in run.baseline.results.items() if v in ("failed", "error"))
+
+
+def night_run(
+    root: Path | str | None = None,
+    *,
+    cb: Callbacks | None = None,
+    config: GlobalConfig | None = None,
+    client: ModelClient | None = None,
+    stop=None,
+    on_task=None,
+):
+    """Solve every queued Night Shift task with quiet mode on and write the morning report."""
+    from qedcode.engine.night import run_night
+
+    cfg = (config or load_global()).model_copy(deep=True)
+    cfg.engine.quiet = "on"  # the night shift is gentle by design
+    folder = resolve_root(root)
+    callbacks = cb or NonInteractiveCallbacks()
+    model = client or make_client(cfg, "main")
+
+    def solve_one(request: str, speed: Speed) -> SolveResult:
+        return solve(folder, request, speed=speed, cb=callbacks, config=cfg, client=model)
+
+    try:
+        return run_night(folder, solve_one, stop=stop or (lambda: False), on_task=on_task)
+    finally:
+        try:
+            model.unload()
+        except Exception:  # noqa: BLE001 - unloading is best effort
+            pass

@@ -440,3 +440,18 @@ def test_when_the_tests_cannot_run_the_summary_and_notes_say_why(tmp_path: Path)
     assert outcome.grade is Grade.C, outcome.message
     assert "tests could not run" in outcome.summary and "no tests ran" not in outcome.summary
     assert any("could not run" in note and "qed doctor" in note for note in outcome.notes)
+
+
+def test_cli_check_fail_below_and_the_next_step(tmp_path: Path, monkeypatch) -> None:
+    project = zoo_repo(tmp_path)
+    apply_solution(project)  # a real fix, but no test that failed before: grade B
+    monkeypatch.chdir(project)
+    passing = CliRunner().invoke(app, ["check", "--fail-below", "B"])
+    assert passing.exit_code == 0, passing.output
+    assert "To raise the grade: Add a test that fails on HEAD" in passing.output
+    strict = CliRunner().invoke(app, ["check", "--fail-below", "a"])
+    assert strict.exit_code == 1 and "below A (--fail-below)" in strict.output
+    data = json.loads(CliRunner().invoke(app, ["check", "--json"]).stdout)
+    assert data["next_step"].startswith("Add a test that fails on HEAD")
+    wrong = CliRunner().invoke(app, ["check", "--fail-below", "E"])
+    assert wrong.exit_code == 2 and "not a grade" in wrong.output

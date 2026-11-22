@@ -5,6 +5,8 @@ Receipts never contain API keys, prompts or code beyond the patch itself (AGENTS
 
 from __future__ import annotations
 
+import base64
+import gzip
 import hashlib
 import time
 from pathlib import Path
@@ -22,6 +24,9 @@ from qedcode.verify.guard import (
 from qedcode.verify.test_additions import key_in_file
 
 RECEIPTS_DIR = Path(".qed") / "receipts"
+RECEIPT_VIEWER_URL = "https://adityatummuri.github.io/QEDCode/receipt/"
+LINK_PREFIX = "#r="
+MAX_LINK_BYTES = 64 * 1024
 NOT_RUNNABLE_PREFIX = "pytest could not run before the change"
 NO_CODE_CHANGE_PREFIX = "The change alters no code outside tests"
 NETWORK_NOTE = "Tests ran on this computer without network blocking (v1 limitation)."
@@ -76,6 +81,8 @@ def summary_line(receipt: Receipt) -> str:
         blocked = next((g for g in receipt.unverified if g.startswith(NOT_RUNNABLE_PREFIX)), "")
         reason = blocked[len(NOT_RUNNABLE_PREFIX) :].strip(" .()")
         parts.append(f"tests could not run: {reason}" if reason else "no tests ran")
+    if receipt.mutation is not None and receipt.mutation.total:
+        parts.append(f"proof strength {receipt.mutation.killed}/{receipt.mutation.total}")
     lint_ok = any(c.stage == "lint" and c.passed for c in receipt.checks)
     parts.append("lint clean" if lint_ok else "lint not run")
     parts.append(
@@ -234,3 +241,117 @@ def load_receipt(path: Path | str) -> Receipt:
             f"{path} is not a valid QEDCode receipt ({str(exc)[:120]}). "
             "Pass a file from .qed/receipts/."
         ) from exc
+
+
+def receipt_link(receipt: Receipt, viewer: str = RECEIPT_VIEWER_URL) -> str:
+    """A link that opens `receipt` in the Receipt Viewer; the receipt rides in the fragment.
+
+    Browsers never send the fragment to a server, so the link stores nothing anywhere. The same
+    receipt always gives the same link (gzip with mtime 0). Raises ValueError when too long."""
+    raw = receipt.model_dump_json().encode("utf-8", "surrogateescape")
+    data = base64.urlsafe_b64encode(gzip.compress(raw, mtime=0)).rstrip(b"=").decode("ascii")
+    link = f"{viewer.split('#', 1)[0]}{LINK_PREFIX}{data}"
+    if len(link) > MAX_LINK_BYTES:
+        raise ValueError(
+            f"This receipt is too big for a link ({len(link) // 1024} KB; the limit is "
+            f"{MAX_LINK_BYTES // 1024} KB, usually because the patch is large). Share the "
+            "receipt file instead: anyone can open it in the Receipt Viewer or run `qed verify`."
+        )
+    return link
+
+
+def is_receipt_link(text: str) -> bool:
+    return LINK_PREFIX in str(text) and str(text).startswith(("http://", "https://"))
+
+
+def receipt_from_link(link: str) -> Receipt:
+    """Decode a receipt link back into a Receipt; ValueError with a plain message otherwise."""
+    _, _, data = str(link).partition(LINK_PREFIX)
+    data = data.split("&", 1)[0].strip()
+    if not data:
+        raise ValueError("This link has no receipt in it (it should contain '#r=').")
+    try:
+        raw = gzip.decompress(base64.urlsafe_b64decode(data + "=" * (-len(data) % 4)))
+    except (ValueError, OSError, EOFError) as exc:
+        raise ValueError(
+            "The receipt link is damaged (it could not be decoded). Copy the whole link, "
+            "including everything after '#r='."
+        ) from exc
+    try:
+        return Receipt.model_validate_json(raw)
+    except ValueError as exc:
+        raise ValueError(
+            f"The link does not hold a valid QEDCode receipt ({str(exc)[:120]})."
+        ) from exc
+
+
+def describe(receipt: Receipt) -> list[str]:
+    """The receipt in plain English, one line per item, for `qed receipt`."""
+    lines = [summary_line(receipt), ""]
+    lines.append(f"Task: {receipt.task.request}")
+    lines.append(f"Project: {receipt.project_name} · base commit {receipt.base_commit[:12]}")
+    lines.append(f"Made by QEDCode {receipt.qed_version} on {receipt.created_at}")
+    model = receipt.model_info.get("model")
+    if model:
+        temps = ", ".join(str(x) for x in receipt.model_info.get("temperatures") or [])
+        lines.append(f"Model: {model}" + (f" (temperatures {temps})" if temps else ""))
+    lines += ["", "Checks that ran:"]
+    for check in receipt.checks:
+        lines.append(f"  {check.stage}: {'ok' if check.passed else 'FAILED'} - {check.summary}")
+    if receipt.fbpa_tests:
+        lines += ["", "Tests that failed before the change and pass after it:"]
+        lines += [f"  {key}" for key in receipt.fbpa_tests]
+    mutation = receipt.mutation
+    if mutation is not None and mutation.total:
+        lines += [
+            "",
+            f"Proof strength: the new tests caught {mutation.killed} of {mutation.total} small "
+            "breakages (mutants) of the changed lines",
+        ]
+        lines += [f"  survived: {s}" for s in mutation.survivors]
+    lines += ["", "Not proven:"]
+    lines += [f"  - {gap}" for gap in receipt.unverified] or ["  (nothing listed)"]
+    lines += ["", f"Patch SHA-256: {receipt.patch_sha256}"]
+    return lines
+
+
+def next_step(receipt: Receipt) -> str:
+    """The one thing that would raise this receipt's grade, in plain English ("" for grade A).
+
+    It mirrors the rules in verify/grade.py, read back from the receipt, so the CLI, the MCP
+    server and the GitHub Action all give the same advice."""
+    if receipt.grade.value == "A":
+        return ""
+    gaps = receipt.unverified
+    weakened = weakened_from_checks(receipt.checks)
+    if any(g.startswith(NOT_RUNNABLE_PREFIX) for g in gaps):
+        return "Make the tests runnable (the receipt says why they could not); see `qed doctor`."
+    if any(g.startswith(NO_CODE_CHANGE_PREFIX) for g in gaps):
+        return "Nothing to prove: only comments, formatting or files no test uses changed."
+    if weakened:
+        return (
+            f"Undo the change that weakens tests in {', '.join(weakened)} (a skip, removed asserts "
+            "or an assert that can never fail); passing tests prove nothing while it is there."
+        )
+    passed, _total = test_counts(receipt.checks)
+    if not passed:
+        return "Add a test that covers the change: no existing test exercised it."
+    if receipt.protected_changes:
+        return (
+            f"Leave existing tests as they were ({', '.join(receipt.protected_changes)} changed); "
+            "add new test functions instead."
+        )
+    if any(g.startswith("You approved a risky pattern") for g in gaps):
+        return (
+            "Avoid the risky pattern you approved (see the receipt); with it the best grade is B."
+        )
+    if not receipt.fbpa_tests:
+        return (
+            f"Add a test that fails on {receipt.base_ref} and passes with this change, so the fix "
+            "is proven, not only tested."
+        )
+    if any(g.startswith("Full suite not run:") for g in gaps):
+        return "The full suite is too slow to run here, so B is the best grade for this project."
+    if any(g.startswith("Full suite not run") for g in gaps):
+        return "Run the full suite too: use --speed normal or sure."
+    return ""

@@ -1241,3 +1241,104 @@ Rules:
 **Rules.** The demo writes only inside its temporary folder (removed at the end unless `--keep`); it never touches the current folder or its git repository. Its project config is written as confirmed with QEDCode's interpreter, so detection never asks anything. A real run follows every normal rule (asks before downloads, uses the shared server).
 
 **v1.2 limits.** Python projects only; the scripted run shows the engine's behaviour and wording, not real-model speed or quality.
+
+### 15.8 Receipts you can link to (`qed receipt`, v1.2)
+
+**What it does.** `qed receipt [<receipt.json>]` shows a receipt in plain English (the last result's when no path is given): the grade line, every check, the tests that failed before and pass now, the "not proven" list and the patch checksum. `--json` prints the file. `--link` prints a link that opens the receipt in the Receipt Viewer on the project website (`https://adityatummuri.github.io/QEDCode/receipt/`, or `--viewer <url>` for a self-hosted copy).
+
+**The link carries the whole receipt and nothing is stored anywhere.** The receipt JSON is gzip-compressed (mtime 0, so the same receipt always gives the same link) and base64url-encoded into the URL fragment: `<viewer>#r=<data>`. Browsers never send the fragment to a server. The viewer decompresses it in the browser, validates it against the receipt schema and recomputes the patch's SHA-256, so a link whose patch was edited shows "checksum mismatch". The CLI warns before printing that the link contains the diff, so a link for private code should only go where that code may go.
+
+| Module | Change |
+| --- | --- |
+| `verify/receipt.py` | `RECEIPT_VIEWER_URL`, `receipt_link(receipt, viewer)`, `receipt_from_link(link)` (the inverse, used by tests and `qed verify <link>`), `describe(receipt) -> list[str]` |
+| `verify/verify.py` | `verify_receipt` also accepts a receipt link (decoded in memory, then verified like a file) |
+| `cli.py` | `qed receipt [path] [--link] [--json] [--viewer]`; `qed verify` accepts a link |
+| `website/receipt/` | the Receipt Viewer (section 15.12) |
+
+**Rules.** A link longer than 64 KB is refused with a message (receipts with very large patches go as files). Decoding a link never runs anything; verifying one follows the same rules as a file (receipts are data, rule 2).
+
+### 15.9 Mutation-backed proofs (proof strength, v1.2)
+
+**Why.** Fail-before/pass-after proves a test noticed the bug, not that it pins the behaviour. A repro test that only asserts `result is not None` can fail before and pass after, yet accept almost any fix. Mutation testing measures how much the new test actually checks.
+
+**What it does.** For a graded result with fail-before-pass-after tests (Python projects, normal and sure speed, and `qed check`), QEDCode makes small mutants of only the changed lines of non-test source files and re-runs only the new tests on each one. A mutant is *caught* (killed) when a new test fails, errors or times out on it. The receipt gains `mutation: {killed, total, survivors}` and the summary line says `proof strength 8/9`. The grade rules do not change: strength is shown beside the grade. Whether a weak proof should cap at B is decided later, from Benchy data.
+
+**Mutation operators** (on the patched file's syntax tree, only for nodes that start on a changed line): `<`↔`<=`, `>`↔`>=`, `==`↔`!=`, `in`↔`not in`, `is`↔`is not`, `+`↔`-`, `*`↔`/` (and `//`), `and`↔`or`, `not x`→`x`, `True`↔`False`, an integer constant `n`→`n + 1`, and `return <value>`→`return None`. The mutant file is the tree written back with `ast.unparse` (comments and formatting are lost in the mutant only, never in the patch). At most 12 mutants per result, spread evenly over the operators found; a mutant that does not compile is skipped.
+
+| Module | Change |
+| --- | --- |
+| `verify/mutate.py` (new) | `changed_source_lines(patch)`, `mutants_for(path, source, lines, limit)`, `mutation_score(root, base_commit, patch, test_files, project, ...) -> MutationScore` |
+| `models/schemas.py` | `MutationScore(killed, total, survivors)`; `Receipt.mutation: MutationScore \| None = None` (old receipts stay valid) |
+| `verify/receipt.py` | `summary_line` adds `proof strength k/n`; `describe` lists the surviving mutants |
+| `engine/solve.py`, `engine/check.py` | after the receipt is built: measure strength (skipped at fast speed and for JavaScript), emit an event, save it in the receipt |
+
+**Rules.** Mutants run in a fresh worktree of the base commit with the patch applied (never the user's tree), through the same test runner (and the sealed test box when it is on). Each mutant run has a limit of three times the fail-before-pass-after run's time (at least 10 s, at most the project's test timeout). Cancelling stops at once and records nothing. `qed verify` does not re-run mutants: strength is information, not a claim the grade depends on.
+
+### 15.10 Proof-carrying commits (`qed apply --commit`, v1.2)
+
+**What it does.** `qed apply [task] --commit` applies the result as usual and then commits exactly the files the patch touched, with the user's own git identity. The message is `<the task, first line>` plus the summary line, and two trailers: `QED-Grade: A` and `QED-Receipt: sha256:<hash of the receipt file>`. The receipt itself is stored as a git note on that commit under `refs/notes/qed`, so the proof travels with the repository and `git log --notes=qed` shows it. Nothing is hosted. `qed receipt --commit <ref>` reads a commit's receipt back from the notes (the GitHub Action and reviewers use the same command).
+
+| Module | Change |
+| --- | --- |
+| `vcs/patch.py` | `commit_applied(root, files, message, receipt_json)` and `commit_receipt(root, ref)`; `undo_last` refuses after a commit and names `git revert <sha>` |
+| `engine/api.py` | `apply_result(..., commit=False)` |
+| `cli.py`, `mcp_server.py` | `qed apply --commit`; `qed receipt --commit <ref>` |
+
+**Rules.** This is the only time QEDCode writes the user's index and history, and only when asked with `--commit`. Only the patch's files are committed (`git commit --only -- <files>`), so other staged work is left staged and uncommitted. QEDCode's own git safety settings still apply, so git hooks do not run for this commit (the change was already checked; the message says how to run them with `git commit --amend --no-edit`). Pushing notes is up to the user: `git push origin refs/notes/qed`.
+
+### 15.11 Safety Net Builder (`qed tests`, v1.2)
+
+**What it does.** `qed tests [path]` finds code no test covers, has the model write tests that pass on today's code, and keeps only the tests that catch mutants (section 15.9). That filter is what separates real tests from padding: a test that passes on today's code *and* on a broken copy of it checks nothing. The kept tests come back as a normal result (a patch that only adds test files, a grade and a receipt) that `qed apply` applies.
+
+**Finding untested code** (no coverage tool, no new dependency): public top-level functions and methods (names not starting with `_`) in non-test Python files whose name appears nowhere in the project's test files. With a `path`, only that file or folder. At most 1 target at fast speed, 3 at normal, 6 at sure, largest functions first.
+
+**Per target:** the `safety_net` role (prompt `safety_net.txt`, same reply format as the test writer) writes one file `tests/test_qed_net_<module>_<name>.py`. In a worktree of the snapshot: the file must collect; test functions that fail on today's code are removed; the rest run against mutants of the target's lines, and a test function is kept only if it fails on at least one mutant. A target whose tests catch no mutant gives no file.
+
+**Grade.** The result goes through the normal cascade as role `user`, so `verify/grade.py` grades it. A change that only adds tests alters no code outside tests, so its grade is C by the existing rule; the receipt's `mutation` score (the kept tests against the targets' mutants) is the measure of the safety net, and the CLI says so.
+
+| Module | Change |
+| --- | --- |
+| `engine/safety_net.py` (new) | `find_untested(root, project, path, limit)`, `build_safety_net(root, ...) -> SolveResult` |
+| `engine/roles.py`, `engine/prompts/safety_net.txt` | `Roles.safety_net(...)`; role settings (temperature 0.3, 1500 tokens) |
+| `engine/api.py` | `build_tests(root, path, speed, cb, config, client)` |
+| `cli.py` | `qed tests [path] [--speed]` (prints the kept tests, the mutation score and `qed apply <task>`) |
+
+**v1.2 limits.** Python only; "untested" is judged by name, so a function tested only indirectly counts as untested; a test the model writes can still encode today's bug as the expected behaviour (that is what a characterization test is), so the user reviews the kept tests before applying.
+
+### 15.12 Bug Hunter (`qed hunt`, v1.2)
+
+**What it does.** `qed hunt [path]` looks for real bugs. For the largest public functions (1 at fast speed, 3 at normal, 6 at sure) the `hunter` role reads the code and writes tests that assert the *correct* behaviour for inputs where it suspects the code is wrong, each with a one-line docstring naming the suspicion. A finding survives only if its test **fails on today's code**; then a normal solve runs with that test as the repro (the solve controller's `given_repro`), so the finding ends either with a proven fix (grade A, a receipt, `qed apply <task>`) or as "not fixed". Tests that pass on today's code are dropped: no bug there.
+
+**You still confirm the expected behaviour.** A test can encode a wrong expectation, so every finding is shown with its test and the CLI says so before anything can be applied. Nothing is applied by `qed hunt`.
+
+| Module | Change |
+| --- | --- |
+| `engine/hunter.py` (new) | `hunt(root, path, speed, cb, client, solve_fn) -> HuntResult` with `Finding(target, test_name, description, test_code, result)` |
+| `engine/solve.py` | `given_repro=(path, content)`: use a supplied failing test as the repro instead of writing one |
+| `engine/roles.py`, `engine/prompts/hunter.txt` | `Roles.hunter(...)` (temperature 0.5, 1500 tokens; same reply format as the test writer) |
+| `engine/safety_net.py` | `public_targets(root, path, limit, untested_only)` shared by both |
+| `engine/api.py`, `cli.py` | `api.hunt(...)`; `qed hunt [path] [--speed]` |
+
+**Measuring it.** Benchy's `tools/plant_bugs.py` plants bugs with known answers, so hit rate (planted bugs found) and precision (findings that are real) can be reported honestly; that report lives in Benchy.
+
+### 15.13 Night Shift (`qed night`, v1.3)
+
+**What it does.** Queue tasks before bed; the GPU works through them in quiet mode; the morning brings one local HTML report with a card per task. Nothing touches the user's files until they apply a result. Tagline: "Your GPU works the night shift."
+
+| Command | What it does |
+| --- | --- |
+| `qed night add "<task>"` | add one task (`--speed`, default the configured speed) |
+| `qed night add --file tasks.txt` | one task per non-empty line (`#` lines are comments) |
+| `qed night add --failing` | run the tests on HEAD once and queue "Make `<test>` pass" for each failing test (at most 10) |
+| `qed night list` / `qed night clear` | show or empty the queue |
+| `qed night run` | solve every queued task one after another with quiet mode on, then write the report; Ctrl+C stops after the current task and keeps the rest queued |
+| `qed night report` | the path of the newest report |
+
+**Where things live.** `.qed/night/queue.json` (the queue) and `.qed/night/report-<YYYYMMDD-HHMM>.html` (self-contained: inline CSS, no scripts, no network needed to read it). Each card shows the task, the grade and summary line, the explanation, the diff, proof strength, the "not proven" list, `qed apply <task id>` and a Receipt Viewer link. A task that ends without a fix gets a card with the reason.
+
+| Module | Change |
+| --- | --- |
+| `engine/night.py` (new) | `Queue` (load, add, remove, clear), `failing_tests(root)`, `run_night(root, ...) -> NightRun`, `render_report(run) -> str` |
+| `engine/api.py`, `cli.py` | `api.night_*`; `qed night [add\|list\|clear\|run\|report]` |
+
+**Rules.** One task at a time under the project lock, exactly like `qed solve` (no apply, no questions answered, risky code never approved, the helper only if pre-approved). Quiet mode is forced on for the run. The report escapes every piece of text (task text, diffs and model replies are data).

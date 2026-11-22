@@ -22,7 +22,7 @@ from qedcode.vcs import worktree
 from qedcode.vcs.git import git
 from qedcode.verify.js_runner import is_js_command, selection_from
 from qedcode.verify.pytest_runner import failed_before
-from qedcode.verify.receipt import load_receipt
+from qedcode.verify.receipt import is_receipt_link, load_receipt, receipt_from_link
 from qedcode.verify.runners import run_tests
 from qedcode.verify.sandbox import sandbox_for
 
@@ -111,10 +111,15 @@ def verify_receipt(
     project: ProjectConfig | None = None,
     cancelled: Callable[[], bool] | None = None,
 ) -> VerifyResult:
-    """Re-check a receipt inside the repository `root`. Never raises for a bad receipt."""
+    """Re-check a receipt (a file, or a Receipt Viewer link) inside the repository `root`.
+
+    Never raises for a bad receipt."""
     root = Path(root)
     try:
-        receipt = load_receipt(receipt_path)
+        if is_receipt_link(str(receipt_path)):
+            receipt = receipt_from_link(str(receipt_path))
+        else:
+            receipt = load_receipt(receipt_path)
     except ValueError as exc:
         return VerifyResult(False, [str(exc)])
     result = VerifyResult(True, receipt=receipt)

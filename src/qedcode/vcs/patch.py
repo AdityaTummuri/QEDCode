@@ -1,8 +1,8 @@
 """Apply a finished result to the user's files, and take it out again (AGENTS.md section 12).
 
 This module is the ONLY writer to the user's working tree. It refuses when a touched file changed
-since the snapshot, never touches the git index, and records what it did so `undo_last` can reverse
-it exactly.
+since the snapshot, never touches the git index (except `commit_applied`, which runs only for
+`qed apply --commit`, AGENTS.md 15.10), and records what it did so `undo_last` can reverse it.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from pathlib import Path
 from qedcode.vcs.git import git, git_out
 
 LAST_APPLY = Path(".qed") / "last_apply.json"
+NOTES_REF = "qed"  # refs/notes/qed holds receipts of committed fixes
 NOTHING = "-"  # recorded hash for "this file did not exist"
 
 
@@ -143,6 +144,12 @@ def undo_last(root: Path | str) -> list[str]:
             "Apply a finished result first with `qed apply`."
         )
     files: list[str] = list(record["files"])
+    if record.get("commit"):
+        raise PatchRefused(
+            f"The last fix was committed ({record['commit'][:12]}), so `qed undo` leaves it alone. "
+            f"Take it back with `git revert {record['commit'][:12]}`.",
+            files,
+        )
     changed = _changed(root, files, record["after"])
     if changed:
         raise PatchRefused(
@@ -160,3 +167,46 @@ def undo_last(root: Path | str) -> list[str]:
         )
     (root / LAST_APPLY).unlink(missing_ok=True)
     return files
+
+
+def commit_applied(root: Path | str, files: list[str], message: str, receipt_json: str) -> str:
+    """Commit exactly `files` with the user's identity and attach the receipt as a git note.
+
+    Only for `qed apply --commit`. Returns the new commit's sha; raises PatchRefused on failure."""
+    root = Path(root)
+    staged = git(root, "add", "--", *files)  # new files must be known to git before --only
+    done = (
+        git(root, "commit", "--only", "-q", "-F", "-", "--", *files, stdin_text=message)
+        if staged.ok
+        else staged
+    )
+    if not done.ok:
+        raise PatchRefused(
+            "The fix was applied to your files but could not be committed "
+            f"({done.output.splitlines()[-1][:160] if done.output else 'git commit failed'}). "
+            "Commit it yourself, or run `qed undo`.",
+            files,
+        )
+    sha = git_out(root, "rev-parse", "HEAD")
+    noted = git(
+        root, "notes", f"--ref={NOTES_REF}", "add", "-f", "-F", "-", sha, stdin_text=receipt_json
+    )
+    if not noted.ok:
+        raise PatchRefused(
+            f"The fix was committed as {sha[:12]}, but its receipt could not be stored as a git "
+            f"note ({noted.output[:160]}). The receipt is still in .qed/receipts/.",
+            files,
+        )
+    record = last_apply(root)
+    if record is not None:
+        record["commit"] = sha
+        (root / LAST_APPLY).write_text(json.dumps(record, indent=1), encoding="utf-8")
+    return sha
+
+
+def commit_receipt(root: Path | str, ref: str) -> str | None:
+    """The receipt JSON stored on commit `ref` by `qed apply --commit`, or None."""
+    if ref.startswith("-"):
+        return None
+    shown = git(root, "notes", f"--ref={NOTES_REF}", "show", ref)
+    return shown.stdout if shown.ok and shown.stdout.strip() else None

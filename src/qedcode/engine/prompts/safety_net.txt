@@ -1,0 +1,20 @@
+Write tests for `{symbol}` in {path}. No test covers it yet.
+The tests must PASS on the current code: they record what it does today, so that a later change
+that breaks it is caught.
+
+CODE:
+{code_context}
+
+HOW EXISTING TESTS LOOK ({example_test_path}):
+{example_test_snippet}
+
+Write ONE new {test_kind} file with 2 to 5 small tests of `{symbol}`: ordinary inputs, edge cases
+(empty, zero, negative, boundaries) and any error it raises on purpose. Assert exact results, not
+only that something came back.
+Rules: import the code the same way the existing tests do; {test_rules}
+
+Reply in exactly this format:
+EDIT create_file path={test_path}
+```{fence}
+<the whole test file>
+```
