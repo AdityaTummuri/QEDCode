@@ -19,7 +19,11 @@ SPEEDS = (Speed.FAST, Speed.NORMAL, Speed.SURE)
 def header_text(project: str, model: str, backend: str, gpu: str, state: str) -> Text:
     """`<model> . <backend> . <GPU, VRAM used/total>     [ready|loading|busy]`."""
     left = f"{model or 'no model'} · {backend or 'n/a'} · {gpu or 'n/a'}"
-    text = Text(f"QEDCode — {project}\n")
+    # The logo as text: <∎>, with the end-of-proof square in the logo's green (assets/mark.svg).
+    text = Text("<", style="bold")
+    text.append("∎", style="bold #2ea043")
+    text.append("> ", style="bold")
+    text.append(f"QEDCode — {project}\n")
     text.append(left)
     text.append(f"    [{state}]", style="bold")
     return text

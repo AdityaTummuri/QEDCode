@@ -27,8 +27,10 @@ def test_header_text() -> None:
         "myproj", "llamacpp:qwen3.5-4b-q4km", "llamacpp", "RTX 4050, 3.1/6.0 GB", "ready"
     )
     assert text.plain == (
-        "QEDCode — myproj\nllamacpp:qwen3.5-4b-q4km · llamacpp · RTX 4050, 3.1/6.0 GB    [ready]"
+        "<∎> QEDCode — myproj\nllamacpp:qwen3.5-4b-q4km · llamacpp · RTX 4050, 3.1/6.0 GB    [ready]"
     )
+    # the end-of-proof square is drawn in the logo's green
+    assert any("#2ea043" in str(span.style) for span in text.spans)
     assert "no model" in header_text("p", "", "", "", "loading").plain
 
 
