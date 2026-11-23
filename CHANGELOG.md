@@ -65,6 +65,12 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
   Benchy's agent mode.
 
 ### Fixed
+- A repair that edited the repro test (for example to add the import it was missing) no longer
+  reuses the old "failed before" list: the edited test runs on the old code again, so a test
+  that passes there is never counted as proof. Found on the first real-hardware run, where
+  `qed verify` correctly returned NOT VERIFIED for such a grade A.
+- `qed doctor` and model recommendations detect the GPU even when a config was saved before
+  `qed setup` ran (it held only the default "cpu" entry).
 - The edit parser no longer splits a SEARCH/REPLACE block at a reST heading underline inside the
   code (`    ========`, as in sympy and numpy docstrings). The exact `=======` marker now wins over
   a loose one; a loose divider still works when the block has no exact one. Any edit whose

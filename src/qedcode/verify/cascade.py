@@ -292,7 +292,12 @@ def _cand_dir(ctx: CascadeContext, cand: Candidate) -> Path:
 def _base_failures_for(ctx: CascadeContext, wt: Path, tests: list[str], run_dir: Path) -> list[str]:
     """Which of these (new) test files' tests fail on the base? Runs them in a base worktree."""
     if ctx.repro is not None and tests == [ctx.repro.path]:
-        return ctx.repro.base_failures
+        current = wt / ctx.repro.path
+        # The cached base failures belong to the repro as written. A candidate (a repair, say)
+        # may have edited it, for example to fix its own broken import; then its tests must be
+        # run on the base again, or a test that passes there would count as failing before.
+        if current.is_file() and current.read_text(encoding="utf-8") == ctx.repro.content:
+            return ctx.repro.base_failures
     base = worktree.create(ctx.root, ctx.base_commit, f"{ctx.task.id}-fbpa-base")
     try:
         for rel in tests:

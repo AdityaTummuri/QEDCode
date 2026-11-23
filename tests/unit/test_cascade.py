@@ -521,3 +521,21 @@ def test_a_full_suite_marked_too_slow_is_never_run(tmp_path: Path) -> None:
     run_full(case.ctx, cand)
     assert not cand.full_suite_ran and not any(c.stage == "full" for c in cand.checks)
     assert cand.grade is Grade.B
+
+
+def test_a_repro_edited_by_the_candidate_is_run_on_the_base_again(tmp_path: Path) -> None:
+    """Found on real hardware: a repair fixed the repro's missing import, and the cached
+    'failed before' list still counted a test that passes on the base as proof."""
+    case = zoo_case(tmp_path)
+    broken = case.hidden_text + "\n\ndef test_no_pages():\n    assert page_count(0, 10) == 0\n"
+    stale = [*case.ctx.repro.base_failures, "tests.test_qed_repro::test_no_pages"]
+    case.ctx.repro = ReproTest(REPRO_PATH, broken, base_failures=stale)
+    first_line = case.hidden_text.splitlines()[0]
+    reply = case.edits_text + "\n" + sr(
+        REPRO_PATH, first_line, first_line + "\nfrom shop.pages import page_count"
+    )
+    cand = evaluate_candidate(case.ctx, case.candidate(reply), run_full=True)
+    fbpa = next(c for c in cand.checks if c.stage == "fbpa")
+    proof = {t.key.split("::")[-1] for t in fbpa.tests}
+    assert "test_no_pages" not in proof  # it passes on the base: no proof
+    assert proof and cand.grade is Grade.A
