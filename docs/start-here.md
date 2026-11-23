@@ -31,7 +31,7 @@ u1 · fbpa: skipped (no new test)
 u1 · full: 4/4 tests pass.
 
 Caught: the tests were changed to look green
-  - tests/test_scores.py: test_top_scores is now skipped or expected to fail
+  - tests/test_scores.py: test_best_first is now skipped or expected to fail
 Grade C
 Grade C · 4/4 tests pass · lint clean · protected files changed · tests weakened in tests/test_scores.py
 Receipt: .qed/receipts/t-20261123-010813-ddf3.json
