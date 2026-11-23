@@ -36,8 +36,8 @@ RTX 4050 Laptop GPU (6 GB), models served by Ollama, normal speed, 3 repetitions
   wrong values, and QEDCode now says "no fix" instead of passing a test the fix rewrote. Better
   tests from small models are the next piece of work.
 - **SWE-bench Verified pilot** (10 real issues, qwen3.5:4b, one attempt): 0/10 bare, 2/10 through
-  QEDCode, both right. Every bare reply was an unusable diff, so part of that lift is QEDCode's
-  edit format, not only its checks.
+  QEDCode, both right. Eight bare replies were unusable diffs and two applied but were wrong, so
+  part of that lift is QEDCode's edit format, not only its checks.
 - **The runs found a real bug in QEDCode** (a stale fail-before list after a repair edited the
   repro test); `qed verify` caught it and it is fixed. See the
   [replay](https://adityatummuri.github.io/QEDCode/replays/).
