@@ -65,9 +65,10 @@ flowchart LR
 ## Results
 
 <!-- results:start -->
-Real-model numbers are being measured with [QEDCode Benchy](https://github.com/AdityaTummuri/QEDCode-benchy)
-on local hardware: resolution lift, grade honesty, silent failures and whether 4B + QEDCode matches
-9B alone. See [what is measured and how](https://github.com/AdityaTummuri/QEDCode/blob/main/docs/results.md); nothing is published before it is run.
+First look, on a 6 GB laptop with Ollama (two small, easy suites, 3 repetitions): no significant
+change in how many tasks get solved, **grade A was right 86 of 89 times**, and **silent failures
+fell from 14 to 4**. The bigger runs are still to come.
+[Details and reports](https://github.com/AdityaTummuri/QEDCode/blob/main/docs/results.md).
 <!-- results:end -->
 
 ## Works with

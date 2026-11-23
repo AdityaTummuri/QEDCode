@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en" data-type="software">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Replays · QEDCode</title>
+  <meta name="description" content="Real QEDCode sessions recorded on a 6 GB laptop GPU with local models, replayed in your browser.">
+  <meta name="theme-color" content="#2ea043">
+  <link rel="icon" href="../mark.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../site.css">
+  <style>
+    main { padding: 40px 0 80px; }
+    .replays { display: grid; gap: 28px; margin-top: 28px; }
+    .replay h2 { font-size: 20px; margin: 0 0 6px; }
+    .replay p { margin: 0 0 12px; color: var(--muted); max-width: 72ch; }
+    .replay .term pre { height: 460px; overflow: auto; }
+    .controls { display: flex; gap: 10px; align-items: center; margin: 0 0 10px; flex-wrap: wrap; }
+    .controls select { min-height: 44px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--ink); padding: 0 10px; font: 14px var(--sans); }
+    .t-bold { font-weight: 700; } .t-info { color: #7cc7ff; } .t-warn { color: #e7b04a; }
+    .tag { font: 600 12px var(--mono); color: var(--muted); }
+  </style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to the replays</a>
+<header class="top">
+  <div class="wrap">
+    <a class="mark" href="../" aria-label="QEDCode home"><b>&lt;<i>∎</i>&gt;</b> QEDCode</a>
+    <nav aria-label="Main">
+      <a href="./" aria-current="page">Replays</a>
+      <a href="../play/">Play</a>
+      <a href="../docs/results/">Results</a>
+    </nav>
+  </div>
+</header>
+<main id="main">
+  <div class="wrap">
+    <h1>Real runs, replayed</h1>
+    <p class="lede">Recorded on a laptop with an RTX 4050 (6 GB) and local models served by Ollama. Nothing is scripted. Pauses longer than a second are cut, and the speed is yours to pick.</p>
+    <div class="replays">
+      <section class="replay" data-cast="casts/try-real-001-qwen3.5-4b.cast">
+        <h2>A 4B model fixes an off-by-one, first try</h2>
+        <p><span class="tag">qwen3.5:4b · 19 s · grade A · VERIFIED</span></p>
+        <div class="controls"><button class="btn btn-primary" type="button">Play</button><label>Speed <select aria-label="Speed"><option value="2">2x</option><option value="4" selected>4x</option><option value="10">10x</option><option value="100">instant</option></select></label></div>
+        <div class="term"><div class="term-bar"><i></i><i></i><i></i><span>qed try --real</span></div><pre></pre></div>
+      </section>
+      <section class="replay" data-cast="casts/try-real-007-qwen3.5-4b.cast">
+        <h2>Top scores, upside down</h2>
+        <p><span class="tag">qwen3.5:4b · 15 s · grade A, proof strength 2/2 · VERIFIED</span></p>
+        <div class="controls"><button class="btn btn-primary" type="button">Play</button><label>Speed <select aria-label="Speed"><option value="2">2x</option><option value="4" selected>4x</option><option value="10">10x</option><option value="100">instant</option></select></label></div>
+        <div class="term"><div class="term-bar"><i></i><i></i><i></i><span>qed try 007 --real</span></div><pre></pre></div>
+      </section>
+      <section class="replay" data-cast="casts/try-real-004-qwen3.5-4b.cast">
+        <h2>A crash on an empty line</h2>
+        <p><span class="tag">qwen3.5:4b · 16 s · grade A · VERIFIED</span></p>
+        <div class="controls"><button class="btn btn-primary" type="button">Play</button><label>Speed <select aria-label="Speed"><option value="2">2x</option><option value="4" selected>4x</option><option value="10">10x</option><option value="100">instant</option></select></label></div>
+        <div class="term"><div class="term-bar"><i></i><i></i><i></i><span>qed try 004 --real</span></div><pre></pre></div>
+      </section>
+      <section class="replay" data-cast="casts/try-real-001-qwen2.5-coder-7b.cast">
+        <h2>The run where QEDCode's own check caught a bug in QEDCode</h2>
+        <p>Three tries fail, a repair passes, and the result is graded A. Then <code>qed verify</code> re-runs the proof and says NOT VERIFIED: the repair had fixed the test's own missing import, and one test that "failed before" really passes on the old code. The grading step reused stale results; that bug is fixed (see the <a href="https://github.com/AdityaTummuri/QEDCode/blob/main/CHANGELOG.md">changelog</a>).</p>
+        <p><span class="tag">qwen2.5-coder:7b · 43 s · graded A, NOT VERIFIED</span></p>
+        <div class="controls"><button class="btn btn-primary" type="button">Play</button><label>Speed <select aria-label="Speed"><option value="2">2x</option><option value="4" selected>4x</option><option value="10">10x</option><option value="100">instant</option></select></label></div>
+        <div class="term"><div class="term-bar"><i></i><i></i><i></i><span>qed try 001 --real</span></div><pre></pre></div>
+      </section>
+    </div>
+  </div>
+</main>
+<footer class="foot"><div class="wrap"><span>QEDCode replays · recorded with asciinema</span><nav><a href="../">QEDCode</a><a href="../docs/results/">Results</a></nav></div></footer>
+<script src="player.js"></script>
+</body>
+</html>

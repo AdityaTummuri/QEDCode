@@ -6,9 +6,32 @@ tells you honestly when it has none. These numbers measure that claim with
 cannot be gamed: the model and the tool never see the tests that judge them.
 
 !!! note "Status"
-    Real-model runs are in progress on the author's own hardware. Until a run is published here,
-    this page lists only what will be measured and how. No number on this site is hand-typed:
-    each one links to the report it came from.
+    The first real-model runs are below: a 6 GB laptop, two small easy suites. The larger runs
+    (SWE-bench Verified, the private fresh suite, the 2B and 9B models) are still to come. Every
+    number links to the report it came from.
+
+## First look: a 6 GB laptop (2026-11-23)
+
+RTX 4050 Laptop GPU (6 GB), models served by Ollama, normal speed, 3 repetitions per task.
+[The four reports](https://github.com/AdityaTummuri/QEDCode-benchy/tree/main/results/pilots/2026-11-23-ollama-rtx4050-laptop).
+
+| Model | Suite | Bare model solved | With QEDCode solved | McNemar p |
+| --- | --- | --- | --- | --- |
+| qwen3.5:4b | benchy-core (8 tasks) | 19/24 (79%) | 22/24 (92%) | 0.375 |
+| qwen3.5:4b | bug zoo (10 tasks) | 28/30 (93%) | 26/30 (87%) | 0.625 |
+| qwen2.5-coder:7b | benchy-core | 24/24 (100%) | 23/24 (96%) | 1.0 |
+| qwen2.5-coder:7b | bug zoo | 26/30 (87%) | 26/30 (87%) | 1.0 |
+
+- **Tasks solved: no significant difference.** These suites are easy: the bare models already
+  solve 79-100% of them, so there is little room to lift.
+- **Grade honesty: 86 of 89 grade A results were right.** The 3 wrong A's are one
+  under-specified task (`008_slugify_feature`: "drop punctuation", and the model also dropped
+  dashes, which the hidden test keeps). The task text was not changed afterwards.
+- **Silent failures: 14 for the bare models, 4 with QEDCode.** A bare model's wrong answer always
+  looks done; QEDCode's other misses came back as "no fix" instead of a wrong change.
+- **The runs found a real bug in QEDCode** (a stale fail-before list after a repair edited the
+  repro test); `qed verify` caught it and it is fixed. See the
+  [replay](https://adityatummuri.github.io/QEDCode/replays/).
 
 ## The four headline numbers
 
