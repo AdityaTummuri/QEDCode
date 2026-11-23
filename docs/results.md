@@ -29,6 +29,15 @@ RTX 4050 Laptop GPU (6 GB), models served by Ollama, normal speed, 3 repetitions
   dashes, which the hidden test keeps). The task text was not changed afterwards.
 - **Silent failures: 14 for the bare models, 4 with QEDCode.** A bare model's wrong answer always
   looks done; QEDCode's other misses came back as "no fix" instead of a wrong change.
+- **After the fixes those runs led to** (a try may no longer edit the test that shows the
+  problem; a broken repro test is rewritten), the same suites gave: grade A right **62 of 65**
+  times (all 3 misses on the under-specified task 008), but fewer tasks solved with qwen3.5:4b on
+  the bug zoo (21/30 through QEDCode vs 28/30 bare). The 4B model's own tests often expect the
+  wrong values, and QEDCode now says "no fix" instead of passing a test the fix rewrote. Better
+  tests from small models are the next piece of work.
+- **SWE-bench Verified pilot** (10 real issues, qwen3.5:4b, one attempt): 0/10 bare, 2/10 through
+  QEDCode, both right. Every bare reply was an unusable diff, so part of that lift is QEDCode's
+  edit format, not only its checks.
 - **The runs found a real bug in QEDCode** (a stale fail-before list after a repair edited the
   repro test); `qed verify` caught it and it is fixed. See the
   [replay](https://adityatummuri.github.io/QEDCode/replays/).
