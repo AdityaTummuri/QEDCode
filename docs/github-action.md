@@ -2,14 +2,19 @@
 
 **Catch AI pull requests that cheat their tests.** The QEDCode Check action runs `qed check` on
 every pull request: no model, no GPU, on your own CI minutes. It posts one comment with the grade,
-the reason and a link to the proof, and can fail the check below a grade you choose.
+the reason and a link to the proof, and fails the job when the change was **Caught** making tests
+look green. It can also fail below a grade you choose.
 
 ```text
-∎ QEDCode: Grade C
+∎ QEDCode: Caught
+
+The tests were changed to look green:
+- tests/test_cart.py: test_total was edited to pass; as it was, it still fails
+
 Grade C · 41/41 tests pass · lint clean · protected files changed · tests weakened in tests/test_cart.py
 
-To raise the grade: Undo the change that weakens tests in tests/test_cart.py (a skip, removed
-asserts or an assert that can never fail); passing tests prove nothing while it is there.
+What to do: Put the tests back as they were and fix the code instead. Then add a new test that
+fails before your fix.
 
 Open the proof in the Receipt Viewer · receipt and log (artifact qedcode-check) · re-run it locally with qed verify <receipt>
 ```
@@ -45,20 +50,37 @@ jobs:
 QEDCode runs your tests twice, once on the base commit and once on the pull request, in throw-away
 git worktrees. It uses the project's `.venv/` when there is one, otherwise `python3` on the PATH.
 
+## What counts as Caught
+
+| Caught | Not Caught |
+| --- | --- |
+| a skip or xfail on an existing test, an assertion that can never fail | a skip on a new test, a comment about skipping |
+| an existing test edited to pass: it failed before, and as it was it still fails | an expectation changed on purpose (the old test passed before): shown as a note |
+| a test that no longer passes was removed, or checks less than it did | a test moved, renamed or split; a test removed with the code it tests |
+| a test file deleted; `collect_ignore`, collection hooks, `--deselect`, `--ignore`, `-k` in pytest settings | new fixtures, markers or other settings |
+
+To tell an edited test from a fixed one, QEDCode puts the original version of each edited test file
+back in a throw-away copy of the change and runs it once. A wrong call either way is a bug: please
+report it.
+
+**Out of reach without hidden tests:** code that special-cases the test inputs, and a wrong fix
+whose own new test encodes the same mistake.
+
 ## Inputs
 
 | Input | Default | What it does |
 | --- | --- | --- |
+| `fail-on` | `tampered` | fail the job when the change was Caught; `none` only reports it |
 | `fail-below` | `none` | fail the job when the grade is below `A`, `B`, `C` or `D` (a rejected change or a check that could not run counts as lowest) |
 | `speed` | `normal` | `fast` skips the full suite (best grade B), `sure` allows more time |
 | `base` | the PR's base commit | compare with another commit |
-| `version` | `qedcode` | what to install, as a `uvx --from` spec (for example `qedcode==0.2.0`, or a git URL) |
+| `version` | the action's own ref | what to install, as a `uvx --from` spec (for example `qedcode==0.2.0`, or a git URL) |
 | `working-directory` | `.` | the project folder inside the repository |
 | `comment` | `true` | post or update one sticky comment |
 | `attest` | `false` | sign the receipt with a GitHub artifact attestation (see below) |
 | `github-token` | `github.token` | the token used for the comment |
 
-Outputs: `grade`, `status`, `summary`, `next-step` and `receipt-link`. The receipt, the comment
+Outputs: `tampered`, `grade`, `status`, `summary`, `next-step` and `receipt-link`. The receipt, the comment
 and the raw result are kept as the run's `qedcode-check` artifact, and the comment is also written
 to the job summary.
 
@@ -116,12 +138,12 @@ repos:
       - id: qedcode-check
 ```
 
-The hook runs `qed check --speed fast --fail-below B`: a commit that weakens a test (grade C) is
-stopped, and the message says what to undo. QEDCode's own git commands never run git hooks and
+The hook runs `qed check --speed fast --fail-on-tampered`: a commit that makes tests look green is
+stopped, and the message says what to put back. QEDCode's own git commands never run git hooks and
 ignore `GIT_DIR` and `GIT_INDEX_FILE`, so it is safe inside a hook and never touches your index.
 
 Without pre-commit, the same line works in any CI system or a plain `.git/hooks/pre-commit` script:
 
 ```bash
-uvx qedcode check --base origin/main --fail-below B
+uvx qedcode check --base origin/main --fail-on-tampered
 ```

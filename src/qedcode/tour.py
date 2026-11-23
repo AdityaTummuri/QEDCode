@@ -192,14 +192,8 @@ class CheckStep:
             return self.outcome.message
         passed, total = test_counts(loaded.checks)
         if self.label == "Proven":
-            strength = loaded.mutation
-            extra = (
-                f" · proof strength {strength.killed}/{strength.total}"
-                if strength is not None and strength.total
-                else ""
-            )
-            return f"a new test failed before, passes now · {passed}/{total} pass{extra}"
-        return f"{passed}/{total} tests pass, but none of them failed before the change"
+            return f"a new test failed before, passes now · {passed}/{total} pass"
+        return f"{passed}/{total} pass, but none failed before the fix"
 
 
 def _edit(project: Path, rel: str, change: Callable[[str], str]) -> None:

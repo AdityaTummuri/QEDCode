@@ -87,6 +87,7 @@ def test_readme_is_a_short_first_screen_and_the_docs_cover_every_command() -> No
         "qed mcp",
         "qed models",
         "qed benchy",
+        "qed hook",
     ):
         assert command in usage, command
     assert "Use QEDCode from your coding agent" in (ROOT / "docs" / "agents.md").read_text(

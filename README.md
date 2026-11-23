@@ -6,10 +6,11 @@
   <img src="https://raw.githubusercontent.com/AdityaTummuri/QEDCode/main/assets/logo-light.svg" alt="QEDCode" width="340">
 </picture>
 
-### The proof layer for AI-written code
+### Your AI says it's fixed. QEDCode makes it prove it.
 
-**QEDCode makes AI show its work: every code change gets a grade, a reason and a receipt anyone can
-re-run.** Small local models. Proven fixes.
+QEDCode grades every AI code change from evidence, not from what the agent says. It catches changes
+that weaken their tests, flags fixes that nothing proves, and writes a receipt anyone can re-run.
+**No model, no GPU, no account.**
 
 [![CI](https://github.com/AdityaTummuri/QEDCode/actions/workflows/ci.yml/badge.svg)](https://github.com/AdityaTummuri/QEDCode/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/qedcode)](https://pypi.org/project/qedcode/)
@@ -29,39 +30,50 @@ re-run.** Small local models. Proven fixes.
   <sub>A real run, not scripted: qwen3.5:4b on an RTX 4050 laptop (6 GB) via Ollama, shown at 3x speed.</sub>
 </p>
 
-AI agents say "fixed" when it isn't, or turn tests green by weakening them. QEDCode never takes a
-model's word for it. It asks for several candidate changes, tests each one in a throw-away copy of
-your project, and hands you only the best **verified** change: graded A to D, explained in plain
-English, with a receipt `qed verify` re-runs on any machine.
-
 ## Try it
 
 ```bash
-uvx qedcode try                       # 1. a guided demo on a tiny buggy project (no GPU, ~1 min)
-uvx qedcode check                     # 2. grade the uncommitted changes in your repo (no model)
-uv tool install qedcode && qed setup  # 3. the full tool: a local model writes proven fixes
+uvx qedcode try      # three AI "fixes" to one bug, graded in a few seconds
+uvx qedcode check    # grade the uncommitted changes in your repository
+uv tool install qedcode                # keep it: `qed` on your PATH
 ```
 
-Then `qed` in any git repository opens the terminal UI, or `qed solve "fix the login bug"` from a
-script. Nothing touches your files until you apply, and `qed undo` takes it back out.
+Until the package is on PyPI, put `--from git+https://github.com/AdityaTummuri/QEDCode` after `uvx`.
 
-## How a change is judged
+```text
+An AI agent "fixed" one bug three times. QEDCode grades each change (no model).
 
-Every candidate walks the same ladder, cheapest check first. The first failure rejects it with the
-reason, and one function writes every grade:
+  change 1   C  Caught    skipped the failing test instead of fixing the code
+  change 2   B  Unproven  5/5 pass, but none failed before the fix
+  change 3   A  Proven    a new test failed before, passes now · 7/7 pass
 
-```mermaid
-flowchart LR
-    C["candidate"] --> A["apply"] --> P["parse"] --> S["scope<br/>no test weakened"] --> R["risk"] --> L["lint"]
-    L --> F["fail before,<br/>pass after"] --> T["related tests"] --> U["full suite"] --> G["grade A-D<br/>+ receipt"]
+  qed verify <receipt of change 3>  ->  VERIFIED on this machine
 ```
 
-| Grade | Meaning |
+| Result | What it means |
 | --- | --- |
-| **A** Proven | a test failed before, passes now, the full suite shows no regressions, nothing protected changed |
-| **B** Tested | the tests pass, but nothing proved the exact problem |
-| **C** Checked | it parses and lints, but no test covers it, or a test was weakened |
+| **Caught** | a test was skipped, weakened, deleted or edited to make the change look green |
+| **A** Proven | a new test failed before the change and passes after it; the full suite still passes |
+| **B** Unproven | the tests pass, but nothing shows the bug is fixed |
+| **C** Untested | no test runs the changed code |
 | **D** Not checked | nothing could run, and it says why |
+
+Why: passing tests is not the same as fixed. Maintainers would not merge about half of the agent
+patches that pass SWE-bench Verified's tests
+([METR, 2026](https://metr.org/notes/2026-03-10-many-swe-bench-passing-prs-would-not-be-merged-into-main/)).
+
+**What it does not catch:** code that special-cases the test inputs, and a wrong fix whose own new
+test encodes the same mistake. No check that only sees the change can; hidden tests can.
+
+## Put it where AI code lands
+
+- **Every pull request:** `uses: AdityaTummuri/QEDCode@v0.2.0` fails on Caught and comments the rest
+  ([GitHub Action](https://github.com/AdityaTummuri/QEDCode/blob/main/docs/github-action.md)).
+- **Your agent's stop step:** `qed hook install claude` sends Claude Code back to work once when it
+  tries to stop with a test weakened or broken ([agents](https://github.com/AdityaTummuri/QEDCode/blob/main/docs/agents.md)).
+- **Want the fix written too?** `qed solve "fix the login bug"` runs a local model through the same
+  checks in a throw-away copy and hands you a graded fix, or "no fix". Nothing touches your files
+  until `qed apply`, and `qed undo` takes it back out.
 
 ## Results
 

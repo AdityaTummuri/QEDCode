@@ -4,7 +4,33 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
 
 ## [Unreleased]
 
+### Changed
+- **The default install is light** (about 70 MB instead of 300). The terminal UI, cloud models and
+  model downloads are extras: `qedcode[tui]`, `[cloud]`, `[download]` or `[all]`.
+- **`qed try` shows the check**: three changes an agent might hand in, graded with no model, in about
+  12 lines. The old tour, where a model writes the fix, is `qed try --solve`.
+- **Fewer model calls at fast and normal speed.** No intake call for a clear request, no locator call
+  on a small project, an explanation written from the receipt, one small repro test instead of up
+  to three, and the tests run while the model writes. `sure` speed is unchanged.
+- `qed --help` lists eight commands; the others still work.
+- The GitHub Action installs QEDCode from its own ref (no PyPI needed) and the pre-commit hook uses
+  `--fail-on-tampered`.
+
+### Fixed
+- `qed try` and every git command failed when git settings came from the environment
+  (`GIT_CONFIG_COUNT`): the secret filter dropped the keys and kept the count. The whole family is
+  dropped now.
+- Docs: the first laptop runs had 11 silent failures from the bare models, not 14.
+
 ### Added
+- **Caught.** `qed check` says when a change makes tests look green: skips, always-true asserts,
+  deleted tests, collection switched off, or a failing test edited to pass (the original test is run
+  against the new code). `--fail-on-tampered`, `tampered` in `--json` and in the MCP tool, and the
+  GitHub Action fails on it by default (`fail-on`).
+- `qed hook install claude`: Claude Code's stop step runs the check.
+- **A second repro test** when two tries fail the first one the same way; a result that needed it is
+  graded B at most and says so.
+- `Receipt.timings`: seconds per step.
 - `qed try` (and `uvx qedcode try`): the whole loop on a tiny bundled project in about a minute,
   with no GPU. It shows a try that cheats (a `conftest.py` that switches the failing test off)
   being rejected, the real fix reaching grade A, and `qed verify` returning VERIFIED. With no model

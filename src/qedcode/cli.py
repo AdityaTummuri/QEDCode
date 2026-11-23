@@ -394,8 +394,7 @@ def _try_check_tour(console: Console, *, keep: bool, verbose: bool) -> None:
         console.print(f"  change {done.number}   {grade}  {label} {done.why()}", highlight=False)
 
     console.print(
-        'An AI agent "fixed" the same bug three times. QEDCode grades each change. '
-        "No model runs.\n",
+        'An AI agent "fixed" one bug three times. QEDCode grades each change (no model).\n',
         highlight=False,
     )
     dest = tour.make_dest()
@@ -419,7 +418,7 @@ def _try_check_tour(console: Console, *, keep: bool, verbose: bool) -> None:
     if keep:
         console.print(f"  The demo projects are kept in {dest}", markup=False, highlight=False)
     console.print("\nGrade your agent's last change:   qed check", highlight=False)
-    console.print(f"Block cheats in every PR:         {tour.ACTION_DOCS}", highlight=False)
+    console.print(f"Check every pull request:         {tour.ACTION_DOCS}", highlight=False)
     console.print("See a model write a proven fix:   qed try --solve", highlight=False)
     if not ok or not all(s.right for s in steps):
         raise typer.Exit(1)

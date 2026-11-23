@@ -1,5 +1,19 @@
 # Use QEDCode from your coding agent
 
+## Check the agent before it stops
+
+```bash
+qed hook install claude      # adds a Stop hook to this project's .claude/settings.json
+qed hook remove claude       # takes it out again
+```
+
+When Claude Code is about to stop, the hook runs `qed check --speed fast`. If the change was Caught
+weakening tests, or a test that passed before now fails, the agent gets the reason and keeps
+working. It is sent back once, never in a loop, and a problem inside QEDCode never blocks it. The
+hook needs `qed` on the PATH, no model and no account. Other settings in the file are kept.
+
+## Call QEDCode as a tool
+
 QEDCode is also an MCP server, so Claude Code, OpenCode, Cline, Cursor, Antigravity, VS Code and
 other agents can call it as a tool. They get the fix, its grade and the proof receipt, and the model server is
 shared with the terminal UI (only one `llama-server` runs).

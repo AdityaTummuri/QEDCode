@@ -24,11 +24,12 @@ qed verify .qed/receipts/<task id>.json                      # re-run a proof re
 
 ```text
 qed                                   open the terminal UI in the current folder
-qed try [--keep]                      a guided demo on a tiny buggy project (no GPU needed)
+qed try [--solve]                     three AI changes graded (no model); --solve: a model writes the fix
 qed setup [--reset]                   hardware, mode, model, downloads, helper, API keys, agents
 qed solve "<task>" [--speed fast|normal|sure] [--apply] [--json] [--allow-risky]
-qed check [--speed ...] [--base <ref>] [--json]    grade the changes you made yourself
+qed check [--speed ...] [--base <ref>] [--json] [--fail-on-tampered] [--fail-below <grade>]
 qed verify <receipt.json>             re-run a proof receipt: VERIFIED or what no longer matches
+qed hook [install|remove] claude      run the check when Claude Code is about to stop
 qed receipt [<receipt.json>] [--link] show a receipt, or make a link to it in the Receipt Viewer
 qed apply [task id] [--commit]        apply a finished result (--commit: commit it with its proof)
 qed undo                              take the last apply back out

@@ -39,7 +39,7 @@ Not in local mode. In mix or cloud mode, the parts of your code sent to the help
 leave your computer, and QEDCode says so before it happens. There is no telemetry.
 
 **Do I need a GPU?**
-Not for `qed check`, `qed verify`, `qed try` or the GitHub Action. For `qed solve` a GPU with
+Not for `qed check`, `qed verify`, `qed try`, `qed hook` or the GitHub Action. For `qed solve` a GPU with
 4–6 GB is the target; CPU-only works for small tasks, or use a cloud model.
 
 **My project has no tests. Will it still help?**

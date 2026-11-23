@@ -3,7 +3,7 @@
 ## Try it first (no install, no GPU)
 
 ```bash
-uvx qedcode try        # a guided demo on a tiny buggy project; about a minute
+uvx qedcode try        # three AI changes to one bug, graded; a few seconds
 uvx qedcode check      # grade the uncommitted changes in your own repository (no model needed)
 ```
 
@@ -30,6 +30,16 @@ QEDCode is installed as a command-line tool with [uv](https://docs.astral.sh/uv/
 uv tool install qedcode        # or: pipx install qedcode
 qed --version
 ```
+
+The default install (about 70 MB) covers `qed check`, `qed verify`, `qed try`, `qed hook` and
+`qed solve` through Ollama or an OpenAI-compatible server. Three optional parts are added by name:
+
+| Extra | Adds | Install |
+| --- | --- | --- |
+| `tui` | the terminal UI (`qed` with no arguments) | `uv tool install "qedcode[tui]"` |
+| `download` | downloading models for llama.cpp | `uv tool install "qedcode[download]"` |
+| `cloud` | cloud models through LiteLLM (about 230 MB) | `uv tool install "qedcode[cloud]"` |
+| `all` | all three | `uv tool install "qedcode[all]"` |
 
 Not on PyPI yet where you are, or want the newest commit? Install straight from GitHub:
 `uv tool install git+https://github.com/AdityaTummuri/QEDCode`.
