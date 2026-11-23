@@ -25,7 +25,8 @@ re-run.** Small local models. Proven fixes.
 </div>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/AdityaTummuri/QEDCode/main/docs/assets/result-card.svg" alt="QEDCode's terminal UI showing a grade A result" width="760">
+  <img src="https://raw.githubusercontent.com/AdityaTummuri/QEDCode/main/docs/assets/demo.gif" alt="A real qed try run: qwen3.5:4b fixes a bug, grade A, VERIFIED" width="760"><br>
+  <sub>A real run, not scripted: qwen3.5:4b on an RTX 4050 laptop (6 GB) via Ollama, shown at 3x speed.</sub>
 </p>
 
 AI agents say "fixed" when it isn't, or turn tests green by weakening them. QEDCode never takes a

@@ -46,6 +46,8 @@ speed dial stops at 1, 3 or 6 tries and quits as soon as a try is proven, so eas
 
 ## A real session
 
+![QEDCode's terminal UI after a task: grade A with the explanation](assets/result-card.svg)
+
 This is the output of QEDCode working on one of its own test projects (a `paginate` function that
 drops the last item of every page). It was recorded with the scripted stand-in model the automated
 tests use, so it shows the engine's real behaviour and wording, not real-model speed or quality.

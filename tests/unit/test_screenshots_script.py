@@ -28,7 +28,10 @@ def test_the_screenshots_show_a_graded_result(tmp_path: Path) -> None:
     assert "Proof" in (tmp_path / "receipt-view.svg").read_text(encoding="utf-8")
 
 
-def test_the_readme_uses_a_generated_screenshot() -> None:
+def test_the_docs_use_the_generated_screenshot_and_the_readme_a_real_run() -> None:
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    assert "docs/assets/result-card.svg" in readme
+    assert "docs/assets/demo.gif" in readme and "not scripted" in readme
+    assert (REPO_ROOT / "docs" / "assets" / "demo.gif").is_file()
+    docs = (REPO_ROOT / "docs" / "how-it-works.md").read_text(encoding="utf-8")
+    assert "assets/result-card.svg" in docs
     assert (REPO_ROOT / "docs" / "assets" / "result-card.svg").is_file()
