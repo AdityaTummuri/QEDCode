@@ -523,21 +523,24 @@ def test_a_full_suite_marked_too_slow_is_never_run(tmp_path: Path) -> None:
     assert cand.grade is Grade.B
 
 
-def test_a_repro_edited_by_the_candidate_is_run_on_the_base_again(tmp_path: Path) -> None:
-    """Found on real hardware: a repair fixed the repro's missing import, and the cached
-    'failed before' list still counted a test that passes on the base as proof."""
+def test_a_candidate_that_edits_the_repro_test_is_rejected(tmp_path: Path) -> None:
+    """Found on real hardware: repairs rewrote the repro (to fix its import, or to match their
+    own fix), and the edited test was then counted as proof. The repro is the task's proof."""
     case = zoo_case(tmp_path)
-    broken = case.hidden_text + "\n\ndef test_no_pages():\n    assert page_count(0, 10) == 0\n"
-    stale = [*case.ctx.repro.base_failures, "tests.test_qed_repro::test_no_pages"]
-    case.ctx.repro = ReproTest(REPRO_PATH, broken, base_failures=stale)
     first_line = case.hidden_text.splitlines()[0]
-    reply = (
-        case.edits_text
-        + "\n"
-        + sr(REPRO_PATH, first_line, first_line + "\nfrom shop.pages import page_count")
-    )
+    reply = case.edits_text + "\n" + sr(REPRO_PATH, first_line, first_line + "\nimport os")
     cand = evaluate_candidate(case.ctx, case.candidate(reply), run_full=True)
-    fbpa = next(c for c in cand.checks if c.stage == "fbpa")
-    proof = {t.key.split("::")[-1] for t in fbpa.tests}
-    assert "test_no_pages" not in proof  # it passes on the base: no proof
-    assert proof and cand.grade is Grade.A
+    assert cand.grade is None and cand.failed_stage == "scope"
+    scope = next(c for c in cand.checks if c.stage == "scope")
+    assert "the test that shows the problem" in scope.summary
+
+
+def test_test_file_problems_finds_undefined_names() -> None:
+    from qedcode.verify.lint import test_file_problems
+
+    broken = (
+        "from shop.pages import paginate\n\n\ndef test_x():\n    assert page_count(0, 1) == 0\n"
+    )
+    problems = test_file_problems("tests/test_x.py", broken)
+    assert problems and "F821" in problems[0]
+    assert test_file_problems("tests/test_x.py", "def test_x():\n    assert 1\n") == []

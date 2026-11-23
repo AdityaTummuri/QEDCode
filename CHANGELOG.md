@@ -65,6 +65,11 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
   Benchy's agent mode.
 
 ### Fixed
+- A try may no longer edit the test QEDCode wrote to show the problem. Repairs on real hardware
+  rewrote that test (once to add its missing import, once to match their own fix), and the edited
+  test then counted as proof: three wrong grade A results in the laptop runs. Such a try is now
+  rejected at the scope check. A new repro test that uses a name it never imported is asked for
+  again instead of being used.
 - A repair that edited the repro test (for example to add the import it was missing) no longer
   reuses the old "failed before" list: the edited test runs on the old code again, so a test
   that passes there is never counted as proof. Found on the first real-hardware run, where

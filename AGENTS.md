@@ -626,7 +626,7 @@ PLAN:
 {protocol_cheatsheet}
 ```
 
-`{repro_block}` is empty or: `This test must pass after your change:` followed by the test file. `{files_block}` repeats `=== path ===` followed by the file content, without line numbers.
+`{repro_block}` is empty or: `This test must pass after your change:` followed by the test file. A candidate (coder, repairer or helper) that edits or deletes the repro test is rejected at `scope`: the repro is the task's proof and stays as the test writer wrote it. A repro whose own text has fatal lint problems (an undefined name, a syntax error) is not used; the test writer is asked once more (it would fail on the old code for the wrong reason). `{files_block}` repeats `=== path ===` followed by the file content, without line numbers.
 
 **protocol\_cheatsheet** (inserted into coder and repairer prompts)
 

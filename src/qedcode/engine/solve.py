@@ -58,6 +58,7 @@ from qedcode.verify.cascade import (
     run_full,
 )
 from qedcode.verify.guard import changed_paths
+from qedcode.verify.lint import test_file_problems
 from qedcode.verify.mutate import strength_for
 from qedcode.verify.receipt import build_receipt, save_receipt, summary_line
 
@@ -281,6 +282,15 @@ class _Run:
                 self.spec, self.ctx.files, self.ctx.example_test, path, label=f"a{attempt}"
             )
             if written is None:
+                continue
+            broken = test_file_problems(written.path, written.content)
+            if broken:
+                self.emit(
+                    "warning",
+                    f"The new test has a mistake of its own ({broken[0]}), so it would fail "
+                    "for the wrong reason; "
+                    + ("asking for it again." if attempt == 1 else "continuing without it."),
+                )
                 continue
             failures = fails_on_base(
                 self.root,

@@ -159,3 +159,14 @@ def lint_check(
         summary=f"New lint error {grown[0]} ({lines[0]})"[:SUMMARY_LIMIT],
         details=("New serious lint errors:\n" + "\n".join(lines))[:DETAILS_LIMIT],
     )
+
+
+def test_file_problems(path: str, text: str) -> list[str]:
+    """Fatal lint problems (undefined names, syntax errors) in one test file written by the model.
+
+    A repro test that fails only because it uses a name it never imported fails on the old code
+    for the wrong reason, so it is no proof. Empty when clean or when ruff cannot run."""
+    if not path.endswith(".py"):
+        return []
+    diags, _error = _ruff({path: text})
+    return [_describe(d) for d in diags or []]

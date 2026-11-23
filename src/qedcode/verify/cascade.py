@@ -289,6 +289,17 @@ def _cand_dir(ctx: CascadeContext, cand: Candidate) -> Path:
     return ctx.run_dir / cand.id
 
 
+def _repro_edited(ctx: CascadeContext, wt: Path) -> bool:
+    """Did the candidate change (or delete) the repro test QEDCode wrote for the task?"""
+    assert ctx.repro is not None
+    current = wt / ctx.repro.path
+    if not current.is_file():
+        return True
+    return current.read_text(encoding="utf-8").replace("\r\n", "\n") != ctx.repro.content.replace(
+        "\r\n", "\n"
+    )
+
+
 def _base_failures_for(ctx: CascadeContext, wt: Path, tests: list[str], run_dir: Path) -> list[str]:
     """Which of these (new) test files' tests fail on the base? Runs them in a base worktree."""
     if ctx.repro is not None and tests == [ctx.repro.path]:
@@ -414,6 +425,19 @@ def _run_stages(ctx: CascadeContext, cand: Candidate, wt: Path, run_full: bool) 
             return
     else:
         _skip(ctx, cand, "parse", "no source files changed")
+    if role != "user" and ctx.repro is not None and _repro_edited(ctx, wt):
+        _record(
+            ctx,
+            cand,
+            CheckResult(
+                stage="scope",
+                passed=False,
+                summary=f"Rejected: the change edits {ctx.repro.path}, the test that shows the "
+                "problem; that test is the task's proof and must stay as written.",
+                details=f"{ctx.repro.path} was changed by the candidate.",
+            ),
+        )
+        return
     cand.code_changed = changes_code(ctx.root, ctx.base_commit, wt, files)
     # qed check only: tests appended to an existing test file are evidence, not tampering
     appended = (
