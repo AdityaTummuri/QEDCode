@@ -1399,6 +1399,8 @@ Rules:
 
 **The Action** fails on Caught by default (`fail-on: tampered`; `none` turns it off); the old `fail-below` stays. With no `version` input it installs QEDCode from the action's own checkout, so the pinned ref is what runs. `qed check --fail-on-tampered` does the same for CI and pre-commit.
 
+**Existing tests that were fixed.** When the change adds no test and touches no test or protected file, an existing test that failed on the base (twice: in the baseline and again now) and passes with the change is fail-before-pass-after proof, recorded in the `fbpa` stage like a new test's. `qed verify` re-runs it on the base without applying any part of the patch.
+
 **Not caught without hidden tests:** code that special-cases the test inputs, and a wrong fix whose own new test encodes the same mistake. The docs say so.
 
 ### 15.18 `qed hook` (v0.2)

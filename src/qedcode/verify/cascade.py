@@ -28,7 +28,8 @@ from qedcode.models.schemas import (
     TaskSpec,
 )
 from qedcode.project.context import select_targeted
-from qedcode.project.paths import is_inert_path, is_js_path, is_test_file
+from qedcode.project.detect import find_test_files
+from qedcode.project.paths import is_inert_path, is_js_path, is_protected, is_test_file
 from qedcode.vcs import worktree
 from qedcode.vcs.git import GitError, git_out
 from qedcode.vcs.snapshot import keep_candidate
@@ -349,6 +350,47 @@ def _run_tests(
     return out
 
 
+MAX_FIXED_FILES = 20
+
+
+def _fixed_existing_tests(
+    ctx: CascadeContext, cand: Candidate, wt: Path, files: list[FileDiff]
+) -> CheckResult | None:
+    """qed check: existing tests that failed before and pass now are proof too (AGENTS.md 15.17).
+
+    Only when the change leaves every test file and every protected file alone, so the tests that
+    pass now are exactly the ones that failed. They are run once more on the base, so that a test
+    that fails now and then is not taken for a fixed one."""
+    known = [k for k, v in ctx.baseline.results.items() if v in ("failed", "error")]
+    if not known or any(
+        _is_test_path(f.path) or is_protected(f.path, ctx.project.protected) for f in files
+    ):
+        return None
+    paths = [
+        p
+        for p in find_test_files(wt, ctx.project.language)
+        if p not in ctx.baseline.slow_tests and any(key_in_file(k, p) for k in known)
+    ]
+    if not paths or len(paths) > MAX_FIXED_FILES:
+        return None
+    out = _run_tests(ctx, wt, paths, "fbpa", _cand_dir(ctx, cand))
+    if out.status not in ("ok", "failed"):
+        return None
+    now = [r for r in out.results if r.outcome == "passed" and r.key in known]
+    if not now:
+        return None
+    before = set(_base_failures_for(ctx, wt, paths, _cand_dir(ctx, cand)))
+    proof = [r for r in now if r.key in before]
+    if not proof:
+        return None
+    check = out.check.model_copy(deep=True)
+    check.passed = True
+    check.details = ""
+    check.tests = proof
+    check.summary = f"{len(proof)} existing test(s) failed before the change and pass now."
+    return check
+
+
 def _stage_fbpa(
     ctx: CascadeContext,
     cand: Candidate,
@@ -359,6 +401,9 @@ def _stage_fbpa(
     appended = appended or {}
     tests = _added_test_files(ctx, files, appended)
     if not tests:
+        check = _fixed_existing_tests(ctx, cand, wt, files) if cand.role == "user" else None
+        if check is not None:
+            return _record(ctx, cand, check)
         _skip(ctx, cand, "fbpa", "no new test")
         return True
     out = _run_tests(ctx, wt, tests, "fbpa", _cand_dir(ctx, cand))

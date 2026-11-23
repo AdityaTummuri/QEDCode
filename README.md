@@ -8,8 +8,9 @@
 
 ### Your AI says it's fixed. QEDCode makes it prove it.
 
-QEDCode grades every AI code change from evidence, not from what the agent says. It catches changes
-that weaken their tests, flags fixes that nothing proves, and writes a receipt anyone can re-run.
+QEDCode grades every AI code change from evidence, not from what the agent says. It shows which
+fixes are proven and which nothing proves, catches changes that weaken their tests, and writes a
+receipt anyone can re-run.
 **No model, no GPU, no account.**
 
 [![CI](https://github.com/AdityaTummuri/QEDCode/actions/workflows/ci.yml/badge.svg)](https://github.com/AdityaTummuri/QEDCode/actions/workflows/ci.yml)
@@ -52,11 +53,11 @@ An AI agent "fixed" one bug three times. QEDCode grades each change (no model).
 
 | Result | What it means |
 | --- | --- |
-| **Caught** | a test was skipped, weakened, deleted or edited to make the change look green |
-| **A** Proven | a new test failed before the change and passes after it; the full suite still passes |
+| **A** Proven | a test failed before the change and passes after it; the full suite still passes |
 | **B** Unproven | the tests pass, but nothing shows the bug is fixed |
 | **C** Untested | no test runs the changed code |
 | **D** Not checked | nothing could run, and it says why |
+| **Caught** | a test was skipped, weakened, deleted or edited to make the change look green |
 
 Why: passing tests is not the same as fixed. Maintainers would not merge about half of the agent
 patches that pass SWE-bench Verified's tests

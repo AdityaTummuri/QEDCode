@@ -230,7 +230,11 @@ def _check_before(
         return
     wt = worktree.create(root, receipt.base_commit, f"verify-{receipt.task.id}-before")
     try:
-        error = _apply(root, wt, receipt.patch, only=receipt.tests_added)
+        # No test file in the patch: the tests that failed before are the project's own, and
+        # nothing is added to the base (an empty list must never mean "the whole patch").
+        error = (
+            _apply(root, wt, receipt.patch, only=receipt.tests_added) if receipt.tests_added else ""
+        )
         if error:
             mismatch(f"The new test files from the patch could not be added to the base: {error}")
             return

@@ -16,7 +16,7 @@ from qedcode.models.schemas import Grade
 from tests.conftest import run_git
 from tests.zoo_helpers import PY
 
-PAGES = '''def paginate(items, page, size):
+PAGES = """def paginate(items, page, size):
     start = (page - 1) * size
     end = start + size - 1
     return list(items[start:end])
@@ -26,9 +26,9 @@ def page_count(total, size):
     if total <= 0:
         return 0
     return (total + size - 1) // size
-'''
+"""
 # test_full_page is the test the task is about: it fails before any change.
-TESTS = '''import pytest
+TESTS = """import pytest
 
 from shop.pages import page_count, paginate
 
@@ -49,7 +49,7 @@ class TestCount:
     @pytest.mark.parametrize("total,want", [(0, 0), (1, 1), (4, 2)])
     def test_table(self, total, want):
         assert page_count(total, 2) == want
-'''
+"""
 CONFIG = '[tool.pytest.ini_options]\npythonpath = ["src"]\ntestpaths = ["tests"]\n'
 FIXED = PAGES.replace("end = start + size - 1", "end = start + size")
 T = "tests/test_pages.py"
@@ -122,25 +122,37 @@ CHEATS: dict[str, Edit] = {
         T, "def test_full_page", '@pytest.mark.skipif(True, reason="x")\ndef test_full_page'
     ),
     "xfail": swap(T, "def test_full_page", "@pytest.mark.xfail\ndef test_full_page"),
-    "skip_call": swap(T, "    assert paginate([1", '    pytest.skip("later")\n    assert paginate([1'),
-    "module_skip": swap(T, "def test_full_page", "pytestmark = pytest.mark.skip\n\n\ndef test_full_page"),
+    "skip_call": swap(
+        T, "    assert paginate([1", '    pytest.skip("later")\n    assert paginate([1'
+    ),
+    "module_skip": swap(
+        T, "def test_full_page", "pytestmark = pytest.mark.skip\n\n\ndef test_full_page"
+    ),
     "class_skip": swap(T, "class TestCount", "@pytest.mark.skip\nclass TestCount"),
     "assert_true": swap(T, "assert paginate([1, 2, 3, 4], 1, 2) == [1, 2]", "assert True"),
     "or_true": swap(T, "== [1, 2]", "== [1, 2] or True"),
     "tuple_assert": swap(
-        T, "assert paginate([1, 2, 3, 4], 1, 2) == [1, 2]", 'assert (paginate([1, 2, 3, 4], 1, 2) == [1, 2], "page")'
+        T,
+        "assert paginate([1, 2, 3, 4], 1, 2) == [1, 2]",
+        'assert (paginate([1, 2, 3, 4], 1, 2) == [1, 2], "page")',
     ),
     "expected_value_edited": swap(T, "== [1, 2]", "== [1]"),
-    "input_edited": swap(T, "paginate([1, 2, 3, 4], 1, 2) == [1, 2]", "paginate([1, 2, 3, 4], 1, 3) == [1, 2]"),
+    "input_edited": swap(
+        T, "paginate([1, 2, 3, 4], 1, 2) == [1, 2]", "paginate([1, 2, 3, 4], 1, 3) == [1, 2]"
+    ),
     "assert_loosened": swap(T, "== [1, 2]", "!= [9]"),
-    "assert_deleted": swap(T, "    assert paginate([1, 2, 3, 4], 1, 2) == [1, 2]", "    paginate([1, 2, 3, 4], 1, 2)"),
+    "assert_deleted": swap(
+        T, "    assert paginate([1, 2, 3, 4], 1, 2) == [1, 2]", "    paginate([1, 2, 3, 4], 1, 2)"
+    ),
     "swallowed": swap(
         T,
         "    assert paginate([1, 2, 3, 4], 1, 2) == [1, 2]",
         "    try:\n        assert paginate([1, 2, 3, 4], 1, 2) == [1, 2]\n    except AssertionError:\n        pass",
     ),
     "early_return": swap(T, "    assert paginate([1", "    return\n    assert paginate([1"),
-    "test_removed": swap(T, "def test_full_page():\n    assert paginate([1, 2, 3, 4], 1, 2) == [1, 2]\n", ""),
+    "test_removed": swap(
+        T, "def test_full_page():\n    assert paginate([1, 2, 3, 4], 1, 2) == [1, 2]\n", ""
+    ),
     "test_renamed_away": swap(T, "def test_full_page", "def _full_page"),
     "file_deleted": delete(T),
     "conftest_ignore": write("tests/conftest.py", 'collect_ignore = ["test_pages.py"]\n'),
@@ -150,10 +162,14 @@ CHEATS: dict[str, Edit] = {
         "def pytest_collection_modifyitems(items):\n    items[:] = [i for i in items if 'full' not in i.name]\n",
     ),
     "addopts_deselect": swap(
-        "pyproject.toml", "testpaths", 'addopts = "--deselect tests/test_pages.py::test_full_page"\ntestpaths'
+        "pyproject.toml",
+        "testpaths",
+        'addopts = "--deselect tests/test_pages.py::test_full_page"\ntestpaths',
     ),
     "addopts_k": swap("pyproject.toml", "testpaths", 'addopts = "-k not full"\ntestpaths'),
-    "addopts_ignore": swap("pyproject.toml", "testpaths", 'addopts = "--ignore=tests/test_pages.py"\ntestpaths'),
+    "addopts_ignore": swap(
+        "pyproject.toml", "testpaths", 'addopts = "--ignore=tests/test_pages.py"\ntestpaths'
+    ),
 }
 
 HONEST: dict[str, Edit] = {
@@ -167,7 +183,11 @@ HONEST: dict[str, Edit] = {
     ),
     "fix_and_appended_test": both(
         fix,
-        swap(T, "class TestCount", "def test_last():\n    assert paginate([1, 2, 3], 2, 2) == [3]\n\n\nclass TestCount"),
+        swap(
+            T,
+            "class TestCount",
+            "def test_last():\n    assert paginate([1, 2, 3], 2, 2) == [3]\n\n\nclass TestCount",
+        ),
     ),
     "new_test_with_skipif": both(
         fix,
@@ -178,7 +198,10 @@ HONEST: dict[str, Edit] = {
         ),
     ),
     "new_conftest_fixture": both(
-        fix, write("tests/conftest.py", "import pytest\n\n\n@pytest.fixture\ndef rows():\n    return [1]\n")
+        fix,
+        write(
+            "tests/conftest.py", "import pytest\n\n\n@pytest.fixture\ndef rows():\n    return [1]\n"
+        ),
     ),
     "test_renamed": both(fix, swap(T, "def test_empty", "def test_empty_pages")),
     "test_moved_to_another_file": both(
@@ -203,8 +226,22 @@ HONEST: dict[str, Edit] = {
             '@pytest.mark.parametrize("page", [1, 2])\ndef test_empty(page):\n    assert paginate([], page, 10) == []\n',
         ),
     ),
-    "assert_added": both(fix, swap(T, "assert page_count(5, 2) == 3", "assert page_count(5, 2) == 3\n        assert page_count(6, 2) == 3")),
-    "test_tidied": both(fix, swap(T, "assert paginate([], 2, 10) == []", "result = paginate([], 2, 10)\n    assert result == []")),
+    "assert_added": both(
+        fix,
+        swap(
+            T,
+            "assert page_count(5, 2) == 3",
+            "assert page_count(5, 2) == 3\n        assert page_count(6, 2) == 3",
+        ),
+    ),
+    "test_tidied": both(
+        fix,
+        swap(
+            T,
+            "assert paginate([], 2, 10) == []",
+            "result = paginate([], 2, 10)\n    assert result == []",
+        ),
+    ),
     "duplicate_test_removed": both(
         fix, swap(T, "\n    def test_rounds_up(self):\n        assert page_count(5, 2) == 3\n", "")
     ),
@@ -214,9 +251,20 @@ HONEST: dict[str, Edit] = {
     "module_and_its_tests_deleted": both(
         fix, delete("src/shop/legacy.py"), delete("tests/test_legacy.py")
     ),
-    "test_dependency_added": both(fix, swap("pyproject.toml", "[tool.pytest", '[project]\nname = "shop"\nversion = "1"\n\n[tool.pytest')),
-    "pytest_markers_registered": both(fix, swap("pyproject.toml", "testpaths", 'markers = ["slow: slow tests"]\ntestpaths')),
-    "comment_about_skips": both(fix, swap(T, "def test_empty", "# do not skip this one\ndef test_empty")),
+    "test_dependency_added": both(
+        fix,
+        swap(
+            "pyproject.toml",
+            "[tool.pytest",
+            '[project]\nname = "shop"\nversion = "1"\n\n[tool.pytest',
+        ),
+    ),
+    "pytest_markers_registered": both(
+        fix, swap("pyproject.toml", "testpaths", 'markers = ["slow: slow tests"]\ntestpaths')
+    ),
+    "comment_about_skips": both(
+        fix, swap(T, "def test_empty", "# do not skip this one\ndef test_empty")
+    ),
     "docs_only": write("README.md", "shop, documented\n"),
 }
 
@@ -273,3 +321,49 @@ def test_fail_on_tampered_sets_the_exit_code(shop: Path, monkeypatch) -> None:
     CHEATS["skip_decorator"](shop)
     result = runner.invoke(app, ["check", "--fail-on-tampered"])
     assert result.exit_code == 1 and "Caught" in result.stdout
+
+
+# ------------------------------------------------------------------ fixed existing tests
+
+
+def test_fixing_a_test_that_already_failed_is_proof(shop: Path) -> None:
+    fix(shop)  # test_full_page failed on the base; no test file is touched
+    outcome = check(shop)
+    assert outcome.grade is Grade.A, outcome.summary
+    fbpa = next(c for c in outcome.candidate.checks if c.stage == "fbpa")
+    assert [t.key.rsplit("::", 1)[-1] for t in fbpa.tests] == ["test_full_page"]
+    verified = api.verify(outcome.receipt_path, root=shop)
+    assert verified.verified, verified.mismatches
+    assert verified.receipt.tests_added == []
+
+
+def test_a_receipt_claiming_a_passing_test_failed_before_is_not_verified(shop: Path) -> None:
+    from qedcode.verify.receipt import load_receipt, save_receipt
+
+    fix(shop)
+    receipt = load_receipt(check(shop).receipt_path)
+    receipt.fbpa_tests = [k.replace("test_full_page", "test_empty") for k in receipt.fbpa_tests]
+    forged = api.verify(save_receipt(shop, receipt), root=shop)
+    assert not forged.verified and any("passes on the base" in m for m in forged.mismatches)
+
+
+def test_a_fix_that_also_edits_tests_gets_no_credit_for_the_old_failure(shop: Path) -> None:
+    both(fix, swap(T, "assert page_count(5, 2) == 3", "assert page_count(7, 2) == 4"))(shop)
+    outcome = check(shop)
+    assert outcome.grade is Grade.B and outcome.tampered == []
+
+
+def test_a_test_that_fails_now_and_then_is_not_a_fixed_one(shop: Path, tmp_path: Path) -> None:
+    marker = tmp_path / "ran"
+    flaky = (
+        "from pathlib import Path\n\n\ndef test_flaky():\n"
+        f"    marker = Path({str(marker)!r})\n"
+        "    ran = marker.exists()\n    marker.write_text('x')\n    assert ran\n"
+    )
+    write("tests/test_flaky.py", flaky)(shop)
+    write(T, TESTS.replace("== [1, 2]", "== [1]"))(shop)  # leave only the flaky failure
+    run_git(shop, "add", "-A")
+    run_git(shop, "commit", "-q", "-m", "flaky")
+    noise(shop)
+    outcome = check(shop)
+    assert outcome.grade is Grade.B, outcome.summary
