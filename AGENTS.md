@@ -1417,8 +1417,11 @@ Measured on a 6 GB laptop, a solved task took a median of 5 model calls (intake,
 | locator | not called when the whole project's source fits the coder's context budget and has at most `max_files` source files, or when one file is a strong search hit; otherwise called |
 | explainer | not called: the explanation is written from the receipt. `sure` speed still calls it |
 | test writer | one small test instead of one to three |
+| second request for the repro test | at 0.7 instead of 0.3, and it says the first test passed on the current code |
 | baseline | runs while the model writes the repro test (a thread; results are used after both finish) |
 
 **A disputed repro.** Small models often write one wrong expected value, and then every right fix fails. When at least two tries were rejected at `fbpa` by the same tests, QEDCode asks the test writer once more, at a higher temperature and without showing it the first test or any try. The second test must fail on the base. Tries are checked again with it in place of the first. A try that passes it is graded as usual but capped at **B** (`Candidate.disputed_repro`, read by `verify/grade.py`), and the receipt's "not proven" list says that two generated tests disagreed. If the tries fail the second test too, the result stays "no fix". Nothing is ever accepted by dropping the test without a second one that fails before and passes after.
+
+**A try that changes nothing** (its edits leave every file as it was) fails at `apply`; it used to reach grade C and end the search.
 
 **Timings.** `Receipt.timings` holds seconds per step (`model:<role>`, `baseline`, `repro`, `checks`, `strength`, `total`), so the next slowdown is visible. Old receipts stay valid.

@@ -69,6 +69,10 @@ from qedcode.verify.receipt import build_receipt, explanation, save_receipt, sum
 
 LAST_RESULT = "last_result.json"
 SECOND_REPRO_TEMPERATURE = 0.7
+PASSES_NOW = (
+    "An earlier test for this task PASSED on the current code, so it asserted today's wrong "
+    "behaviour. Assert what the task says should happen instead."
+)
 DEFAULT_QUESTION = "Can you give an example of the input and the output you expect?"
 
 
@@ -322,7 +326,9 @@ class _Run:
             self.request, find_test_files(self.root, language), self.root, language
         )
 
-    def write_repro(self, label: str, temperature: float | None = None) -> TestWriterResult | None:
+    def write_repro(
+        self, label: str, temperature: float | None = None, rejected: str = ""
+    ) -> TestWriterResult | None:
         return self.roles.test_writer(
             self.spec,
             self.ctx.files,
@@ -330,6 +336,7 @@ class _Run:
             self.repro_path(),
             label=label,
             temperature=temperature,
+            rejected=rejected,
         )
 
     def confirm_repro(self, written: TestWriterResult, if_bad: str) -> ReproTest | None:
@@ -370,13 +377,18 @@ class _Run:
             return
         if not (test_writer_on(self.speed, self.spec.kind) and self.base_run.baseline.runnable):
             return
+        passed_now = False
         for attempt in (1, 2):
             self.check_cancel()
             if attempt == 1 and asked:
                 written = first
             else:
                 self.emit("stage", "Writing a test that shows the problem...")
-                written = self.write_repro(f"a{attempt}")
+                written = self.write_repro(
+                    f"a{attempt}",
+                    temperature=SECOND_REPRO_TEMPERATURE if attempt == 2 else None,
+                    rejected=PASSES_NOW if attempt == 2 and passed_now else "",
+                )
             if written is None:
                 continue
             self.repro = self.confirm_repro(
@@ -385,6 +397,7 @@ class _Run:
             if self.repro is not None:
                 self.emit("stage", "Writing a test that shows the problem ... done (it fails now)")
                 return
+            passed_now = not test_file_problems(written.path, written.content)
 
     def use_given_repro(self, path: str, content: str) -> None:
         """A failing test supplied by the caller (Bug Hunter, Smart Questions) is the repro."""

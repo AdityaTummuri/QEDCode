@@ -371,8 +371,11 @@ class Roles:
         *,
         label: str = "",
         temperature: float | None = None,
+        rejected: str = "",
     ) -> TestWriterResult | None:
-        """Write ONE new test file that should fail now; None when no usable file came back."""
+        """Write ONE new test file that should fail now; None when no usable file came back.
+
+        `rejected` says what was wrong with an earlier test that showed nothing."""
         usual, max_tokens = ROLE_SETTINGS["test_writer"]
         temperature = usual if temperature is None else temperature
         snippet = NO_TESTS
@@ -383,7 +386,7 @@ class Roles:
         stack = stack_for(self.project, test_path)
         fixed = format_prompt(
             stack.test_writer_template,
-            request=spec.request,
+            request=f"{spec.request}\n\n{rejected}" if rejected else spec.request,
             acceptance=_bullets(spec.acceptance),
             code_context=CODE_SLOT,
             example_test_path=example_path,

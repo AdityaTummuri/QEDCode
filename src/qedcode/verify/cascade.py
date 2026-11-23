@@ -199,6 +199,14 @@ def _stage_apply(ctx: CascadeContext, cand: Candidate, wt: Path) -> bool:
         )
         return _record(ctx, cand, check)
     files = ", ".join(report.changed + report.created)
+    if not files:  # a try that changes nothing proves nothing, and must not end the search
+        check = CheckResult(
+            stage="apply",
+            passed=False,
+            summary="The edits leave every file as it was, so nothing is fixed.",
+            details="The replacement text is the same as the text it replaces.",
+        )
+        return _record(ctx, cand, check)
     return _record(
         ctx, cand, CheckResult(stage="apply", passed=True, summary=f"Edits applied to {files}.")
     )

@@ -723,3 +723,31 @@ def test_an_error_while_the_baseline_runs_is_reported_and_cleaned_up(tmp_path: P
 )
 def test_the_kind_is_guessed_from_fixed_words(request_text: str, kind: str) -> None:
     assert guess_kind(request_text).value == kind
+
+
+# ------------------------------------------------------------------ tries that change nothing
+
+
+NOOP = sr(PAGES, "    end = start + size - 1", "    end = start + size - 1")
+
+
+def test_a_try_that_changes_nothing_is_rejected_and_the_next_one_wins(tmp_path: Path) -> None:
+    project = zoo_git_repo(tmp_path)
+    good = script_for(ZOO)["coder"][0]
+    passing = repro_reply("paginate([], 1, 2) == []")  # no repro, so the target is B
+    script = script_for(ZOO, test_writer=[passing, passing], coder=[NOOP, good])
+    result, _ = run_solve(project, FakeModel(script))
+    first = result.candidates[0]
+    assert first.failed_stage == "apply" and "as it was" in first.checks[-1].summary
+    assert result.best.id == "c2" and result.best.grade is Grade.B
+
+
+def test_the_second_test_request_says_the_first_one_passed(tmp_path: Path) -> None:
+    project = zoo_git_repo(tmp_path)
+    passing = repro_reply("paginate([], 1, 2) == []")
+    model = FakeModel(script_for(ZOO, test_writer=[passing, RIGHT_TEST]))
+    result, _ = run_solve(project, model)
+    first, second = model.calls_for("test_writer")
+    assert "PASSED on the current code" in second.prompt and "PASSED on" not in first.prompt
+    assert second.temperature > first.temperature
+    assert result.best.grade is Grade.A
