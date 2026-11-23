@@ -32,6 +32,7 @@ from qedcode.models.schemas import (
     Callbacks,
     Candidate,
     Event,
+    Grade,
     Mode,
     SolveResult,
     Speed,
@@ -104,6 +105,7 @@ class _Run:
     repro: ReproTest | None = None
     excluded: set[str] = field(default_factory=set)  # passed, but not what the user answered
     second_opinion: bool = False  # sure speed: one extra try after the first passing one
+    dropped_repro: str = ""  # the repro test every try failed (it may have been wrong)
     cctx: CascadeContext = field(init=False)
     deadline: float = 0.0
 
@@ -182,6 +184,7 @@ class _Run:
         self.try_coders()
         self.repair_near_misses()
         self.ask_helper()
+        self.drop_suspect_repro()
         self.smart_question()
         return self.finalize()
 
@@ -407,6 +410,35 @@ class _Run:
             and c.commit
         ]
 
+    def drop_suspect_repro(self) -> None:
+        """Every try fails only the new repro test: the test itself is suspect (a small model's
+        test can expect the wrong values). Check the closest try again without it, so the result
+        can reach B at most ("tested, nothing proved the exact problem"), never a false A."""
+        if self.repro is None or any(c.grade is not None for c in self.pool) or self.should_stop():
+            return
+        at_repro = [c for c in self.pool if c.failed_stage == "fbpa" and c.code_changed]
+        if len(at_repro) < 2:
+            return
+        near = select.near_miss(at_repro) or at_repro[0]
+        self.emit(
+            "warning",
+            f"Every try passes the existing tests but fails the new test ({self.repro.path}), so "
+            f"that test may expect the wrong thing. Checking {near.id} without it (best grade B).",
+        )
+        self.dropped_repro = self.repro.path
+        self.repro = None
+        self.cctx.repro = None
+        self.spec.target_grade = Grade.B
+        again = Candidate(
+            id="n1",
+            role=near.role,
+            parent_id=near.id,
+            model=near.model,
+            temperature=near.temperature,
+            reply=near.reply,
+        )
+        self.evaluate(again)
+
     def wants_second_opinion(self) -> bool:
         """Sure speed: after the first passing try, one more (Smart Questions, AGENTS.md 15.14)."""
         return (
@@ -585,6 +617,12 @@ class _Run:
             model_info=info,
         )
         self.measure_strength(receipt)
+        if self.dropped_repro:
+            receipt.unverified.insert(
+                0,
+                f"The test written for this task ({self.dropped_repro}) was dropped because every "
+                "try failed it; it may have expected the wrong thing, so nothing proved the fix.",
+            )
         if self.question:  # Smart Questions: two passing fixes disagree and nobody answered
             receipt.unverified.insert(0, f"Open question: {self.question}")
         path = save_receipt(self.root, receipt)

@@ -77,6 +77,8 @@ Roadmap build, step 2 of 3: test on real hardware (the OMEN laptop, Ollama with 
 
 - Round 2 on the laptop (qwen2.5-coder:7b, bug zoo, 3 reps, with the stale-repro fix): bare 27/30 vs QEDCode 23/30; 3 wrong A's again: 008 twice (under-specified task) and 003_mutable_default once, where every try failed the repro, and the repair rewrote the repro to match its own fix (returns a new list; the hidden test wants the given list extended in place). Fix: cascade rejects any non-user candidate that edits or deletes the repro (scope), and make_repro rejects a repro with fatal lint problems (verify/lint.test_file_problems, F821 etc.) and asks again. AGENTS.md section 9 note. 3 new tests.
 
+- Round 3 (repro-edit rule live): coder-7b bug zoo bare 27/30 vs QEDCode 25/30, wrong A only on 008 (3x); 003 became an honest no fix. 4B bug zoo bare 28/30 vs QEDCode 21/30, grade A 21/21 right: the 4B's own repro often expected wrong values, so right fixes failed it. Added solve.drop_suspect_repro (>= 2 tries fail only the repro: re-check the closest without it, best grade B, receipt names the dropped test). SWE-bench pilot (4B, 10 tasks): bare 0/10 (all replies unusable diffs), QEDCode 2/10 (A and B, both right).
+
 ## Known issues
 - Ruff is told to skip `*.md` and `docs/` so AGENTS.md stays byte-identical to the brief.
 - HelperConfig has an extra 'base_url' field (not in the brief's TOML) so an openai_compat helper has somewhere to point; the brief's make_client(role='helper') needs it.
