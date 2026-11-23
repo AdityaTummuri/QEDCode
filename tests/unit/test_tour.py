@@ -67,7 +67,7 @@ def test_try_prints_the_proof_and_leaves_the_current_folder_alone(
     tmp_path: Path, monkeypatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    result = runner.invoke(app, ["try"])
+    result = runner.invoke(app, ["try", "--solve"])
     assert result.exit_code == 0, result.stdout
     out = result.stdout
     assert tour.SCRIPTED_NOTE in out
@@ -75,6 +75,16 @@ def test_try_prints_the_proof_and_leaves_the_current_folder_alone(
     for command, _why in tour.next_steps():
         assert command in out
     assert list(tmp_path.iterdir()) == []
+
+
+def test_the_demo_works_when_git_settings_come_from_the_environment(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "safe.directory")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "*")
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["try", "--scripted"])
+    assert result.exit_code == 0, result.stdout
+    assert "VERIFIED" in result.stdout
 
 
 def test_try_keep_leaves_the_demo_project(tmp_path: Path, monkeypatch) -> None:
@@ -108,7 +118,7 @@ def test_a_set_up_model_that_is_not_ready_falls_back_to_the_script(monkeypatch) 
         raise ModelError("the model file is missing")
 
     monkeypatch.setattr("qedcode.cli.make_client", broken)
-    result = runner.invoke(app, ["try"])
+    result = runner.invoke(app, ["try", "--solve"])
     assert result.exit_code == 0, result.stdout
     assert "the model file is missing" in result.stdout and tour.SCRIPTED_NOTE in result.stdout
     strict = runner.invoke(app, ["try", "--real"])
@@ -119,3 +129,26 @@ def test_an_unknown_project_is_a_clear_error() -> None:
     result = runner.invoke(app, ["try", "zzz"])
     assert result.exit_code == 2
     assert "qed try --list" in result.output
+
+
+def test_the_default_tour_shows_caught_unproven_and_proven(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["try"], env={"COLUMNS": "120"})
+    assert result.exit_code == 0, result.stdout
+    lines = [x for x in result.stdout.splitlines() if x.strip()]
+    changes = [x for x in lines if x.strip().startswith("change ")]
+    assert [x.split()[2:4] for x in changes] == [
+        ["C", "Caught"],
+        ["B", "Unproven"],
+        ["A", "Proven"],
+    ]
+    assert "VERIFIED" in result.stdout and "NOT VERIFIED" not in result.stdout
+    assert len(lines) <= 12
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_the_default_tour_can_print_every_check(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["try", "--verbose"])
+    assert result.exit_code == 0, result.stdout
+    assert "fbpa" in result.stdout and "Caught:" in result.stdout

@@ -6,8 +6,8 @@
 #         - id: qedcode-check
 - id: qedcode-check
   name: QEDCode check (grade the change)
-  description: Grade the staged change A-D with your tests; fail when a test was weakened (grade C or lower).
-  entry: qed check --speed fast --fail-below B
+  description: Grade the staged change A-D with your tests; fail when the tests were changed to look green.
+  entry: qed check --speed fast --fail-on-tampered
   language: python
   pass_filenames: false
   always_run: true

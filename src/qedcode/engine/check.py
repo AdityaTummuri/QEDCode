@@ -33,7 +33,7 @@ from qedcode.vcs.git import GitError, git, git_out, has_commits, is_git_repo, re
 from qedcode.vcs.snapshot import snapshot
 from qedcode.verify.baseline import baseline_run
 from qedcode.verify.cascade import Cancelled, CascadeContext, evaluate_candidate
-from qedcode.verify.guard import changed_paths
+from qedcode.verify.guard import caught_from_checks, changed_paths, expectations_from_checks
 from qedcode.verify.mutate import strength_for
 from qedcode.verify.receipt import build_receipt, next_step, save_receipt, summary_line
 
@@ -52,6 +52,7 @@ class CheckOutcome(BaseModel):
     candidate: Candidate | None = None
     notes: list[str] = Field(default_factory=list)
     next_step: str = ""  # what would raise the grade ("" for grade A)
+    tampered: list[str] = Field(default_factory=list)  # Caught: why (AGENTS.md 15.17)
 
 
 def _stage(cb: Callbacks, message: str) -> None:
@@ -191,6 +192,13 @@ def _check_locked(
             status="cancelled", base=base, task_id=task.id, message="The check was cancelled."
         )
     failing = _failing(candidate)
+    tampered = caught_from_checks(candidate.checks)
+    moved = expectations_from_checks(candidate.checks)
+    if moved:
+        notes.append(
+            f"{len(moved)} test(s) expect something else than before ({', '.join(moved[:3])}); "
+            "as they were, they fail with this change. Check that the new behaviour is wanted."
+        )
     if candidate.grade is None:
         last = candidate.checks[-1].summary if candidate.checks else "no result"
         return CheckOutcome(
@@ -202,6 +210,7 @@ def _check_locked(
             failing_tests=failing,
             candidate=candidate,
             notes=notes,
+            tampered=tampered,
         )
     receipt = build_receipt(
         root=root,
@@ -231,4 +240,5 @@ def _check_locked(
         candidate=candidate,
         notes=notes,
         next_step=next_step(receipt),
+        tampered=tampered,
     )

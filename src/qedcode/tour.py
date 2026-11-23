@@ -10,19 +10,23 @@ from __future__ import annotations
 import shutil
 import sys
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from qedcode.config import ProjectConfig, global_config_path, save_project
 from qedcode.engine import api
+from qedcode.engine.check import CheckOutcome
 from qedcode.models.schemas import Callbacks, SolveResult, Speed
 from qedcode.runtime.client import ModelClient
 from qedcode.runtime.fake import FakeModel, load_script
 from qedcode.vcs.git import GitError, git
+from qedcode.verify.receipt import load_receipt, test_counts
 from qedcode.verify.verify import VerifyResult
 
 TOUR_DIR = Path(__file__).parent / "tour_data"
 DEFAULT_PROJECT = "001_paginate_off_by_one"
+ACTION_DOCS = "https://github.com/AdityaTummuri/QEDCode/blob/main/docs/github-action.md"
 SCRIPTED_NOTE = "scripted: shows the engine, not model quality"
 
 
@@ -78,8 +82,10 @@ def has_model_setup() -> bool:
     return global_config_path().exists()
 
 
-def prepare(name: str, dest: Path) -> Path:
-    """Copy a demo project into `dest/<name>` as a git repository with one commit."""
+def prepare(name: str, dest: Path, *, failing: bool = False) -> Path:
+    """Copy a demo project into `dest/<name>` as a git repository with one commit.
+
+    `failing` adds a test that shows the shop project's bug (check tour, change 1)."""
     project = dest / name
     shutil.copytree(
         TOUR_DIR / name,
@@ -87,6 +93,8 @@ def prepare(name: str, dest: Path) -> Path:
         ignore=shutil.ignore_patterns("script.yaml", "__pycache__", ".pytest_cache"),
     )
     (project / ".gitignore").write_text("__pycache__/\n.pytest_cache/\n.qed/\n", encoding="utf-8")
+    if failing:
+        _edit(project, SHOP_TEST, lambda t: t + FAILING_TEST)
     for args in (("init", "-q"), ("add", "-A"), ("commit", "-q", "-m", "demo project")):
         result = git(project, *args, identity=True)
         if not result.ok:
@@ -129,6 +137,109 @@ def run_tour(
     if result.receipt_path:
         tour.verify = api.verify(result.receipt_path, root=project)
     return tour
+
+
+# ------------------------------------------------------------- the check tour (AGENTS.md 15.16)
+
+SHOP_TEST = "tests/test_pages.py"
+SHOP_CODE = "src/shop/pages.py"
+BUG, FIX = "end = start + size - 1", "end = start + size"
+FAILING_TEST = """
+
+def test_a_full_page_has_every_item():
+    assert paginate([1, 2, 3, 4], 1, 2) == [1, 2]
+"""
+PROOF_TEST = """from shop.pages import paginate
+
+
+def test_a_full_page_has_every_item():
+    assert paginate([1, 2, 3, 4], 1, 2) == [1, 2]
+
+
+def test_the_last_page_keeps_its_last_item():
+    assert paginate([1, 2, 3, 4, 5], 3, 2) == [5]
+"""
+
+
+@dataclass
+class CheckStep:
+    """One agent change of the check tour and what `qed check` said about it."""
+
+    number: int
+    outcome: CheckOutcome
+    verify: VerifyResult | None = None
+
+    @property
+    def label(self) -> str:
+        if self.outcome.tampered:
+            return "Caught"
+        grade = self.outcome.grade
+        return {"A": "Proven", "B": "Unproven", "C": "Untested", "D": "Not checked"}.get(
+            grade.value if grade else "", "Rejected"
+        )
+
+    @property
+    def right(self) -> bool:
+        """Did the demo show what it promises? (Otherwise the exit code says so.)"""
+        return self.label == ("Caught", "Unproven", "Proven")[self.number - 1]
+
+    def why(self) -> str:
+        if self.outcome.tampered:
+            return "skipped the failing test instead of fixing the code"
+        receipt = self.outcome.receipt_path
+        loaded = load_receipt(receipt) if receipt else None
+        if loaded is None:
+            return self.outcome.message
+        passed, total = test_counts(loaded.checks)
+        if self.label == "Proven":
+            strength = loaded.mutation
+            extra = (
+                f" · proof strength {strength.killed}/{strength.total}"
+                if strength is not None and strength.total
+                else ""
+            )
+            return f"a new test failed before, passes now · {passed}/{total} pass{extra}"
+        return f"{passed}/{total} tests pass, but none of them failed before the change"
+
+
+def _edit(project: Path, rel: str, change: Callable[[str], str]) -> None:
+    path = project / rel
+    path.write_text(change(path.read_text(encoding="utf-8")), encoding="utf-8", newline="")
+
+
+def run_check_tour(
+    dest: Path, cb: Callbacks, on_step: Callable[[CheckStep], None]
+) -> list[CheckStep]:
+    """Grade three changes to the bundled shop project, as an agent might hand them in."""
+    steps = []
+    for number in (1, 2, 3):
+        try:
+            project = prepare(DEFAULT_PROJECT, dest / str(number), failing=number == 1)
+        except (OSError, GitError) as exc:
+            raise TourError(
+                f"Could not copy the demo project into {dest} ({exc}). Check the free disk space "
+                "and that the temporary folder is writable, then run `qed try` again."
+            ) from exc
+        if number == 1:
+            _edit(
+                project,
+                SHOP_TEST,
+                lambda t: (
+                    "import pytest\n"
+                    + t.replace("def test_a_full", "@pytest.mark.skip\ndef test_a_full")
+                ),
+            )
+            _edit(project, SHOP_CODE, lambda t: t.replace("1-based page", "page"))
+        else:
+            _edit(project, SHOP_CODE, lambda t: t.replace(BUG, FIX))
+        if number == 3:
+            (project / "tests" / "test_full_pages.py").write_text(PROOF_TEST, encoding="utf-8")
+        step = CheckStep(number, api.check(project, cb=cb))
+        if number == 3 and step.outcome.receipt_path:
+            step.verify = api.verify(step.outcome.receipt_path, root=project)
+        steps.append(step)
+        on_step(step)
+    return steps
 
 
 def next_steps() -> list[tuple[str, str]]:

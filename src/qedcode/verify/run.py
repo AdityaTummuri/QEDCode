@@ -19,6 +19,9 @@ from pathlib import Path
 import psutil
 
 SECRET_NAME = re.compile(r"KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL", re.IGNORECASE)
+# Git settings passed through the environment. They only work as a family (a COUNT without its KEYs
+# makes every git command fail) and their values can hold credentials, so all of them are dropped.
+GIT_CONFIG_NAME = re.compile(r"GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+|PARAMETERS)$", re.IGNORECASE)
 OUTPUT_LIMIT = 1_000_000  # characters kept per stream in memory; the log file keeps all of it
 _POLL_SECONDS = 0.1
 
@@ -55,7 +58,11 @@ def scrubbed_env(
 ) -> dict[str, str]:
     """Copy the environment without secrets or `drop` names, then add `extra` (never scrubbed)."""
     source = os.environ if base is None else base
-    env = {k: v for k, v in source.items() if not SECRET_NAME.search(k) and k not in drop}
+    env = {
+        k: v
+        for k, v in source.items()
+        if not SECRET_NAME.search(k) and not GIT_CONFIG_NAME.match(k) and k not in drop
+    }
     if extra:
         env.update(extra)
     return env

@@ -178,7 +178,56 @@ def test_the_action_never_puts_pull_request_values_into_a_script() -> None:
     assert set(action["outputs"]) >= {"grade", "summary", "next-step", "receipt-link"}
 
 
+def _render(tmp_path: Path, monkeypatch, result: dict, *extra: str) -> tuple[int, str, str]:
+    (tmp_path / "r.json").write_text(json.dumps(result), encoding="utf-8")
+    outputs = tmp_path / "outputs.txt"
+    outputs.write_text("", encoding="utf-8")
+    monkeypatch.setenv("GITHUB_OUTPUT", str(outputs))
+    code = report.main(
+        ["render", "--result", str(tmp_path / "r.json"), "--out", str(tmp_path / "out"), *extra]
+    )
+    comment = tmp_path / "out" / "comment.md"
+    return (
+        code,
+        outputs.read_text(encoding="utf-8"),
+        comment.read_text(encoding="utf-8") if comment.exists() else "",
+    )
+
+
+CAUGHT = {
+    "status": "graded",
+    "grade": "C",
+    "summary": "Grade C · tests weakened in tests/test_x.py",
+    "next_step": "Put the tests back as they were and fix the code instead.",
+    "tampered": ["tests/test_x.py: `[click](http://evil)`\n@everyone is now skipped"],
+}
+
+
+def test_a_caught_change_fails_the_job_and_is_shown_as_plain_text(tmp_path, monkeypatch) -> None:
+    code, outputs, comment = _render(tmp_path, monkeypatch, CAUGHT, "--fail-on", "tampered")
+    assert code == 0
+    assert "tampered<<__QED__\ntrue" in outputs and "failed<<__QED__\ntrue" in outputs
+    assert "QEDCode: Caught" in comment and "What to do" in comment
+    line = next(x for x in comment.splitlines() if "evil" in x)
+    assert line.startswith("- `") and line.endswith("`") and line.count("`") == 2
+
+
+def test_fail_on_none_only_reports_and_a_wrong_value_is_an_error(tmp_path, monkeypatch) -> None:
+    _, outputs, _ = _render(tmp_path, monkeypatch, CAUGHT, "--fail-on", "none")
+    assert "tampered<<__QED__\ntrue" in outputs and "failed<<__QED__\nfalse" in outputs
+    code, _, _ = _render(tmp_path, monkeypatch, CAUGHT, "--fail-on", "sometimes")
+    assert code == 2
+
+
+def test_the_action_installs_its_own_ref_and_fails_on_caught_by_default() -> None:
+    text = (REPO_ROOT / "action.yml").read_text(encoding="utf-8")
+    action = yaml.safe_load(text)
+    assert action["inputs"]["fail-on"]["default"] == "tampered"
+    assert action["inputs"]["version"]["default"] == ""
+    assert 'QED_SPEC="${QED_SPEC:-$GITHUB_ACTION_PATH}"' in text
+
+
 def test_the_pre_commit_hook_fails_on_weakened_tests() -> None:
     (hook,) = yaml.safe_load((REPO_ROOT / ".pre-commit-hooks.yaml").read_text(encoding="utf-8"))
     assert hook["id"] == "qedcode-check" and hook["pass_filenames"] is False
-    assert "qed check" in hook["entry"] and "--fail-below B" in hook["entry"]
+    assert "qed check" in hook["entry"] and "--fail-on-tampered" in hook["entry"]

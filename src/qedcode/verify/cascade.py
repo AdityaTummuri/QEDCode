@@ -48,6 +48,7 @@ from qedcode.verify.pytest_runner import (
     file_level_failure,
 )
 from qedcode.verify.runners import run_tests
+from qedcode.verify.tamper import find_tampering, record
 from qedcode.verify.test_additions import (
     appended_tests_in_worktree,
     is_new_test_key,
@@ -505,6 +506,32 @@ def _run_stages(ctx: CascadeContext, cand: Candidate, wt: Path, run_full: bool) 
         _stage_tests(ctx, cand, wt, "full", None)
 
 
+def _look_for_tampering(ctx: CascadeContext, cand: Candidate, wt: Path) -> None:
+    """qed check: was the change made to look green? Recorded before the grade (15.17)."""
+    scope = next((c for c in cand.checks if c.stage == "scope"), None)
+    if scope is None or cand.commit is None:
+        return
+    _check_cancel(ctx)
+    files = parse_diff(cand.diff)
+    results = {t.key: t.outcome for c in cand.checks for t in c.tests}
+    found = find_tampering(
+        root=ctx.root,
+        base_commit=ctx.base_commit,
+        commit=cand.commit,
+        files=files,
+        appended=appended_tests_in_worktree(ctx.root, ctx.base_commit, wt, files),
+        baseline=ctx.baseline,
+        project=ctx.project,
+        results=results,
+        run_dir=ctx.run_dir,
+        name=ctx.task.id,
+        cancelled=ctx.cancelled,
+    )
+    record(scope, found)
+    for reason in found.caught:
+        _emit(ctx, "warning", f"Caught: {reason}", candidate=cand.id)
+
+
 def _finish(ctx: CascadeContext, cand: Candidate) -> None:
     grade = grading.assign_grade(cand, ctx.baseline)
     if grade is None:
@@ -557,6 +584,8 @@ def evaluate_candidate(
         cand.diff = worktree.diff(ctx.root, ctx.base_commit, cand.commit)
         cand.diff_lines = count_changed_lines(cand.diff)
         _run_stages(ctx, cand, wt, run_full)
+        if cand.role == "user":
+            _look_for_tampering(ctx, cand, wt)
         _finish(ctx, cand)
         return cand
     finally:

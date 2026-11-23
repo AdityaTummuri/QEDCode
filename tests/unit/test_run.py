@@ -98,6 +98,21 @@ def test_environment_is_scrubbed_but_extra_is_kept(monkeypatch) -> None:
         assert name not in result.stdout
 
 
+def test_git_settings_from_the_environment_are_dropped_as_a_family() -> None:
+    # Dropping only the *_KEY_n half (it matches the secret pattern) made every git command fail.
+    env = scrubbed_env(
+        {
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "http.extraHeader",
+            "GIT_CONFIG_VALUE_0": "Authorization: secret",
+            "GIT_CONFIG_PARAMETERS": "'a.b=c'",
+            "GIT_CONFIG_GLOBAL": "/etc/gitconfig",
+            "PATH": "/bin",
+        }
+    )
+    assert env == {"GIT_CONFIG_GLOBAL": "/etc/gitconfig", "PATH": "/bin"}
+
+
 def test_scrubbed_env_function() -> None:
     env = scrubbed_env({"A_KEY": "1", "path": "x", "PASSWORD": "y"}, {"EXTRA_KEY": "kept"})
     assert env == {"path": "x", "EXTRA_KEY": "kept"}

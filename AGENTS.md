@@ -51,12 +51,12 @@ Breaking any rule below is a bug, even if the feature works.
 | --- | --- |
 | Language and packaging | Python ≥ 3.11 (target 3.12), `uv`, `hatchling` build backend |
 | CLI | `typer`, `rich` |
-| Terminal UI | `textual` |
+| Terminal UI (extra `tui`) | `textual` |
 | Data models | `pydantic` v2 |
 | HTTP to local model servers | `httpx` |
-| Cloud models only | `litellm` |
+| Cloud models only (extra `cloud`) | `litellm` |
 | API keys | `keyring` |
-| Model downloads | `huggingface_hub` |
+| Model downloads (extra `download`) | `huggingface_hub` |
 | Config | `tomllib` (stdlib) + `tomli-w` |
 | Lint stage | `ruff` (runtime dependency, run as a subprocess) |
 | Process control | `psutil` |
@@ -1376,3 +1376,47 @@ Rules:
 **Generated, never hand-kept** (`scripts/build_site.py`): `play/levels.json` from `bugzoo/`, `play/py/` (the QEDCode modules the grader imports), `receipt/receipt.schema.json` from the `Receipt` model and `receipt/sample.json` from a scripted `qed try` run.
 
 **Rules.** Scripts load only from the site itself and the pinned Pyodide CDN path (a test enforces it). Receipt and game text is never inserted as HTML (a test enforces it). Pages work at 390 px wide without sideways scrolling and respect `prefers-reduced-motion` and `prefers-color-scheme`.
+
+### 15.16 A light install and a check-first `qed try` (v0.2)
+
+**Light install.** The default install holds what `qed check`, `qed verify`, `qed try` and `qed solve` through Ollama or an OpenAI-compatible server need. Three parts move to extras and are imported only when used: `cloud` (`litellm`), `download` (`huggingface_hub`, for llama.cpp model files) and `tui` (`textual`); `all` is the three together. A missing extra gives one sentence that names the command to run (`uv tool install "qedcode[cloud]"`). QEDCode never installs an extra itself: the model-free commands of rule 2 do not include a package installer. `qed` with no arguments and no `tui` extra prints the help and that sentence. The development dependency group installs all extras.
+
+**`qed try` shows the check.** Default: three changes to the bundled shop project, as an agent might hand them in, each graded by `qed check` with no model: one skips the failing test (Caught), one fixes the code without a test that shows the bug (B, unproven), one fixes it with a test that fails before (A, proven; its receipt is re-run with `verify`). About 12 lines of output; `--verbose` prints every stage. `qed try --solve` (also implied by `--real`, `--scripted` or a project name) is the section 15.7 tour.
+
+**Git settings from the environment.** `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_n`, `GIT_CONFIG_VALUE_n` and `GIT_CONFIG_PARAMETERS` are dropped together from every child process (`verify/run.py`): dropping only the `KEY` half made git fail, and the values can carry credentials.
+
+### 15.17 Caught: the `tampered` flag (v0.2)
+
+**What it does.** `qed check` says *Caught* when the change makes tests look green instead of fixing code. Caught is a flag beside the grade (`CheckOutcome.tampered: list[str]`, the reasons), never a grade; `verify/grade.py` caps a caught change at C through the `Tests weakened:` marker, as before.
+
+| Caught when | How it is found |
+| --- | --- |
+| a skip or xfail is added, asserts are removed, or an assert can never fail | the diff (section 8 rules) |
+| an existing test file is deleted, or test collection is switched off (`collect_ignore`, `collect_ignore_glob`, `pytest_ignore_collect`, `pytest_collection_modifyitems`, `--ignore`, `--deselect`, `-k` or `--co` in pytest `addopts`, `norecursedirs`) | the diff |
+| an existing test was edited so that it passes, while its original version fails with the new code and failed before it | the original tests (next paragraph) |
+
+**The original tests.** When the change modifies or deletes existing test files, `qed check` puts the base versions of those files back in a throw-away worktree of the change and runs them once (same runner, same limits). A test that failed on the base, still fails with the new code, and passes or is gone in the edited file was *edited to pass*: Caught. A test that passed on the base and fails with the new code may be a deliberate change of behaviour; it is listed as a note (`expectations changed`) and is not Caught. Nothing runs when no existing test file changed.
+
+**The Action** fails on Caught by default (`fail-on: tampered`; `none` turns it off); the old `fail-below` stays. With no `version` input it installs QEDCode from the action's own checkout, so the pinned ref is what runs. `qed check --fail-on-tampered` does the same for CI and pre-commit.
+
+**Not caught without hidden tests:** code that special-cases the test inputs, and a wrong fix whose own new test encodes the same mistake. The docs say so.
+
+### 15.18 `qed hook` (v0.2)
+
+`qed hook install claude` adds a Claude Code `Stop` hook to the project's `.claude/settings.json` (only that entry; other settings are kept, and a file that is not valid JSON is left alone with a message). `qed hook remove claude` takes it out. The hook runs `qed hook run claude`: it reads the event from stdin, runs `qed check` at fast speed, and exits 2 with the reason on stderr when the change is Caught or a test that passed before now fails, so the agent keeps working. It exits 0 when `stop_hook_active` is set (no loops), when nothing changed, and whenever QEDCode itself cannot check (a hook must never block an agent because of QEDCode). No model is involved.
+
+### 15.19 Fewer model calls (v0.2)
+
+Measured on a 6 GB laptop, a solved task took a median of 5 model calls (intake, locator, test writer, coder, explainer). At fast and normal speed:
+
+| Call | Now |
+| --- | --- |
+| intake | not called: the request is the task. The kind comes from fixed words in the request (a docs, refactor or test task is recognised; anything else counts as a bugfix). `sure` speed still calls it. |
+| locator | not called when the whole project's source fits the coder's context budget and has at most `max_files` source files, or when one file is a strong search hit; otherwise called |
+| explainer | not called: the explanation is written from the receipt. `sure` speed still calls it |
+| test writer | one small test instead of one to three |
+| baseline | runs while the model writes the repro test (a thread; results are used after both finish) |
+
+**A disputed repro.** Small models often write one wrong expected value, and then every right fix fails. When at least two tries were rejected at `fbpa` by the same tests, QEDCode asks the test writer once more, at a higher temperature and without showing it the first test or any try. The second test must fail on the base. Tries are checked again with it in place of the first. A try that passes it is graded as usual but capped at **B** (`Candidate.disputed_repro`, read by `verify/grade.py`), and the receipt's "not proven" list says that two generated tests disagreed. If the tries fail the second test too, the result stays "no fix". Nothing is ever accepted by dropping the test without a second one that fails before and passes after.
+
+**Timings.** `Receipt.timings` holds seconds per step (`model:<role>`, `baseline`, `repro`, `checks`, `strength`, `total`), so the next slowdown is visible. Old receipts stay valid.

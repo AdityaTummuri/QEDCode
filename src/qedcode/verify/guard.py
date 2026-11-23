@@ -21,6 +21,8 @@ SUMMARY_LIMIT = 300
 DETAILS_LIMIT = 4000
 PROTECTED_MARKER = "Protected files changed:"
 WEAKENED_MARKER = "Tests weakened:"
+CAUGHT_MARKER = "Caught: "  # qed check: a reason the change makes tests look green (15.17)
+EXPECTATIONS_MARKER = "Expectations changed: "
 
 
 def _marked(checks: Iterable[CheckResult], marker: str) -> list[str]:
@@ -41,6 +43,27 @@ def protected_from_checks(checks: Iterable[CheckResult]) -> list[str]:
 def weakened_from_checks(checks: Iterable[CheckResult]) -> list[str]:
     """Test files a `qed check` scope stage found weakened (the grade function reads this)."""
     return _marked(checks, WEAKENED_MARKER)
+
+
+def _marked_lines(checks: Iterable[CheckResult], marker: str) -> list[str]:
+    return [
+        line[len(marker) :]
+        for check in checks
+        if check.stage == "scope"
+        for line in check.details.split("\n")
+        if line.startswith(marker)
+    ]
+
+
+def caught_from_checks(checks: Iterable[CheckResult]) -> list[str]:
+    """Why `qed check` Caught a change (see verify/tamper.py), read back from its checks."""
+    return _marked_lines(checks, CAUGHT_MARKER)
+
+
+def expectations_from_checks(checks: Iterable[CheckResult]) -> list[str]:
+    """Tests whose original version passed before the change and fails with it."""
+    lines = _marked_lines(checks, EXPECTATIONS_MARKER)
+    return [k.strip() for line in lines for k in line.split(", ") if k.strip()]
 
 
 # --------------------------------------------------------------------------- diff parsing
@@ -183,15 +206,15 @@ _JS_ALWAYS_TRUE = re.compile(
 )
 
 
-def _is_test_path(path: str) -> bool:
+def is_test_path(path: str) -> bool:
     return is_test_file(path) or path.endswith("conftest.py")
 
 
-def _weakening(file: FileDiff, *, always_true_asserts: bool = False) -> list[str]:
+def weakening_of(file: FileDiff, *, always_true_asserts: bool = False) -> list[str]:
     """Ways a diff weakens a test file. `always_true_asserts` also flags asserts that can never
     fail (used for `qed check`; for generated candidates other stages already cover them)."""
     problems: list[str] = []
-    if not _is_test_path(file.path):
+    if not is_test_path(file.path):
         return problems
     js = is_js_path(file.path)
     skip, assertion = (_JS_SKIP, _JS_ASSERT) if js else (_SKIP, _ASSERT)
@@ -219,9 +242,9 @@ def weakening_in(diff: str) -> dict[str, list[str]]:
     test-weakening study (scripts/study_test_weakening.py)."""
     found: dict[str, list[str]] = {}
     for f in parse_diff(diff):
-        if not _is_test_path(f.path):
+        if not is_test_path(f.path):
             continue
-        problems = _weakening(f, always_true_asserts=True)
+        problems = weakening_of(f, always_true_asserts=True)
         if f.status == "deleted":
             problems.append(f"{f.path} was deleted")
         if problems:
@@ -259,7 +282,7 @@ def scope_check(
             problems.append(f"{f.path}: {bad_path}.")
             continue
         if f.path in allowed and f.status == "added":
-            problems.extend(_weakening(f))
+            problems.extend(weakening_of(f))
             continue
         new_test = (f.status == "added" and is_test_file(f.path)) or (
             f.path in only_added
@@ -276,7 +299,7 @@ def scope_check(
         if f.status == "added" and is_test_file(f.path) and role not in ("test_writer", "user"):
             # a model try may not add tests; the user's own new test is evidence (qed check)
             problems.append(f"{f.path} is a new test file; only the test writer may add tests.")
-        weak = _weakening(f, always_true_asserts=role == "user")
+        weak = weakening_of(f, always_true_asserts=role == "user")
         if weak and f.path not in weakened:
             weakened.append(f.path)
         problems.extend(weak)

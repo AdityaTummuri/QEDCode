@@ -30,11 +30,8 @@ dependencies = [
     "pyyaml>=6.0.3",
     "psutil>=7.2.2",
     "httpx>=0.28.1",
-    "huggingface-hub>=2.4.0",
-    "litellm>=1.110.1",
     "keyring>=25.7.0",
     "ruff>=0.17.6",
-    "textual>=8.2.8",
     "mcp>=2.3.0",
     "tree-sitter>=0.26.1",
     "tree-sitter-javascript>=0.25.0",
@@ -52,12 +49,18 @@ Source = "https://github.com/AdityaTummuri/QEDCode"
 Issues = "https://github.com/AdityaTummuri/QEDCode/issues"
 
 [project.optional-dependencies]
+# AGENTS.md 15.16: what `qed check` needs is the default; these are asked for by name.
+cloud = ["litellm>=1.110.1"]
+download = ["huggingface-hub>=2.4.0"]
+tui = ["textual>=8.2.8"]
+all = ["qedcode[cloud,download,tui]"]
 nvidia = [
     "nvidia-ml-py>=13.615.71",
 ]
 
 [dependency-groups]
 dev = [
+    "qedcode[all]",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "ruff>=0.5",

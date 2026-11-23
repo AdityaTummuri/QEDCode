@@ -22,6 +22,7 @@ from qedcode.config import load_global, logs_dir, save_global
 from qedcode.engine import api
 from qedcode.engine.callbacks import NonInteractiveCallbacks
 from qedcode.engine.events import event_line
+from qedcode.extras import MissingExtra, load_extra
 from qedcode.hardware import detect as hardware_detect
 from qedcode.hardware.recommend import best_ctx_for, recommend
 from qedcode.models.schemas import Event, Grade, SolveResult, Speed
@@ -33,10 +34,11 @@ from qedcode.runtime.installer import (
     download_model,
     remove_model,
 )
+from qedcode.vcs.git import GitError
 
 app = typer.Typer(
     name="qed",
-    help="QEDCode: small local models, proven fixes.",
+    help="Your AI says it's fixed. QEDCode makes it prove it.",
     add_completion=False,
     no_args_is_help=False,
 )
@@ -64,6 +66,12 @@ def main(
 
     setup_logging()  # tracebacks and details go to ~/.qedcode/logs/qedcode.log, not the screen
     if ctx.invoked_subcommand is None:
+        try:
+            load_extra("textual", "tui", "The terminal UI")
+        except MissingExtra as exc:
+            typer.echo(ctx.get_help())
+            typer.echo(f"\n{exc}")
+            return
         from qedcode.tui.app import run_tui
 
         run_tui(Path.cwd())
@@ -131,8 +139,14 @@ def check_command(
             "--fail-below", help="Exit with 1 when the grade is below this (A, B, C or D)."
         ),
     ] = "",
+    fail_on_tampered: Annotated[
+        bool,
+        typer.Option(
+            "--fail-on-tampered", help="Exit with 1 when the change was Caught weakening tests."
+        ),
+    ] = False,
 ) -> None:
-    """Grade the changes you made yourself (uncommitted work) and write a proof receipt."""
+    """Grade the uncommitted changes in your repository, from evidence (no model needed)."""
     chosen = _parse_speed(speed)
     floor = _parse_grade(fail_below) if fail_below else None
     console = Console(stderr=True) if as_json else Console()
@@ -146,6 +160,8 @@ def check_command(
         typer.echo(outcome.model_dump_json(indent=1, exclude={"candidate"}))
     else:
         _print_check(Console(), outcome)
+    if fail_on_tampered and outcome.tampered:
+        raise typer.Exit(1)
     if outcome.status == "graded":
         if floor is not None and outcome.grade is not None and outcome.grade.rank() < floor.rank():
             if not as_json:
@@ -171,6 +187,10 @@ def _print_check(console: Console, outcome) -> None:
         console.print(outcome.message, markup=False)
         return
     console.print()
+    if outcome.tampered:
+        console.print("[bold red]Caught[/bold red]: the tests were changed to look green")
+        for reason in outcome.tampered:
+            console.print(f"  - {reason}", markup=False, highlight=False)
     console.print(_grade_text(outcome.grade))
     console.print(outcome.summary or outcome.message, markup=False)
     if outcome.failing_tests:
@@ -292,13 +312,20 @@ def try_command(
     ] = False,
     real: Annotated[bool, typer.Option("--real", help="Use your configured model.")] = False,
     keep: Annotated[bool, typer.Option("--keep", help="Keep the demo folder afterwards.")] = False,
+    solve: Annotated[
+        bool, typer.Option("--solve", help="Show a model writing the fix instead.")
+    ] = False,
+    verbose: Annotated[bool, typer.Option("--verbose", help="Print every check.")] = False,
 ) -> None:
-    """See QEDCode work in about a minute, on a tiny bundled project (no GPU needed)."""
+    """See QEDCode grade three AI changes in a few seconds (no model, no GPU, no account)."""
     import shutil
 
     from qedcode import tour
 
     console = Console()
+    if not (solve or scripted or real or project or list_only):
+        _try_check_tour(console, keep=keep, verbose=verbose)
+        return
     if list_only:
         for name in tour.list_projects():
             console.print(f"{name}: {tour.task_text(name)}", markup=False)
@@ -348,6 +375,53 @@ def try_command(
             shutil.rmtree(dest, ignore_errors=True)
     _print_tour(console, result, dest if keep else None)
     if result.solve.status != "done" or result.verify is None or not result.verify.verified:
+        raise typer.Exit(1)
+
+
+def _try_check_tour(console: Console, *, keep: bool, verbose: bool) -> None:
+    import shutil
+
+    from qedcode import tour
+
+    colours = {"Caught": "bold red", "Unproven": "bold yellow", "Proven": "bold green"}
+
+    def show(event: Event) -> None:
+        console.print(f"    {event.message}", style="dim", markup=False, highlight=False)
+
+    def step(done: tour.CheckStep) -> None:
+        grade = done.outcome.grade.value if done.outcome.grade else "-"
+        label = f"[{colours.get(done.label, 'bold')}]{done.label:<9}[/]"
+        console.print(f"  change {done.number}   {grade}  {label} {done.why()}", highlight=False)
+
+    console.print(
+        'An AI agent "fixed" the same bug three times. QEDCode grades each change. '
+        "No model runs.\n",
+        highlight=False,
+    )
+    dest = tour.make_dest()
+    try:
+        steps = tour.run_check_tour(
+            dest, NonInteractiveCallbacks(on_event=show if verbose else None), step
+        )
+    except tour.TourError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+    finally:
+        if not keep:
+            shutil.rmtree(dest, ignore_errors=True)
+    proof = steps[-1].verify
+    ok = proof is not None and proof.verified
+    console.print(
+        "\n  qed verify <receipt of change 3>  ->  "
+        + ("[bold green]VERIFIED[/] on this machine" if ok else "[bold red]NOT VERIFIED[/]"),
+        highlight=False,
+    )
+    if keep:
+        console.print(f"  The demo projects are kept in {dest}", markup=False, highlight=False)
+    console.print("\nGrade your agent's last change:   qed check", highlight=False)
+    console.print(f"Block cheats in every PR:         {tour.ACTION_DOCS}", highlight=False)
+    console.print("See a model write a proven fix:   qed try --solve", highlight=False)
+    if not ok or not all(s.right for s in steps):
         raise typer.Exit(1)
 
 
@@ -410,7 +484,7 @@ def _log_crash(exc: Exception) -> None:
     )
 
 
-@app.command("tests")
+@app.command("tests", hidden=True)
 def tests_command(
     path: Annotated[str, typer.Argument(help="Only this file or folder (default: all).")] = "",
     speed: Annotated[str | None, typer.Option("--speed", help="fast, normal or sure.")] = None,
@@ -441,7 +515,7 @@ def tests_command(
     raise typer.Exit(2 if result.status == "error" else 1)
 
 
-@app.command("hunt")
+@app.command("hunt", hidden=True)
 def hunt_command(
     path: Annotated[str, typer.Argument(help="Only this file or folder (default: all).")] = "",
     speed: Annotated[str | None, typer.Option("--speed", help="fast, normal or sure.")] = None,
@@ -519,7 +593,7 @@ def undo_command() -> None:
         raise typer.Exit(1 if outcome.status == "refused" else 2)
 
 
-@app.command("mcp")
+@app.command("mcp", hidden=True)
 def mcp_command() -> None:
     """Run the MCP server over stdio, so Claude Code, OpenCode and other agents can use QEDCode."""
     from qedcode.mcp_server import run_stdio
@@ -527,12 +601,68 @@ def mcp_command() -> None:
     run_stdio()
 
 
+hook_app = typer.Typer(
+    help="Make your agent pass `qed check` before it may stop.", no_args_is_help=True
+)
+app.add_typer(hook_app, name="hook")
+
+
+def _hook_agent(agent: str) -> None:
+    if agent.lower() != "claude":
+        typer.echo(f"'{agent}' is not supported yet. Use: claude (Claude Code).", err=True)
+        raise typer.Exit(2)
+
+
+def _hook_change(change_settings) -> None:
+    from qedcode.hook import HookError
+    from qedcode.vcs.git import repo_root
+
+    try:
+        root = repo_root(Path.cwd())
+        typer.echo(change_settings(root).message)
+    except (HookError, GitError) as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(2) from exc
+
+
+@hook_app.command("install")
+def hook_install(agent: Annotated[str, typer.Argument(help="claude")] = "claude") -> None:
+    """Add the hook to this project's agent settings."""
+    from qedcode import hook
+
+    _hook_agent(agent)
+    _hook_change(hook.install)
+
+
+@hook_app.command("remove")
+def hook_remove(agent: Annotated[str, typer.Argument(help="claude")] = "claude") -> None:
+    """Take the hook out again."""
+    from qedcode import hook
+
+    _hook_agent(agent)
+    _hook_change(hook.remove)
+
+
+@hook_app.command("run", hidden=True)
+def hook_run(agent: Annotated[str, typer.Argument(help="claude")] = "claude") -> None:
+    """Called by the agent: reads the event from stdin, exits 2 when the agent must go on."""
+    import sys
+
+    from qedcode import hook
+
+    _hook_agent(agent)
+    code, reason = hook.run_claude(sys.stdin.read(), Path.cwd())
+    if reason:
+        typer.echo(reason, err=True)
+    raise typer.Exit(code)
+
+
 memory_app = typer.Typer(
     help="What QEDCode remembers about this project (fixes you applied).",
     invoke_without_command=True,
     no_args_is_help=False,
 )
-app.add_typer(memory_app, name="memory")
+app.add_typer(memory_app, name="memory", hidden=True)
 
 
 @memory_app.callback()
@@ -597,7 +727,7 @@ sandbox_app = typer.Typer(
     invoke_without_command=True,
     no_args_is_help=False,
 )
-app.add_typer(sandbox_app, name="sandbox")
+app.add_typer(sandbox_app, name="sandbox", hidden=True)
 
 
 @sandbox_app.callback()
@@ -645,7 +775,7 @@ benchy_app = typer.Typer(
     invoke_without_command=True,
     no_args_is_help=False,
 )
-app.add_typer(benchy_app, name="benchy")
+app.add_typer(benchy_app, name="benchy", hidden=True)
 _PASS_THROUGH = {"allow_extra_args": True, "ignore_unknown_options": True}
 
 
@@ -720,7 +850,7 @@ for _name, _summary in (
     _benchy_pass_through(_name, _summary)
 
 
-@app.command("quiet")
+@app.command("quiet", hidden=True)
 def quiet_command(
     setting: Annotated[
         str | None,
@@ -751,7 +881,7 @@ def quiet_command(
     )
 
 
-@app.command("connect")
+@app.command("connect", hidden=True)
 def connect_command(
     agent: Annotated[
         str | None,
@@ -802,7 +932,7 @@ def connect_command(
         raise typer.Exit(1)
 
 
-@app.command("uninstall")
+@app.command("uninstall", hidden=True)
 def uninstall_command(
     everything: Annotated[
         bool,
@@ -856,7 +986,7 @@ def verify_command(
     raise typer.Exit(1)
 
 
-@app.command("receipt")
+@app.command("receipt", hidden=True)
 def receipt_command(
     receipt: Annotated[
         Path | None, typer.Argument(help="A receipt file (default: the last result's).")
@@ -949,7 +1079,7 @@ def receipt_command(
     console.print("Re-check it with `qed verify`, or share it with `qed receipt --link`.")
 
 
-@app.command()
+@app.command(hidden=True)
 def doctor(
     update_engine: Annotated[
         bool,
@@ -997,7 +1127,7 @@ night_app = typer.Typer(
     help="Night Shift: queue tasks, let them run unattended, read one report in the morning.",
     invoke_without_command=True,
 )
-app.add_typer(night_app, name="night")
+app.add_typer(night_app, name="night", hidden=True)
 
 
 @night_app.callback()
@@ -1106,7 +1236,7 @@ def night_report() -> None:
 models_app = typer.Typer(
     help="List, recommend and manage local models.", invoke_without_command=True
 )
-app.add_typer(models_app, name="models")
+app.add_typer(models_app, name="models", hidden=True)
 
 
 @models_app.callback()

@@ -26,12 +26,28 @@ VIEWER = "https://adityatummuri.github.io/QEDCode/receipt/"
 MAX_COMMENT = 20_000
 
 
+def _plain(text: str) -> str:
+    """Text safe inside a Markdown code span: one line, no backticks."""
+    return " ".join(str(text).replace("`", "'").split())
+
+
 def render_comment(result: dict, link: str = "", run_url: str = "") -> str:
     """The sticky comment for one check result (Markdown)."""
     status = result.get("status", "error")
     grade = result.get("grade")
     lines = [MARKER]
-    if status == "graded" and grade:
+    tampered = result.get("tampered") or []
+    if tampered:
+        lines.append("### ∎ QEDCode: Caught")
+        lines += ["", "The tests were changed to look green:"]
+        # a reason can quote the pull request's own text: show it as code, never as Markdown
+        lines += [f"- `{_plain(reason)}`" for reason in tampered[:10]]
+        lines.append("")
+        lines.append(result.get("summary") or result.get("message") or "")
+        step = result.get("next_step") or ""
+        if step:
+            lines += ["", f"**What to do:** `{_plain(step)}`"]
+    elif status == "graded" and grade:
         lines.append(f"### ∎ QEDCode: Grade {grade}")
         lines.append("")
         lines.append(result.get("summary") or result.get("message") or "")
@@ -114,6 +130,12 @@ def cmd_render(args: argparse.Namespace) -> int:
         return 2
     if result.get("status") not in ("graded", "no_changes"):
         failed = failed or (args.fail_below or "none").strip().lower() != "none"
+    fail_on = (args.fail_on or "none").strip().lower()
+    if fail_on not in ("none", "tampered"):
+        print(f"::error::fail-on must be tampered or none, not '{fail_on}'.")
+        return 2
+    caught = bool(result.get("tampered"))
+    failed = failed or (caught and fail_on == "tampered")
     _outputs(
         {
             "grade": result.get("grade") or "",
@@ -121,6 +143,7 @@ def cmd_render(args: argparse.Namespace) -> int:
             "summary": result.get("summary") or result.get("message") or "",
             "next-step": result.get("next_step") or "",
             "receipt-link": link,
+            "tampered": "true" if caught else "false",
             "failed": "true" if failed else "false",
         }
     )
@@ -188,6 +211,7 @@ def main(argv: list[str] | None = None) -> int:
     render.add_argument("--result", required=True)
     render.add_argument("--link-file", default="")
     render.add_argument("--fail-below", default="none")
+    render.add_argument("--fail-on", default="none")
     render.add_argument("--out", required=True)
     render.add_argument("--pr", default="")
     render.add_argument("--head-sha", default="")

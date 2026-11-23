@@ -9,6 +9,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
+from qedcode.extras import MissingExtra, load_extra
 from qedcode.runtime.client import ModelError
 from qedcode.runtime.secrets import (
     env_var_for,
@@ -24,8 +25,10 @@ CHARS_PER_TOKEN = 3.5
 
 def _load_litellm() -> Any:
     """Import litellm on first use (it is slow to import)."""
-    import litellm
-
+    try:
+        litellm = load_extra("litellm", "cloud", "Cloud models")
+    except MissingExtra as exc:
+        raise ModelError(str(exc)) from exc
     litellm.drop_params = True  # ignore settings a provider does not support
     return litellm
 

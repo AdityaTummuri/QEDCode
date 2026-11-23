@@ -285,6 +285,7 @@ class QedMcpService:
                 "message": outcome.message,
                 "notes": outcome.notes,
                 "next_step": outcome.next_step,
+                "tampered": outcome.tampered,
             }
 
         try:
@@ -361,7 +362,8 @@ def build_server(service: QedMcpService | None = None) -> MCPServer:
 
         Runs the project's tests and checks, with no model involved, and returns a grade, a
         one-line summary, any failing tests, notes (for example when the tests could not run),
-        next_step (the one thing that would raise the grade; empty for grade A) and a proof
+        next_step (the one thing that would raise the grade; empty for grade A), tampered (why
+        the change was Caught making tests look green; empty when it was not) and a proof
         receipt path.
         """
         return await service.check(speed, base, project_dir, ctx)

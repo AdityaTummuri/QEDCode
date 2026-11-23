@@ -16,6 +16,8 @@ from qedcode.config import ProjectConfig
 from qedcode.models.schemas import Baseline, Candidate, CheckResult, Receipt, TaskSpec
 from qedcode.project.paths import is_test_file
 from qedcode.verify.guard import (
+    caught_from_checks,
+    expectations_from_checks,
     parse_diff,
     protected_from_checks,
     risk_findings,
@@ -145,8 +147,16 @@ def unverified_gaps(
     protected = protected_from_checks(cand.checks)
     if protected:
         gaps.append(f"Protected files were changed: {', '.join(protected)}.")
+    caught = caught_from_checks(cand.checks)
+    gaps.extend(f"Caught: {reason}." for reason in caught)
+    moved = expectations_from_checks(cand.checks)
+    if moved:
+        gaps.append(
+            "Tests expect something else than before (as they were, they fail with this change): "
+            f"{', '.join(moved)}."
+        )
     weakened = weakened_from_checks(cand.checks)
-    if weakened:
+    if weakened and not caught:
         gaps.append(
             f"Tests were weakened in {', '.join(weakened)} (a skip, removed asserts or an assert "
             "that can never fail), so passing tests are no evidence."
@@ -326,6 +336,12 @@ def next_step(receipt: Receipt) -> str:
     weakened = weakened_from_checks(receipt.checks)
     if any(g.startswith(NOT_RUNNABLE_PREFIX) for g in gaps):
         return "Make the tests runnable (the receipt says why they could not); see `qed doctor`."
+    caught = caught_from_checks(receipt.checks)
+    if caught:
+        return (
+            f"Put the tests back as they were and fix the code instead ({caught[0]}). "
+            "Then add a new test that fails before your fix."
+        )
     if weakened:  # first: a weakened test is the thing to undo, whatever else changed
         return (
             f"Undo the change that weakens tests in {', '.join(weakened)} (a skip, removed asserts "

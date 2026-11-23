@@ -9,6 +9,9 @@ inputs:
   mode:
     description: "check (run qed check on this pull request) or comment (post the comment saved by a check run; for PRs from forks, in a workflow_run job)."
     default: check
+  fail-on:
+    description: "tampered (default: fail the job when the change was Caught weakening tests) or none."
+    default: tampered
   fail-below:
     description: "Fail the job when the grade is below this: A, B, C, D, or none (default: report only)."
     default: none
@@ -19,8 +22,8 @@ inputs:
     description: "Commit to compare with (default: the pull request's base commit)."
     default: ""
   version:
-    description: "What to install, as a uvx --from spec (default: the latest qedcode from PyPI)."
-    default: qedcode
+    description: "What to install, as a uvx --from spec (default: the QEDCode this action's own ref holds)."
+    default: ""
   working-directory:
     description: "The project folder inside the repository."
     default: "."
@@ -35,6 +38,9 @@ inputs:
     default: ${{ github.token }}
 
 outputs:
+  tampered:
+    description: "true when the change was Caught weakening tests, else false."
+    value: ${{ steps.report.outputs.tampered }}
   grade:
     description: "A, B, C, D, or empty when the change was rejected or the check could not run."
     value: ${{ steps.report.outputs.grade }}
@@ -69,6 +75,7 @@ runs:
         QED_OUT: ${{ runner.temp }}/qedcode-check
       run: |
         mkdir -p "$QED_OUT"
+        QED_SPEC="${QED_SPEC:-$GITHUB_ACTION_PATH}"
         if [ -z "$QED_BASE" ]; then
           echo "::error::No base commit: run this on pull_request events or set the 'base' input."
           echo '{"status": "error", "message": "No base commit to compare with."}' > "$QED_OUT/result.json"
@@ -94,13 +101,14 @@ runs:
       env:
         QED_OUT: ${{ runner.temp }}/qedcode-check
         QED_FAIL_BELOW: ${{ inputs.fail-below }}
+        QED_FAIL_ON: ${{ inputs.fail-on }}
         QED_PR: ${{ github.event.pull_request.number }}
         QED_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         QED_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       run: |
         python3 "$GITHUB_ACTION_PATH/action/report.py" render \
           --result "$QED_OUT/result.json" --link-file "$QED_OUT/link.txt" \
-          --fail-below "$QED_FAIL_BELOW" --out "$QED_OUT" \
+          --fail-below "$QED_FAIL_BELOW" --fail-on "$QED_FAIL_ON" --out "$QED_OUT" \
           --pr "$QED_PR" --head-sha "$QED_HEAD_SHA" --run-url "$QED_RUN_URL"
         cat "$QED_OUT/comment.md" >> "$GITHUB_STEP_SUMMARY"
 
@@ -150,13 +158,18 @@ runs:
         QED_OUT: ${{ runner.temp }}/qedcode-check
       run: python3 "$GITHUB_ACTION_PATH/action/report.py" post --dir "$QED_OUT"
 
-    - name: Enforce fail-below
+    - name: Enforce fail-on and fail-below
       if: inputs.mode == 'check' && steps.report.outputs.failed == 'true'
       shell: bash
       env:
         QED_GRADE: ${{ steps.report.outputs.grade }}
         QED_FAIL_BELOW: ${{ inputs.fail-below }}
         QED_NEXT: ${{ steps.report.outputs.next-step }}
+        QED_TAMPERED: ${{ steps.report.outputs.tampered }}
       run: |
+        if [ "$QED_TAMPERED" = "true" ]; then
+          printf '::error::QEDCode: Caught, the tests were changed to look green. %s\n' "$QED_NEXT"
+          exit 1
+        fi
         printf '::error::QEDCode grade %s is below %s. %s\n' "${QED_GRADE:-none}" "$QED_FAIL_BELOW" "$QED_NEXT"
         exit 1

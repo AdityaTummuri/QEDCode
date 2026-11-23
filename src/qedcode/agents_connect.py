@@ -229,7 +229,7 @@ def _backup(path: Path, env: Environment) -> str:
     return str(target)
 
 
-def _write_json(path: Path, data: dict) -> None:
+def write_json(path: Path, data: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f"{path.name}.qedcode-{os.getpid()}.tmp")
     tmp.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
@@ -278,7 +278,7 @@ def connect_file(key: str, confirm: Confirm, env: Environment) -> ConnectResult:
     servers[SERVER_NAME] = wanted
     data["mcpServers"] = servers
     try:
-        _write_json(path, data)
+        write_json(path, data)
     except OSError as exc:
         return ConnectResult(
             key,

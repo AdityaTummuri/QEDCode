@@ -21,10 +21,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
-from huggingface_hub import hf_hub_download
-from tqdm.auto import tqdm
 
 from qedcode.config import bin_dir, models_dir
+from qedcode.extras import MissingExtra, load_extra
 from qedcode.hardware.detect import HardwareInfo, sys_platform_name
 from qedcode.runtime.catalog import CatalogEntry, local_path
 from qedcode.verify.run import run
@@ -562,7 +561,16 @@ def verify_model_file(entry: CatalogEntry, path: Path | None = None) -> bool:
     return True if expected in ("<fill>", "<verify>") else sha256_of(path) == expected
 
 
+def hf_hub_download(**kwargs) -> str:
+    """huggingface_hub's download, imported on first use (the `download` extra)."""
+    return load_extra("huggingface_hub", "download", "Downloading a model file").hf_hub_download(
+        **kwargs
+    )
+
+
 def _progress_bar_class(callback: ProgressFn | None, name: str, total: int):
+    from tqdm.auto import tqdm  # comes with huggingface_hub
+
     class _Bar(tqdm):
         def __init__(self, *args, **kwargs):
             kwargs["disable"] = True  # no terminal bar from here; the UI draws its own
@@ -596,6 +604,10 @@ def download_model(
     target = local_path(entry)
     if verify_model_file(entry, target):
         return target  # already here and intact: nothing to download
+    try:  # before asking: a yes that cannot be honoured would be a wasted question
+        load_extra("huggingface_hub", "download", "Downloading a model file")
+    except MissingExtra as exc:
+        raise InstallError(str(exc)) from exc
     size = entry.gguf.size_bytes or int((entry.weights_gb or 0) * 1e9)
     prompt = (
         f"Download {entry.display} ({format_size(size)}) from huggingface.co/{entry.gguf.repo}? "
