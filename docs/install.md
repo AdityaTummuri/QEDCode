@@ -129,4 +129,5 @@ macOS and Windows with Python 3.11 and 3.12 on every push, with a scripted stand
 
 | Machine | GPU | OS | Model | Result |
 | --- | --- | --- | --- | --- |
-| *Being filled in by the hardware pass* | | | | |
+| Laptop, Ryzen 7 7840HS, 14 GB RAM | NVIDIA RTX 4050 Laptop, 6 GB | Ubuntu 24.04 | qwen3.5:4b and qwen2.5-coder:7b via Ollama | `qed try --real`: grade A in 15-43 s; Benchy runs in the [results](results.md) (2026-11-23) |
+| MacBook, Apple M2 | Apple GPU (Metal) | macOS | scripted model (development machine) | the full test suite |
