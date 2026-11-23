@@ -51,17 +51,19 @@ def test_the_site_has_every_page_and_generated_file(site: Path) -> None:
         "play/py/qedcode/verify/grade.py",
     ):
         assert (site / rel).is_file(), rel
-    sample = Receipt.model_validate_json((site / "receipt" / "sample.json").read_text())
+    sample = Receipt.model_validate_json(
+        (site / "receipt" / "sample.json").read_text(encoding="utf-8")
+    )
     assert sample.grade.value == "A" and sample.mutation is not None
-    schema = json.loads((site / "receipt" / "receipt.schema.json").read_text())
+    schema = json.loads((site / "receipt" / "receipt.schema.json").read_text(encoding="utf-8"))
     assert "grade" in schema["required"] and "mutation" in schema["properties"]
-    for rel in json.loads((site / "play" / "py" / "manifest.json").read_text()):
+    for rel in json.loads((site / "play" / "py" / "manifest.json").read_text(encoding="utf-8")):
         assert (site / "play" / "py" / rel).is_file(), rel
 
 
 def test_pages_never_inline_receipt_text_as_html() -> None:
-    viewer = (REPO_ROOT / "website" / "receipt" / "viewer.js").read_text()
-    play = (REPO_ROOT / "website" / "play" / "play.js").read_text()
+    viewer = (REPO_ROOT / "website" / "receipt" / "viewer.js").read_text(encoding="utf-8")
+    play = (REPO_ROOT / "website" / "play" / "play.js").read_text(encoding="utf-8")
     for source in (viewer, play):
         assert "innerHTML" not in source and "insertAdjacentHTML" not in source
 
@@ -70,14 +72,14 @@ def test_scripts_come_only_from_the_site_or_a_pinned_cdn() -> None:
     for page in (REPO_ROOT / "website").rglob("*"):
         if page.suffix not in (".html", ".js"):
             continue
-        text = page.read_text()
+        text = page.read_text(encoding="utf-8")
         for url in re.findall(r"(?:src=|importScripts\()\"(https?://[^\"]+)\"", text):
             assert url.startswith("https://cdn.jsdelivr.net/pyodide/v0.28.3/"), (page.name, url)
 
 
 def _grade(site: Path, level_index: int, edits_for) -> dict:
     """Run the grader in a fresh interpreter with exactly the browser's module set."""
-    levels = json.loads((site / "play" / "levels.json").read_text())
+    levels = json.loads((site / "play" / "levels.json").read_text(encoding="utf-8"))
     level = levels[level_index]
     payload = json.dumps({"level": level, "edits": edits_for(level)})
     env = {

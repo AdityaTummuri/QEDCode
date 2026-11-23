@@ -531,8 +531,10 @@ def test_a_repro_edited_by_the_candidate_is_run_on_the_base_again(tmp_path: Path
     stale = [*case.ctx.repro.base_failures, "tests.test_qed_repro::test_no_pages"]
     case.ctx.repro = ReproTest(REPRO_PATH, broken, base_failures=stale)
     first_line = case.hidden_text.splitlines()[0]
-    reply = case.edits_text + "\n" + sr(
-        REPRO_PATH, first_line, first_line + "\nfrom shop.pages import page_count"
+    reply = (
+        case.edits_text
+        + "\n"
+        + sr(REPRO_PATH, first_line, first_line + "\nfrom shop.pages import page_count")
     )
     cand = evaluate_candidate(case.ctx, case.candidate(reply), run_full=True)
     fbpa = next(c for c in cand.checks if c.stage == "fbpa")

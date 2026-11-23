@@ -88,9 +88,9 @@ def test_render_writes_the_files_and_the_outputs(tmp_path: Path, monkeypatch) ->
         ]
     )
     assert code == 0
-    assert (tmp_path / "c" / "comment.md").read_text().startswith(report.MARKER)
-    assert json.loads((tmp_path / "c" / "pr.json").read_text())["number"] == "7"
-    text = outputs.read_text()
+    assert (tmp_path / "c" / "comment.md").read_text(encoding="utf-8").startswith(report.MARKER)
+    assert json.loads((tmp_path / "c" / "pr.json").read_text(encoding="utf-8"))["number"] == "7"
+    text = outputs.read_text(encoding="utf-8")
     assert "grade<<__QED__\nB\n" in text and "failed<<__QED__\ntrue\n" in text
     assert f"receipt-link<<__QED__\n{LINK}\n" in text
 
@@ -110,7 +110,7 @@ def test_a_link_to_another_site_is_dropped(tmp_path: Path, monkeypatch) -> None:
             str(tmp_path / "c"),
         ]
     )
-    assert "evil.example" not in (tmp_path / "c" / "comment.md").read_text()
+    assert "evil.example" not in (tmp_path / "c" / "comment.md").read_text(encoding="utf-8")
 
 
 def test_a_missing_result_still_gives_a_comment(tmp_path: Path, monkeypatch) -> None:
@@ -126,8 +126,8 @@ def test_a_missing_result_still_gives_a_comment(tmp_path: Path, monkeypatch) -> 
             "B",
         ]
     )
-    assert "could not run" in (tmp_path / "c" / "comment.md").read_text()
-    assert "failed<<__QED__\ntrue" in (tmp_path / "o.txt").read_text()
+    assert "could not run" in (tmp_path / "c" / "comment.md").read_text(encoding="utf-8")
+    assert "failed<<__QED__\ntrue" in (tmp_path / "o.txt").read_text(encoding="utf-8")
 
 
 def _post_dir(tmp_path: Path, body: str, number: str = "7") -> Path:

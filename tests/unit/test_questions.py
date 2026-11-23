@@ -51,7 +51,9 @@ class Answering(NonInteractiveCallbacks):
 
 
 def _model() -> FakeModel:
-    script = yaml.safe_load((tour.TOUR_DIR / "001_paginate_off_by_one" / "script.yaml").read_text())
+    script = yaml.safe_load(
+        (tour.TOUR_DIR / "001_paginate_off_by_one" / "script.yaml").read_text(encoding="utf-8")
+    )
     good = script["coder"][1]
     script["coder"] = [good, ALT_FIX]
     return FakeModel(script)

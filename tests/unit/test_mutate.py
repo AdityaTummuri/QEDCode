@@ -66,10 +66,11 @@ def _fixed_repo(tmp_path: Path, repro: str) -> tuple[Path, str, str]:
     repo = tour.prepare("007_sort_order", tmp_path)
     base = git(repo, "rev-parse", "HEAD").stdout.strip()
     scores = repo / "src" / "board" / "scores.py"
-    scores.write_text(
-        scores.read_text().replace("sorted(scores)[:n]", "sorted(scores, reverse=True)[:n]")
+    # bytes, so the file keeps its line endings (on Windows text mode would rewrite every line)
+    scores.write_bytes(
+        scores.read_bytes().replace(b"sorted(scores)[:n]", b"sorted(scores, reverse=True)[:n]")
     )
-    (repo / "tests" / "test_qed_repro.py").write_text(repro)
+    (repo / "tests" / "test_qed_repro.py").write_bytes(repro.encode("utf-8"))
     git(repo, "add", "-A")
     patch = git(repo, "diff", "--cached", "--binary", base, exact=True).stdout
     git(repo, "reset", "-q", "--hard", base)

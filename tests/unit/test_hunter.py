@@ -44,7 +44,9 @@ def test_rows_are_fine():
 
 
 def _script() -> dict[str, list[str]]:
-    script = yaml.safe_load((tour.TOUR_DIR / "004_empty_input_crash" / "script.yaml").read_text())
+    script = yaml.safe_load(
+        (tour.TOUR_DIR / "004_empty_input_crash" / "script.yaml").read_text(encoding="utf-8")
+    )
     script.pop("test_writer")  # the hunter's failing test is the repro
     script["coder"] = script["coder"][1:]  # no cheating try here
     script["hunter"] = [SUSPECTS, NOTHING_WRONG]
