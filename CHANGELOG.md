@@ -65,10 +65,6 @@ All notable changes to QEDCode. The format follows [Keep a Changelog](https://ke
   Benchy's agent mode.
 
 ### Fixed
-- When every try passes the existing tests but fails the new test QEDCode wrote, that test is
-  treated as suspect (a small model's test can expect the wrong values): the closest try is
-  checked again without it, so the result can be grade B at most, and the receipt says the test
-  was dropped. Before, such runs ended with no fix even when the fix was right.
 - A try may no longer edit the test QEDCode wrote to show the problem. Repairs on real hardware
   rewrote that test (once to add its missing import, once to match their own fix), and the edited
   test then counted as proof: three wrong grade A results in the laptop runs. Such a try is now
