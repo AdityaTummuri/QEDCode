@@ -57,7 +57,7 @@ def test_solve_prints_progress_grade_explanation_and_receipt(project, monkeypatc
     assert "Writing a test that shows the problem ... done (it fails now)" in out
     assert "c1 · fbpa:" in out and "c1: grade A" in out
     assert "Grade A" in out and "repro test failed before, passes now" in out
-    assert "paginate computed the end of each page" in out  # the plain-English explanation
+    assert "Changed src/shop/pages.py" in out  # the plain-English explanation
     assert "Tries: c1: grade A" in out
     assert "Receipt:" in out and "/.qed/receipts/" in out.replace("\n", "").replace("\\", "/")
     assert "Apply it with: qed apply t-" in out
@@ -77,7 +77,7 @@ def test_solve_json_is_one_solve_result(project, monkeypatch) -> None:
     parsed = SolveResult.model_validate_json(result.stdout)  # all of stdout is the JSON
     assert parsed.status == "done" and parsed.best.grade is Grade.A and parsed.best.id == "c1"
     assert parsed.receipt_path and Path(parsed.receipt_path).exists()
-    assert parsed.explanation.startswith("paginate computed")
+    assert parsed.explanation.startswith("Changed src/shop/pages.py")
     assert parsed.message.startswith("Grade A")
     assert json.loads(result.stdout)["task"]["request"] == TASK
     assert "Taking a snapshot" not in result.stdout  # progress is not mixed into the JSON

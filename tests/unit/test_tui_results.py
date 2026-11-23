@@ -70,7 +70,7 @@ async def test_cards_and_result_panel_fill_in_as_the_tries_come_back(tmp_path: P
         )
         panel = str(app.query_one("#result").render())
         assert "Grade A" in panel and "repro test failed before, passes now" in panel
-        assert "paginate computed the end of each page" in panel
+        assert "Changed src/shop/pages.py" in panel
         assert "[a] apply" in panel
 
 
@@ -113,7 +113,7 @@ async def test_e_explains_the_change_in_plain_words(tmp_path: Path) -> None:
         await run_task(pilot, app)
         await pilot.press("e")
         assert screen_name(app) == "TextScreen"
-        assert app.screen.body.startswith("paginate computed the end of each page")
+        assert app.screen.body.startswith("Changed src/shop/pages.py")
         await pilot.press("q")  # q closes a text screen instead of quitting the app
         assert screen_name(app) != "TextScreen" and app.is_running
 

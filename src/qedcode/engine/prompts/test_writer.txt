@@ -8,10 +8,10 @@ RELEVANT CODE:
 HOW EXISTING TESTS LOOK ({example_test_path}):
 {example_test_snippet}
 
-Write ONE new pytest file with 1 to 3 small tests.
-The tests must FAIL on the current code because of the problem in the task, and PASS once the task is done.
+Write ONE new pytest file with exactly ONE small test (one function, one or two asserts).
+Use the smallest input that shows the problem. The test must FAIL on the current code because of the problem in the task, and PASS once the task is done.
 Rules: import the code the same way the existing tests do; test only behaviour named in the task;
-no network, no subprocess, no files written outside pytest's tmp_path; every test has at least one assert.
+no network, no subprocess, no files written outside pytest's tmp_path; the test has at least one assert. Never use pytest.raises unless the task asks for an error.
 
 Reply in exactly this format:
 EDIT create_file path={test_path}

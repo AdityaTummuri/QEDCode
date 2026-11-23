@@ -117,6 +117,8 @@ def script_for(name: str, **replace) -> dict[str, list[str]]:
     from qedcode.runtime.fake import load_script
 
     script = load_script(next(SCRIPTS_DIR.glob(f"{name[:3]}_*.yaml")))
+    # the same test again when the engine asks for a second one (AGENTS.md 15.19): nothing changes
+    script["test_writer"] = script["test_writer"] * 2
     for tag, replies in replace.items():
         if replies is None:
             script.pop(tag, None)

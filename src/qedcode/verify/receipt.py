@@ -31,6 +31,10 @@ LINK_PREFIX = "#r="
 MAX_LINK_BYTES = 64 * 1024
 NOT_RUNNABLE_PREFIX = "pytest could not run before the change"
 NO_CODE_CHANGE_PREFIX = "The change alters no code outside tests"
+DISPUTED_GAP = (
+    "Two generated tests disagreed about this task: the change passes the second and fails the "
+    "first, so check that the expected behaviour is the one you want."
+)
 NETWORK_NOTE = "Tests ran on this computer without network blocking (v1 limitation)."
 SEALED_NOTE = (
     "Tests ran in a sealed Docker container with the network off; the project's dependencies "
@@ -134,6 +138,8 @@ def unverified_gaps(
         gaps.append("No existing test covered this change.")
     if not fbpa_tests:
         gaps.append("No test was shown to fail before the change and pass after it.")
+    if cand.disputed_repro:
+        gaps.append(DISPUTED_GAP)
     risk = next((c for c in cand.checks if c.stage == "risk"), None)
     if risk is not None and risk.needs_approval and risk.passed:
         seen = []
@@ -325,6 +331,28 @@ def describe(receipt: Receipt) -> list[str]:
     return lines
 
 
+def explanation(receipt: Receipt, plan: list[str] = ()) -> str:  # type: ignore[assignment]
+    """What changed and what shows it works, in a few sentences, from the receipt alone."""
+    files = [f for f in parse_diff(receipt.patch) if f.path not in receipt.tests_added]
+    where = ", ".join(f.path for f in files[:3]) or "your project"
+    added = sum(len(f.added) for f in files)
+    removed = sum(len(f.removed) for f in files)
+    parts = [f"Changed {where} ({added} line(s) added, {removed} removed)."]
+    idea = next((line.strip(" -") for line in plan if line.strip(" -")), "")
+    if idea:
+        parts.append(f"The model's plan: {idea.rstrip('.')}.")
+    passed, total = test_counts(receipt.checks)
+    if receipt.fbpa_tests:
+        names = ", ".join(k.rsplit("::", 1)[-1] for k in receipt.fbpa_tests[:2])
+        more = f" and {len(receipt.fbpa_tests) - 2} more" if len(receipt.fbpa_tests) > 2 else ""
+        parts.append(f"Failed before the change, passing with it: {names}{more}.")
+    if total:
+        parts.append(f"{passed} of {total} tests pass.")
+    if DISPUTED_GAP in receipt.unverified:
+        parts.append(DISPUTED_GAP)
+    return " ".join(parts)
+
+
 def next_step(receipt: Receipt) -> str:
     """The one thing that would raise this receipt's grade, in plain English ("" for grade A).
 
@@ -364,6 +392,8 @@ def next_step(receipt: Receipt) -> str:
         return (
             "Avoid the risky pattern you approved (see the receipt); with it the best grade is B."
         )
+    if DISPUTED_GAP in gaps:
+        return "Read the new test: two generated tests disagreed about what is right."
     if not receipt.fbpa_tests:
         return (
             f"Add a test that fails on {receipt.base_ref} and passes with this change, so the fix "

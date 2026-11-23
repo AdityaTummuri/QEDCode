@@ -54,7 +54,7 @@ async def test_solve_returns_the_proven_result(tmp_path: Path) -> None:
     out = await service_for(FakeModel(script_for(ZOO))).solve(TASK, project_dir=str(repo))
     assert out["status"] == "done" and out["grade"] == "A" and out["job_id"]
     assert out["summary"].startswith("Grade A · repro test failed before, passes now")
-    assert out["explanation"].startswith("paginate computed the end of each page")
+    assert out["explanation"].startswith("Changed src/shop/pages.py")
     assert "+    end = start + size\n" in out["diff"]
     assert Path(out["receipt_path"]).exists() and out["question"] is None
 
@@ -172,7 +172,7 @@ async def test_progress_is_reported_while_waiting(tmp_path: Path) -> None:
     out = await service_for(SlowModel(script_for(ZOO))).solve(TASK, project_dir=str(repo), ctx=ctx)
     assert out["status"] == "done"
     assert ctx.calls and [c[0] for c in ctx.calls] == sorted(c[0] for c in ctx.calls)
-    assert any("Finding files" in c[2] or "Taking a snapshot" in c[2] for c in ctx.calls)
+    assert any("Writing a test" in c[2] or "Finding files" in c[2] for c in ctx.calls)
 
 
 async def test_a_client_without_progress_support_does_not_break_the_call(tmp_path: Path) -> None:
@@ -340,7 +340,7 @@ async def test_solve_through_the_protocol_with_progress_notifications(tmp_path: 
         assert verified["verified"] is True
     assert seen, "no progress notification reached the client"
     assert [s[0] for s in seen] == sorted(s[0] for s in seen)  # progress only goes up
-    assert any(m and "Taking a snapshot" in m for _, _, m in seen)
+    assert any(m and "Writing a test" in m for _, _, m in seen)
 
 
 # ------------------------------------------------------------------ the real stdio transport

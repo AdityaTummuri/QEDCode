@@ -169,7 +169,7 @@ async def test_an_unclear_task_asks_a_question_and_uses_the_answer(tmp_path: Pat
     app, model, _ = make_app(tmp_path, model=FakeModel(script_for(ZOO, intake=[asked, answered])))
     async with app.run_test(size=(120, 40)) as pilot:
         await ready(app)
-        await submit(pilot, "something is off with pages")
+        await submit(pilot, "pages are off")
         await on_screen(app, "AskScreen")
         assert app.screen.question == "Which function is broken?"
         await pilot.press(*"paginate")
@@ -185,7 +185,7 @@ async def test_skipping_the_question_carries_on_without_an_answer(tmp_path: Path
     app, model, _ = make_app(tmp_path, model=FakeModel(script_for(ZOO, intake=[asked])))
     async with app.run_test(size=(120, 40)) as pilot:
         await ready(app)
-        await submit(pilot, "something is off with pages")
+        await submit(pilot, "pages are off")
         await on_screen(app, "AskScreen")
         await pilot.press("escape")
         await wait_for(lambda: app.last_result is not None)

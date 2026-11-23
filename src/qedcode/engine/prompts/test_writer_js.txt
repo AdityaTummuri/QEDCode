@@ -8,8 +8,8 @@ RELEVANT CODE:
 HOW EXISTING TESTS LOOK ({example_test_path}):
 {example_test_snippet}
 
-Write ONE new {test_kind} file with 1 to 3 small tests.
-The tests must FAIL on the current code because of the problem in the task, and PASS once the task is done.
+Write ONE new {test_kind} file with exactly ONE small test (one function, one or two asserts).
+Use the smallest input that shows the problem. The test must FAIL on the current code because of the problem in the task, and PASS once the task is done.
 Rules: import the code the same way the existing tests do; test only behaviour named in the task;
 {test_rules}
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Literal
 
@@ -25,6 +26,9 @@ class SpeedSettings:
     max_changed_lines: int  # per candidate
     helper: Literal["never", "after_repairs"]
     time_budget_s: float
+    # Skip the model calls a small model spends most of a task's time on without need: intake for
+    # a clear request, the locator on a small project, the explainer (AGENTS.md 15.19).
+    lean: bool = True
 
 
 SPEED_DIAL: dict[Speed, SpeedSettings] = {
@@ -66,6 +70,7 @@ SPEED_DIAL: dict[Speed, SpeedSettings] = {
         max_changed_lines=600,
         helper="after_repairs",
         time_budget_s=30 * 60,
+        lean=False,
     ),
 }
 
@@ -79,6 +84,28 @@ def settings_for(speed: Speed | str) -> SpeedSettings:
 
 def max_changed_lines(speed: Speed | str) -> int:
     return settings_for(speed).max_changed_lines
+
+
+_KIND_WORDS = (
+    (TaskKind.DOCS, r"\b(?:docs?|documentation|readme|docstrings?|changelog|comments?)\b"),
+    (TaskKind.TEST, r"\b(?:write|add|create)\b.{0,30}\btests?\b|\btest coverage\b"),
+    (TaskKind.REFACTOR, r"\b(?:refactor|rename|clean ?up|tidy|reformat|simplify)\b"),
+)
+_BUG_WORDS = r"\b(?:fix|bug|crash\w*|fail\w*|wrong|error|broken|raises?|instead of|should)\b"
+VAGUE_WORDS = 4  # a request with fewer words than this still goes through intake
+
+
+def clear_request(request: str) -> bool:
+    """Enough words to work from without asking the model what the task is."""
+    return len(re.findall(r"\w+", request)) >= VAGUE_WORDS
+
+
+def guess_kind(request: str) -> TaskKind:
+    """The task's kind from fixed words in the request; a bugfix when nothing says otherwise."""
+    text = request.lower()
+    if re.search(_BUG_WORDS, text):
+        return TaskKind.BUGFIX
+    return next((k for k, words in _KIND_WORDS if re.search(words, text)), TaskKind.BUGFIX)
 
 
 def test_writer_on(speed: Speed | str, kind: TaskKind | str) -> bool:

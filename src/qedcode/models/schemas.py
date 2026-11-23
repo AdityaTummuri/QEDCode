@@ -111,6 +111,7 @@ class Candidate(BaseModel):
     grade: Grade | None = None  # None = rejected
     tests_passed: int = 0
     full_suite_ran: bool = False
+    disputed_repro: bool = False  # two generated tests disagreed; this try passes one (15.19)
     code_changed: bool = True  # False = outside tests only comments/formatting/docs changed
 
 
@@ -152,6 +153,7 @@ class Receipt(BaseModel):
     model_info: dict = Field(default_factory=dict)  # backend, model, ctx, temps, helper_used
     commands: list[list[str]] = Field(default_factory=list)  # what verify re-runs
     sandbox: str = ""  # "docker" when the tests ran in the sealed test box, else ""
+    timings: dict[str, float] = Field(default_factory=dict)  # seconds per step (15.19)
     mutation: MutationScore | None = None  # proof strength; None when it was not measured
 
 

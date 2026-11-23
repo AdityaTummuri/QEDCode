@@ -70,7 +70,7 @@ def test_templates_follow_the_brief_word_for_word() -> None:
         in load_prompt("intake")
     )
     assert "SEARCH HITS FOR WORDS FROM THE TASK:" in load_prompt("locator")
-    assert "Write ONE new pytest file with 1 to 3 small tests." in load_prompt("test_writer")
+    assert "Write ONE new pytest file with exactly ONE small test" in load_prompt("test_writer")
     assert "FAILS NOW BECAUSE: <one line>" in load_prompt("test_writer")
     assert (
         "Make the smallest change that completes the task. Do not edit or create test files."

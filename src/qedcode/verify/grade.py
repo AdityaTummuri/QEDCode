@@ -1,7 +1,7 @@
 """The ONLY place grades are set (AGENTS.md section 8, rule 3: no success without evidence).
 
 A = a test failed before and passes now, the full suite shows no regressions, nothing protected
-    changed and no risky pattern needed approval.
+    changed, no risky pattern needed approval and no two generated tests disagreed.
 B = relevant tests pass with no regressions, but no fail-before-pass-after test or no full run.
 C = static checks pass but no relevant test ran, or the change alters no code outside tests
     (only comments, formatting, or files no test uses such as docs), or (qed check) it weakens
@@ -51,7 +51,7 @@ def grade(c: Candidate, base: Baseline) -> Grade | None:
     if c_has_weakened_tests(c):
         return Grade.C  # the tests were weakened, so their passing proves nothing
     g = Grade.A if passed(c, "fbpa") and c.full_suite_ran else Grade.B
-    if g is Grade.A and (needed_risk_approval(c) or c_has_protected_changes(c)):
+    if g is Grade.A and (needed_risk_approval(c) or c_has_protected_changes(c) or c.disputed_repro):
         g = Grade.B  # proof is weaker: cap at B
     return g
 

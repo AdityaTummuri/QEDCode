@@ -20,7 +20,7 @@ from qedcode.project.detect import find_test_files
 from qedcode.project.detect_js import resolve_js_import
 from qedcode.project.paths import is_js_path, is_test_file, normalize_path, validate_path
 from qedcode.project.repo_map import MAX_FILE_BYTES, SKIP_DIRS, list_source_files, repo_map
-from qedcode.project.search import extract_keywords, format_hits, search
+from qedcode.project.search import SearchResult, extract_keywords, format_hits, search
 from qedcode.project.tokens import CHARS_PER_TOKEN, estimate_tokens, prompt_budget
 
 FULL_SUITE_FAST_SECONDS = 60.0
@@ -365,6 +365,35 @@ def validate_located(root: Path | str, paths: list[str]) -> list[str]:
     return kept
 
 
+CLEAR_LEAD = 2.0  # one file stands out when it scores this many times the next best
+
+
+def _without_locator(
+    root: Path, source_files: list[str], found: SearchResult, max_files: int, room: int
+) -> list[str]:
+    """The files for the coder when they are certain without asking the model, else []."""
+    texts = (
+        {
+            p: text
+            for p in source_files
+            if not is_test_file(p) and (text := read_project_file(root, p)) and text.strip()
+        }
+        if len(source_files) <= 4 * max_files + 10
+        else {}
+    )
+    if texts and len(texts) <= max_files:
+        if sum(estimate_tokens(t) for t in texts.values()) <= room:
+            return sorted(texts, key=lambda p: (-found.scores.get(p, 0.0), p))
+    ranked = found.top_source_files(2)
+    if not ranked:
+        return []
+    best = found.scores.get(ranked[0], 0.0)
+    second = found.scores.get(ranked[1], 0.0) if len(ranked) > 1 else 0.0
+    if best >= 2 * STRONG_HIT_SCORE and best >= CLEAR_LEAD * second:
+        return ranked[:1]
+    return []
+
+
 def build_context(
     root: Path | str,
     spec: TaskSpec,
@@ -374,12 +403,14 @@ def build_context(
     context_tokens: int,
     on_event: Callable[[Event], None] | None = None,
     language: str = "python",
+    lean: bool = False,
 ) -> ContextBundle:
     """Find the files for a task: search, repo map, the locator, validation and fallbacks.
 
     `locate(repo_map, hits)` is the locator role. Its paths are validated; when it gives nothing
     usable the best search hits are used instead; when it picked fewer than `max_files`, a strong
-    search match it missed is added.
+    search match it missed is added. With `lean`, the locator is not asked when the whole project
+    fits the coder's prompt or one file clearly stands out (AGENTS.md 15.19).
     """
     root = Path(root)
     notes: list[str] = []
@@ -387,11 +418,13 @@ def build_context(
     keywords = extract_keywords(spec.request, spec.acceptance)
     found = search(root, keywords, files=py_files)
     hits_text = format_hits(found, 20)
+    coder_room = max(256, prompt_budget(context_tokens, 2000) - CODER_FILE_BUDGET_MARGIN)
+    certain = _without_locator(root, py_files, found, max_files, coder_room) if lean else []
     budget = prompt_budget(context_tokens, LOCATOR_MAX_TOKENS)
     fixed = estimate_tokens(spec.request + "\n".join(spec.acceptance)) + 400
     map_budget = max(200, budget - fixed - estimate_tokens(hits_text))
     map_text = repo_map(root, map_budget, py_files, language)
-    located = validate_located(root, locate(map_text, hits_text))
+    located = validate_located(root, certain or locate(map_text, hits_text))
     top_sources = found.top_source_files(1)
     top = top_sources[0] if top_sources else None
     if not located:
@@ -399,7 +432,8 @@ def build_context(
         if located:
             notes.append("The locator gave no usable files, so the best search matches were used.")
     elif (
-        top
+        not certain
+        and top
         and top not in located
         and len(located) < max_files + 1
         and (
@@ -428,7 +462,7 @@ def build_context(
     ]
     files = fit_files(
         raw_files,
-        max(256, prompt_budget(context_tokens, 2000) - CODER_FILE_BUDGET_MARGIN),
+        coder_room,
         task_keywords(spec.request),
     )
     if on_event is not None:

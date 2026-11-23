@@ -128,10 +128,6 @@ def test_a_javascript_bug_is_fixed_to_grade_a_with_real_node(tmp_path: Path) -> 
     assert NETWORK_NOTE in receipt.unverified and receipt.sandbox == ""
     # the prompts used the JavaScript wording, not pytest
     prompts = [c.messages[-1]["content"] for c in model.calls]
-    intake = next(p for c, p in zip(model.calls, prompts, strict=True) if c.tag == "intake")
-    assert (
-        "JavaScript/TypeScript (Node.js), tests run with the built-in node:test runner." in intake
-    )
     writer = next(p for c, p in zip(model.calls, prompts, strict=True) if c.tag == "test_writer")
     assert "node:test test" in writer and "```javascript" in writer and "pytest" not in writer
     coder = next(p for c, p in zip(model.calls, prompts, strict=True) if c.tag == "coder")

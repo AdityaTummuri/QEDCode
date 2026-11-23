@@ -10,6 +10,7 @@ decide grades.
 from __future__ import annotations
 
 import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from importlib import resources
@@ -228,6 +229,7 @@ class Roles:
         self._on_token = on_token
         self._seq = 0
         self.calls = 0
+        self.seconds: dict[str, float] = {}  # time spent in the model, per role
 
     # ------------------------------------------------------------------ plumbing
 
@@ -263,13 +265,17 @@ class Roles:
                 self._on_token(tag, text)
 
         self.calls += 1
-        return self.client.chat(
-            messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            tag=tag,
-            on_token=piece,
-        )
+        started = time.monotonic()
+        try:
+            return self.client.chat(
+                messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                tag=tag,
+                on_token=piece,
+            )
+        finally:
+            self.seconds[tag] = self.seconds.get(tag, 0.0) + time.monotonic() - started
 
     def _ask(
         self,
@@ -364,9 +370,11 @@ class Roles:
         test_path: str,
         *,
         label: str = "",
+        temperature: float | None = None,
     ) -> TestWriterResult | None:
         """Write ONE new test file that should fail now; None when no usable file came back."""
-        temperature, max_tokens = ROLE_SETTINGS["test_writer"]
+        usual, max_tokens = ROLE_SETTINGS["test_writer"]
+        temperature = usual if temperature is None else temperature
         snippet = NO_TESTS
         example_path = "no example"
         if example_test is not None:

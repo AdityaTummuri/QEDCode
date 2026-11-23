@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
 from qedcode.engine import api, select
-from qedcode.engine.budget import SPEED_DIAL
+from qedcode.engine.budget import SPEED_DIAL, guess_kind
 from qedcode.engine.callbacks import NonInteractiveCallbacks
 from qedcode.engine.lock import project_lock
 from qedcode.engine.solve import read_last_result, solve
@@ -27,6 +28,7 @@ def sr(path: str, old: str, new: str) -> str:
     )
 
 
+TALKATIVE = replace(SPEED_DIAL[Speed.NORMAL], lean=False)  # intake, locator and explainer on
 BROKEN_SYNTAX = sr(PAGES, "    end = start + size - 1", "    end = start + size -")
 NO_FIX = sr(
     PAGES, '    """Return the items on a 1-based page of the given size."""', '    """A page."""'
@@ -53,9 +55,10 @@ def test_1_a_good_coder_reply_reaches_grade_a_at_normal_speed(tmp_path: Path) ->
     assert result.status == "done" and result.best.grade is Grade.A, result.message
     assert result.best.id == "c1" and [c.id for c in result.candidates] == ["c1"]
     assert result.message.startswith("Grade A · repro test failed before, passes now")
-    assert result.explanation.startswith("paginate computed the end of each page")
-    assert tags(model) == ["intake", "locator", "test_writer", "coder", "explainer"]
-    assert result.task.kind.value == "bugfix" and len(result.task.acceptance) == 2
+    assert result.explanation.startswith("Changed src/shop/pages.py")
+    assert "Failed before the change, passing with it: test_full_page" in result.explanation
+    assert tags(model) == ["test_writer", "coder"]  # AGENTS.md 15.19: no call without need
+    assert result.task.kind.value == "bugfix"
     assert result.task.target_grade is Grade.A
     receipt = Path(result.receipt_path)
     assert receipt == project / ".qed" / "receipts" / f"{result.task.id}.json" and receipt.exists()
@@ -143,7 +146,7 @@ def test_6_fast_speed_one_try_no_test_writer_grade_b(tmp_path: Path) -> None:
     model = FakeModel(script)
     result, _ = run_solve(project, model, speed=Speed.FAST)
     assert result.best.grade is Grade.B and result.task.target_grade is Grade.B
-    assert tags(model) == ["intake", "locator", "coder", "explainer"]
+    assert tags(model) == ["coder"]
     assert [c.id for c in result.candidates] == ["c1"]
     assert not result.best.full_suite_ran
     assert model.calls_for("coder")[0].temperature == 0.2
@@ -196,20 +199,18 @@ def test_the_users_files_are_never_touched_and_prompts_are_saved(tmp_path: Path)
     assert worktree.list_worktrees(project) == []
     runs = project / ".qed" / "runs" / result.task.id
     names = sorted(p.name for p in runs.iterdir() if p.suffix == ".txt")
-    assert "01-intake-prompt.txt" in names and any("coder-c1-reply" in n for n in names)
+    assert "01-test_writer-a1-prompt.txt" in names and any("coder-c1-reply" in n for n in names)
     assert (runs / "baseline.log").exists() or any(p.name.endswith(".log") for p in runs.iterdir())
 
 
 def test_time_budget_stops_the_tries(tmp_path: Path) -> None:
-    from dataclasses import replace
-
     project = zoo_git_repo(tmp_path)
     script = script_for(ZOO, coder=[NO_FIX, NO_FIX, NO_FIX], repairer=[NO_FIX])
     model = FakeModel(script)
     zero = replace(SPEED_DIAL[Speed.NORMAL], time_budget_s=0.0)
     result, _ = run_solve(project, model, settings=zero)
     assert result.status == "no_fix" and result.candidates == []
-    assert tags(model) == ["intake", "locator", "test_writer"]  # the coder was never asked
+    assert tags(model) == ["test_writer"]  # the coder was never asked
 
 
 def test_a_second_job_in_the_same_project_is_refused(tmp_path: Path) -> None:
@@ -231,7 +232,7 @@ def test_the_intake_question_is_asked_and_the_answer_used(tmp_path: Path) -> Non
             asked.append(q)
             return "paginate"
 
-    result, _ = run_solve(project, model, cb=Asking())
+    result, _ = run_solve(project, model, cb=Asking(), settings=TALKATIVE)
     assert asked == ["Which function is broken?"]
     assert model.calls_for("intake")[1].prompt.count("paginate") >= 2
     assert result.task.acceptance == ["paginate returns size items"] and result.status == "done"
@@ -243,7 +244,8 @@ def test_an_unanswerable_question_continues_and_becomes_needs_input_when_nothing
     project = zoo_git_repo(tmp_path)
     question = "KIND: bugfix\nACCEPTANCE:\n- unclear\nQUESTION: Which function is broken?\n"
     script = script_for(ZOO, intake=[question], coder=[NO_FIX] * 3, repairer=[NO_FIX])
-    result, cb = run_solve(project, FakeModel(script))  # non-interactive: ask() returns None
+    # non-interactive: ask() returns None
+    result, cb = run_solve(project, FakeModel(script), settings=TALKATIVE)
     assert result.status == "needs_input" and result.question == "Which function is broken?"
     assert any(e.kind == "warning" and "may be unclear" in e.message for e in cb.events)
 
@@ -600,3 +602,124 @@ def test_reached_and_promising() -> None:
     assert select.promising(cand("c", tests=2), Grade.B)
     assert not select.promising(cand("c", tests=0, fbpa=True), Grade.A)
     assert not select.promising(cand("c", failed="full", tests=3, fbpa=True), Grade.A)
+
+
+# ------------------------------------------------------------------ fewer calls (AGENTS.md 15.19)
+
+REPRO = "tests/test_qed_paginate_drops_the_last_item.py"
+
+
+def repro_reply(*asserts: str) -> str:
+    body = "\n".join(f"    assert {a}" for a in asserts)
+    return (
+        f"EDIT create_file path={REPRO}\n{FENCE}python\nfrom shop.pages import paginate\n\n\n"
+        f"def test_page():\n{body}\n{FENCE}\nFAILS NOW BECAUSE: it drops the last item\n"
+    )
+
+
+WRONG_TEST = repro_reply("paginate([1, 2, 3, 4], 1, 2) == [1, 2, 3]")  # no right fix passes this
+RIGHT_TEST = repro_reply("paginate([1, 2, 3, 4], 1, 2) == [1, 2]")
+WRONG_FIX = sr(PAGES, "    end = start + size - 1", "    end = start + size + 1")
+
+
+def test_a_wrong_first_test_is_settled_by_a_second_one_and_capped_at_b(tmp_path: Path) -> None:
+    project = zoo_git_repo(tmp_path)
+    good = script_for(ZOO)["coder"][0]
+    model = FakeModel(script_for(ZOO, test_writer=[WRONG_TEST, RIGHT_TEST], coder=[good, good]))
+    result, cb = run_solve(project, model)
+    assert result.status == "done" and result.best.id == "d1", result.message
+    assert result.best.grade is Grade.B and result.best.disputed_repro
+    assert tags(model) == ["test_writer", "coder", "coder", "test_writer"]
+    first, second = model.calls_for("test_writer")
+    assert second.temperature > first.temperature
+    assert "== [1, 2, 3]" not in second.prompt and "end = start + size\n" not in second.prompt
+    verified = verify_receipt(result.receipt_path, project)
+    assert verified.verified, verified.mismatches
+    assert any("Two generated tests disagreed" in g for g in verified.receipt.unverified)
+    assert "Two generated tests disagreed" in result.explanation
+    assert "== [1, 2, 3]" not in result.best.diff  # only the second test travels with the fix
+
+
+def test_a_wrong_fix_stays_rejected_when_the_second_test_is_right_too(tmp_path: Path) -> None:
+    project = zoo_git_repo(tmp_path)
+    script = script_for(
+        ZOO, test_writer=[RIGHT_TEST, RIGHT_TEST], coder=[WRONG_FIX] * 3, repairer=[WRONG_FIX]
+    )
+    result, _ = run_solve(project, FakeModel(script))
+    assert result.status == "no_fix" and result.best is None
+
+
+@pytest.mark.parametrize(
+    "second", [repro_reply("paginate([], 1, 2) == []"), repro_reply("undefined_name == 1")]
+)
+def test_a_second_test_that_shows_nothing_changes_nothing(tmp_path: Path, second: str) -> None:
+    project = zoo_git_repo(tmp_path)
+    good = script_for(ZOO)["coder"][0]
+    script = script_for(ZOO, test_writer=[WRONG_TEST, second], coder=[good] * 3, repairer=[NO_FIX])
+    model = FakeModel(script)
+    result, _ = run_solve(project, model)
+    assert result.status == "no_fix"
+    assert len(model.calls_for("test_writer")) == 2  # asked once, not again
+
+
+def test_one_failed_try_is_not_a_dispute(tmp_path: Path) -> None:
+    project = zoo_git_repo(tmp_path)
+    good = script_for(ZOO)["coder"][0]
+    model = FakeModel(script_for(ZOO, coder=[WRONG_FIX, good]))
+    result, _ = run_solve(project, model)
+    assert result.best.id == "c2" and result.best.grade is Grade.A
+    assert len(model.calls_for("test_writer")) == 1
+
+
+def test_the_receipt_says_where_the_time_went(tmp_path: Path) -> None:
+    project = zoo_git_repo(tmp_path)
+    result, _ = run_solve(project, FakeModel(script_for(ZOO)))
+    timings = verify_receipt(result.receipt_path, project).receipt.timings
+    assert {"model:test_writer", "model:coder", "baseline", "repro", "checks", "total"} <= set(
+        timings
+    )
+    assert timings["total"] >= timings["checks"] > 0
+
+
+def test_sure_speed_still_asks_everything(tmp_path: Path) -> None:
+    project = zoo_git_repo(tmp_path)
+    model = FakeModel(script_for(ZOO))
+    result, _ = run_solve(project, model, settings=TALKATIVE)
+    assert result.best.grade is Grade.A
+    assert tags(model) == ["intake", "locator", "test_writer", "coder", "explainer"]
+    assert not SPEED_DIAL[Speed.SURE].lean
+
+
+def test_a_vague_request_still_goes_through_intake(tmp_path: Path) -> None:
+    project = zoo_git_repo(tmp_path)
+    model = FakeModel(script_for(ZOO))
+    solve(project, "fix it", Speed.NORMAL, Mode.LOCAL, NonInteractiveCallbacks(), client=model)
+    assert tags(model)[0] == "intake"
+
+
+def test_an_error_while_the_baseline_runs_is_reported_and_cleaned_up(tmp_path: Path, monkeypatch):
+    from qedcode.vcs.git import GitError
+
+    def broken(*args, **kwargs):
+        raise GitError("git could not make a worktree")
+
+    monkeypatch.setattr("qedcode.engine.solve.baseline_run", broken)
+    project = zoo_git_repo(tmp_path)
+    result, _ = run_solve(project, FakeModel(script_for(ZOO)))
+    assert result.status == "error" and "could not make a worktree" in result.message
+    assert worktree.list_worktrees(project) == []
+
+
+@pytest.mark.parametrize(
+    ("request_text", "kind"),
+    [
+        ("paginate drops the last item", "bugfix"),
+        ("Add a docstring to paginate in pages.py", "docs"),
+        ("The README example crashes with KeyError", "bugfix"),
+        ("Write tests for the cart module", "test"),
+        ("Rename helper to paginate_all everywhere", "refactor"),
+        ("Add CSV export to the report page", "bugfix"),
+    ],
+)
+def test_the_kind_is_guessed_from_fixed_words(request_text: str, kind: str) -> None:
+    assert guess_kind(request_text).value == kind

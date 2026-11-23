@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -19,6 +21,8 @@ from qedcode.config import ProjectConfig
 from qedcode.engine import select
 from qedcode.engine.budget import (
     SpeedSettings,
+    clear_request,
+    guess_kind,
     settings_for,
     target_grade,
     temperatures_for,
@@ -26,12 +30,13 @@ from qedcode.engine.budget import (
 )
 from qedcode.engine.check import project_config_for
 from qedcode.engine.lock import ProjectBusy, project_lock
-from qedcode.engine.roles import Roles
+from qedcode.engine.roles import Roles, TestWriterResult
 from qedcode.models.ids import new_task_id
 from qedcode.models.schemas import (
     Callbacks,
     Candidate,
     Event,
+    Grade,
     Mode,
     SolveResult,
     Speed,
@@ -60,9 +65,10 @@ from qedcode.verify.cascade import (
 from qedcode.verify.guard import changed_paths
 from qedcode.verify.lint import test_file_problems
 from qedcode.verify.mutate import strength_for
-from qedcode.verify.receipt import build_receipt, save_receipt, summary_line
+from qedcode.verify.receipt import build_receipt, explanation, save_receipt, summary_line
 
 LAST_RESULT = "last_result.json"
+SECOND_REPRO_TEMPERATURE = 0.7
 DEFAULT_QUESTION = "Can you give an example of the input and the output you expect?"
 
 
@@ -103,9 +109,12 @@ class _Run:
     base_run: BaselineRun = field(init=False)
     repro: ReproTest | None = None
     excluded: set[str] = field(default_factory=set)  # passed, but not what the user answered
+    second_asked: bool = False  # a second repro test was already asked for
     second_opinion: bool = False  # sure speed: one extra try after the first passing one
     cctx: CascadeContext = field(init=False)
     deadline: float = 0.0
+    started: float = 0.0
+    timings: dict[str, float] = field(default_factory=dict)
 
     # ------------------------------------------------------------------ small helpers
 
@@ -135,6 +144,21 @@ class _Run:
             self.sleep(step)
             waited += step
 
+    @contextmanager
+    def timed(self, step: str) -> Iterator[None]:
+        """Add the time spent in the block to `step` (model time is counted apart, per role)."""
+        started = time.monotonic()
+        try:
+            yield
+        finally:
+            spent = time.monotonic() - started
+            self.timings[step] = self.timings.get(step, 0.0) + spent
+
+    def all_timings(self) -> dict[str, float]:
+        model = {f"model:{tag}": s for tag, s in self.roles.seconds.items()}
+        total = {"total": time.monotonic() - self.started}
+        return {k: round(v, 2) for k, v in {**model, **self.timings, **total}.items()}
+
     def done_trying(self) -> bool:
         return any(
             select.reached(c, self.spec.target_grade) or select.promising(c, self.spec.target_grade)
@@ -144,7 +168,8 @@ class _Run:
     # ------------------------------------------------------------------ the steps
 
     def execute(self) -> SolveResult:
-        self.deadline = time.monotonic() + self.settings.time_budget_s
+        self.started = time.monotonic()
+        self.deadline = self.started + self.settings.time_budget_s
         self.emit("stage", "Taking a snapshot of your project...")
         worktree.prune(self.root)
         cleanup_old_candidates(self.root)
@@ -161,8 +186,7 @@ class _Run:
         )
         self.understand()
         self.find_files()
-        self.run_baseline()
-        self.make_repro()
+        self.baseline_and_repro()
         self.spec.target_grade = target_grade(self.speed, self.repro is not None)
         self.cctx = CascadeContext(
             root=self.root,
@@ -187,6 +211,9 @@ class _Run:
 
     def understand(self) -> None:
         self.check_cancel()
+        if self.settings.lean and clear_request(self.request):
+            self.spec.kind = guess_kind(self.request)
+            return
         result = self.roles.intake(self.request, self.speed)
         if result.question:
             answer = self.cb.ask(result.question)
@@ -212,6 +239,7 @@ class _Run:
             context_tokens=self.client.context_tokens,
             on_event=self.cb.on_event,
             language=self.project.language,  # type: ignore[union-attr]
+            lean=self.settings.lean,
         )
         for note in self.ctx.notes:
             self.emit("log", note)
@@ -229,11 +257,32 @@ class _Run:
         if self.examples:
             self.emit("log", f"Using {len(lessons)} earlier fix(es) from this project as examples.")
 
-    def run_baseline(self) -> None:
+    def baseline_and_repro(self) -> None:
+        """The tests before the change and the test that shows the problem. At lean speeds the
+        model writes while the tests run; nothing is concluded until both are finished."""
+        wanted = test_writer_on(self.speed, self.spec.kind) and self.given_repro is None
         self.check_cancel()
         what = "all your tests" if self.settings.baseline_full else "the related tests"
         self.emit("stage", f"Running {what} to see what already passes...")
-        self.base_run = baseline_run(
+        first: TestWriterResult | None = None
+        if not (self.settings.lean and wanted):
+            with self.timed("baseline"):
+                self.base_run = self.run_baseline()
+            self.report_baseline()
+            self.make_repro()
+            return
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            running = pool.submit(self.run_baseline)
+            self.emit("stage", "Writing a test that shows the problem...")
+            first = self.write_repro("a1")
+            with self.timed("baseline"):  # only the wait that the model did not cover
+                self.base_run = running.result()
+        self.check_cancel()
+        self.report_baseline()
+        self.make_repro(first=first, asked=True)
+
+    def run_baseline(self) -> BaselineRun:
+        return baseline_run(
             self.root,
             self.snap,
             self.project,  # type: ignore[arg-type]
@@ -244,6 +293,8 @@ class _Run:
             cancelled=self.cb.cancelled,
             full_limit_s=self.settings.full_suite_limit_s or None,
         )
+
+    def report_baseline(self) -> None:
         base = self.base_run.baseline
         if base.full_skipped:
             self.emit(
@@ -265,33 +316,34 @@ class _Run:
                 "the best grade possible is C.",
             )
 
-    def make_repro(self) -> None:
-        if self.given_repro is not None and self.base_run.baseline.runnable:
-            self.use_given_repro(*self.given_repro)
-            return
-        if not (test_writer_on(self.speed, self.spec.kind) and self.base_run.baseline.runnable):
-            return
+    def repro_path(self) -> str:
         language = self.project.language  # type: ignore[union-attr]
-        path = repro_test_path(
+        return repro_test_path(
             self.request, find_test_files(self.root, language), self.root, language
         )
-        for attempt in (1, 2):
-            self.check_cancel()
-            self.emit("stage", "Writing a test that shows the problem...")
-            written = self.roles.test_writer(
-                self.spec, self.ctx.files, self.ctx.example_test, path, label=f"a{attempt}"
+
+    def write_repro(self, label: str, temperature: float | None = None) -> TestWriterResult | None:
+        return self.roles.test_writer(
+            self.spec,
+            self.ctx.files,
+            self.ctx.example_test,
+            self.repro_path(),
+            label=label,
+            temperature=temperature,
+        )
+
+    def confirm_repro(self, written: TestWriterResult, if_bad: str) -> ReproTest | None:
+        """The written test as a repro, or None (with a warning) when it shows nothing."""
+        broken = test_file_problems(written.path, written.content)
+        if broken:
+            self.emit(
+                "warning",
+                f"The new test has a mistake of its own ({broken[0]}), so it would fail "
+                "for the wrong reason; "
+                + if_bad.replace("trying once more", "asking for it again"),
             )
-            if written is None:
-                continue
-            broken = test_file_problems(written.path, written.content)
-            if broken:
-                self.emit(
-                    "warning",
-                    f"The new test has a mistake of its own ({broken[0]}), so it would fail "
-                    "for the wrong reason; "
-                    + ("asking for it again." if attempt == 1 else "continuing without it."),
-                )
-                continue
+            return None
+        with self.timed("repro"):
             failures = fails_on_base(
                 self.root,
                 self.snap,
@@ -302,15 +354,37 @@ class _Run:
                 name=f"{self.spec.id}-repro",
                 cancelled=self.cb.cancelled,
             )
-            if failures:
-                self.repro = ReproTest(written.path, written.content, failures)
+        if failures:
+            return ReproTest(written.path, written.content, failures)
+        self.emit(
+            "warning",
+            f"The new test passes on the current code, so it proves nothing; {if_bad}",
+        )
+        return None
+
+    def make_repro(self, first: TestWriterResult | None = None, asked: bool = False) -> None:
+        """Write the test that shows the problem. With `asked`, `first` is the first reply (which
+        was requested while the baseline ran) and only a second one may still be asked for."""
+        if self.given_repro is not None and self.base_run.baseline.runnable:
+            self.use_given_repro(*self.given_repro)
+            return
+        if not (test_writer_on(self.speed, self.spec.kind) and self.base_run.baseline.runnable):
+            return
+        for attempt in (1, 2):
+            self.check_cancel()
+            if attempt == 1 and asked:
+                written = first
+            else:
+                self.emit("stage", "Writing a test that shows the problem...")
+                written = self.write_repro(f"a{attempt}")
+            if written is None:
+                continue
+            self.repro = self.confirm_repro(
+                written, "trying once more." if attempt == 1 else "continuing without it."
+            )
+            if self.repro is not None:
                 self.emit("stage", "Writing a test that shows the problem ... done (it fails now)")
                 return
-            self.emit(
-                "warning",
-                "The new test passes on the current code, so it proves nothing; "
-                + ("trying once more." if attempt == 1 else "continuing without it."),
-            )
 
     def use_given_repro(self, path: str, content: str) -> None:
         """A failing test supplied by the caller (Bug Hunter, Smart Questions) is the repro."""
@@ -353,7 +427,8 @@ class _Run:
     def evaluate(self, cand: Candidate, start_commit: str | None = None) -> Candidate:
         """Check a candidate. One that looks good also gets the full suite right away, so that
         stopping early means the proof is complete (and a regression sends the loop on)."""
-        evaluate_candidate(self.cctx, cand, start_commit=start_commit, run_full=False)
+        with self.timed("checks"):
+            evaluate_candidate(self.cctx, cand, start_commit=start_commit, run_full=False)
         self.pool.append(cand)
         if (
             select.promising(cand, self.spec.target_grade)
@@ -364,7 +439,8 @@ class _Run:
         ):
             self.check_cancel()
             self.emit("stage", f"Running all tests on {cand.id}...")
-            run_full(self.cctx, cand)
+            with self.timed("checks"):
+                run_full(self.cctx, cand)
             if cand.grade is None:
                 self.emit("warning", f"{cand.id} broke other tests, so it is rejected.")
         return cand
@@ -397,6 +473,62 @@ class _Run:
                 reply=reply.reply,
             )
             self.evaluate(cand)
+            self.second_repro()
+
+    def disputing(self) -> list[Candidate]:
+        """The tries that the repro test alone rejected, all by the same failing tests."""
+        failed = [
+            c
+            for c in self.pool
+            if c.role == "coder" and c.failed_stage == "fbpa" and c.commit and c.code_changed
+        ]
+        groups: dict[frozenset[str], list[Candidate]] = {}
+        for c in failed:
+            groups.setdefault(frozenset(select.failing_test_keys(c)), []).append(c)
+        return max(groups.values(), key=len, default=[])
+
+    def second_repro(self) -> None:
+        """Two tries fail the same repro test: is the test wrong? Ask for an independent second
+        one and check the tries against it (AGENTS.md 15.19). A try that passes it reaches B at
+        most; when none does, nothing changes and the first test stays the task's proof."""
+        if self.second_asked or self.repro is None or self.given_repro is not None:
+            return
+        tries = self.disputing()
+        if len(tries) < 2 or self.done_trying() or self.should_stop():
+            return
+        self.second_asked = True
+        self.cooldown()
+        self.emit("stage", "Two tries fail the new test the same way; asking for a second test...")
+        written = self.write_repro("second", temperature=SECOND_REPRO_TEMPERATURE)
+        if written is None:
+            return
+        second = self.confirm_repro(written, "keeping the first test.")
+        if second is None:
+            return
+        first_repro = self.repro
+        self.cctx.repro = second
+        seen: set[str] = set()
+        for number, cand in enumerate(tries, start=1):
+            key = cand.reply.model_dump_json()
+            if key in seen or self.should_stop():
+                continue
+            seen.add(key)
+            again = Candidate(
+                id=f"d{number}",
+                role=cand.role,
+                parent_id=cand.id,
+                model=cand.model,
+                temperature=cand.temperature,
+                reply=cand.reply,
+                disputed_repro=True,
+            )
+            self.evaluate(again)
+            if again.failed_stage is None:
+                self.repro = second
+                self.spec.target_grade = Grade.B
+                return
+            self.repaired.add(again.id)  # it holds the second test: nothing to repair from it
+        self.cctx.repro = first_repro
 
     def passing(self) -> list[Candidate]:
         return [
@@ -584,13 +716,18 @@ class _Run:
             base_ref=snapshot_ref(self.spec.id),
             model_info=info,
         )
-        self.measure_strength(receipt)
+        with self.timed("strength"):
+            self.measure_strength(receipt)
         if self.question:  # Smart Questions: two passing fixes disagree and nobody answered
             receipt.unverified.insert(0, f"Open question: {self.question}")
-        path = save_receipt(self.root, receipt)
         line = summary_line(receipt)
-        self.emit("stage", "Explaining the change...")
-        explanation = self.roles.explainer(self.spec, chosen.diff, line, changed_paths(chosen.diff))
+        if self.settings.lean:
+            text = explanation(receipt, chosen.reply.plan)
+        else:
+            self.emit("stage", "Explaining the change...")
+            text = self.roles.explainer(self.spec, chosen.diff, line, changed_paths(chosen.diff))
+        receipt.timings = self.all_timings()
+        path = save_receipt(self.root, receipt)
         self.emit("result", line, grade=chosen.grade.value if chosen.grade else None)
         write_last_result(self.root, self.spec.id, chosen.id, str(path))
         return SolveResult(
@@ -599,7 +736,7 @@ class _Run:
             best=chosen,
             candidates=self.pool,
             receipt_path=str(path),
-            explanation=explanation,
+            explanation=text,
             message=line,
             question=self.question,
         )
