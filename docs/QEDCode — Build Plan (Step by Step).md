@@ -1,6 +1,6 @@
 # QEDCode — Build Plan (Step by Step)
 
-Nov 20, 2026 · @Susamanth Nellore
+Nov 20, 2026
 
 ## Before you start
 

@@ -1,6 +1,6 @@
 # QEDCode — AI Build Brief
 
-Nov 20, 2026 · @Susamanth Nellore
+Nov 20, 2026
 
 ## 1. Mission and scope
 

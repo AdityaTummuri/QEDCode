@@ -68,7 +68,7 @@ flowchart LR
 <!-- results:start -->
 First look, on a 6 GB laptop with Ollama (two small, easy suites, 3 repetitions): no significant
 change in how many tasks get solved, **grade A was right 86 of 89 times**, and **silent failures
-fell from 14 to 4**. The bigger runs are still to come.
+fell from 11 to 4**. The bigger runs are still to come.
 [Details and reports](https://github.com/AdityaTummuri/QEDCode/blob/main/docs/results.md).
 <!-- results:end -->
 

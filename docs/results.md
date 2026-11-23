@@ -27,7 +27,7 @@ RTX 4050 Laptop GPU (6 GB), models served by Ollama, normal speed, 3 repetitions
 - **Grade honesty: 86 of 89 grade A results were right.** The 3 wrong A's are one
   under-specified task (`008_slugify_feature`: "drop punctuation", and the model also dropped
   dashes, which the hidden test keeps). The task text was not changed afterwards.
-- **Silent failures: 14 for the bare models, 4 with QEDCode.** A bare model's wrong answer always
+- **Silent failures: 11 of 108 for the bare models, 4 of 108 with QEDCode.** A bare model's wrong answer always
   looks done; QEDCode's other misses came back as "no fix" instead of a wrong change.
 - **After the fixes those runs led to** (a try may no longer edit the test that shows the
   problem; a broken repro test is rewritten), the same suites gave: grade A right **62 of 65**
